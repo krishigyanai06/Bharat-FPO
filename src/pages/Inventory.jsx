@@ -885,20 +885,39 @@ function Inventory() {
     setSaving(true);
 
     if (editRow) {
-      const product = editRow.products?.[0];
+      // For editing, handle the first variant only and include optional fields
+      const firstVariant = variants[0];
       const data = {
         productName: form.productName,
         productCategory: form.productCategory || editRow.productCategory || "",
         description: form.description || null,
         brand: form.brand || null,
-        mrp: Number(variants[0].mrp),
-        quantity: Number(variants[0].quantity),
-        unit: variants[0].unit,
-        purchaseDate: variants[0].purchaseDate,
-        expiryDate: variants[0].expiryDate || null,
-        ...(variants[0].parameter && { parameter: variants[0].parameter }),
+        ...(form.productTechnicalDetails && { productTechnicalDetails: form.productTechnicalDetails }),
+        ...(form.howToUse && { howToUse: form.howToUse }),
+        ...(form.productBenefits && { productBenefits: form.productBenefits }),
+        mrp: Number(firstVariant.mrp),
+        quantity: Number(firstVariant.quantity),
+        unit: firstVariant.unit,
+        purchaseDate: firstVariant.purchaseDate,
+        expiryDate: firstVariant.expiryDate || null,
+        ...(firstVariant.parameter && { parameter: firstVariant.parameter }),
       };
-      dispatch(updateProduct({ id: editRow._id, data }))
+      
+      // If there's an image, create FormData, otherwise send JSON
+      let updatePayload;
+      if (imageFile) {
+        updatePayload = new FormData();
+        Object.keys(data).forEach(key => {
+          if (data[key] !== null && data[key] !== undefined) {
+            updatePayload.append(key, data[key]);
+          }
+        });
+        updatePayload.append('productImages', imageFile);
+      } else {
+        updatePayload = data;
+      }
+      
+      dispatch(updateProduct({ id: editRow._id, data: updatePayload }))
         .unwrap()
         .then(() => {
           toast.success("Product updated");
@@ -909,91 +928,67 @@ function Inventory() {
             dispatch(fetchStockSummary());
           }, 1500);
         })
-        .catch((err) =>
+        .catch((err) => {
+          console.error('Update product error:', err);
           toast.error(
             typeof err === "string"
               ? err
               : err?.message || "Failed to update product",
-          ),
-        )
+          );
+        })
         .finally(() => setSaving(false));
       return;
     }
 
+    // For adding new product - always use FormData to handle image properly
     const crops = form.targetCrops
-      ? form.targetCrops
-          .split(",")
-          .map((c) => c.trim())
-          .filter(Boolean)
+      ? form.targetCrops.split(",").map((c) => c.trim()).filter(Boolean)
       : ["All"];
 
-    // Create payload without image first
-    const payload = {
-      productName: form.productName,
-      productCategory: form.productCategory,
-      ...(form.description && { description: form.description }),
-      ...(form.brand && { brand: form.brand }),
-      ...(form.productTechnicalDetails && {
-        productTechnicalDetails: form.productTechnicalDetails,
-      }),
-      ...(form.howToUse && { howToUse: form.howToUse }),
-      ...(form.productBenefits && { productBenefits: form.productBenefits }),
-      targetCrops: crops,
-      products: variants.map((variant) => ({
-        unit: variant.unit,
-        ...(variant.parameter && { parameter: variant.parameter }),
-        mrp: Number(variant.mrp),
-        quantity: Number(variant.quantity),
-        purchaseDate: variant.purchaseDate,
-        ...(variant.expiryDate && { expiryDate: variant.expiryDate }),
-      })),
-    };
-
-    // If image is provided, create FormData, otherwise send JSON
-    let finalPayload;
-    let isFormData = false;
-
+    const formData = new FormData();
+    
+    // Add basic product info
+    formData.append('productName', form.productName);
+    formData.append('productCategory', form.productCategory);
+    if (form.description) formData.append('description', form.description);
+    if (form.brand) formData.append('brand', form.brand);
+    if (form.productTechnicalDetails) formData.append('productTechnicalDetails', form.productTechnicalDetails);
+    if (form.howToUse) formData.append('howToUse', form.howToUse);
+    if (form.productBenefits) formData.append('productBenefits', form.productBenefits);
+    formData.append('targetCrops', JSON.stringify(crops));
+    
+    // Add products array
+    const productsArray = variants.map(variant => ({
+      unit: variant.unit,
+      ...(variant.parameter && { parameter: variant.parameter }),
+      mrp: Number(variant.mrp),
+      quantity: Number(variant.quantity),
+      purchaseDate: variant.purchaseDate,
+      ...(variant.expiryDate && { expiryDate: variant.expiryDate }),
+    }));
+    formData.append('products', JSON.stringify(productsArray));
+    
+    // Add image if provided
     if (imageFile) {
-      finalPayload = new FormData();
-      // Add all form fields to FormData
-      Object.keys(payload).forEach((key) => {
-        if (key === "products" || key === "targetCrops") {
-          finalPayload.append(key, JSON.stringify(payload[key]));
-        } else {
-          finalPayload.append(key, payload[key]);
-        }
-      });
-      finalPayload.append("productImages", imageFile);
-      isFormData = true;
-    } else {
-      finalPayload = payload;
+      formData.append('productImages', imageFile);
     }
 
-    console.log(
-      "Sending payload:",
-      isFormData
-        ? "FormData with image"
-        : JSON.stringify(finalPayload, null, 2),
-    );
+    console.log('Sending FormData with:', {
+      hasImage: !!imageFile,
+      imageName: imageFile?.name,
+      variantsCount: variants.length,
+      productName: form.productName
+    });
 
-    dispatch(addProduct(finalPayload))
+    dispatch(addProduct(formData))
       .unwrap()
       .then((newProduct) => {
-        toast.success("Product added");
+        toast.success("Product added successfully");
         setShowModal(false);
-        // If we sent JSON payload and have an image, upload it separately
-        if (!isFormData && imageFile) {
-          const newId = newProduct?._id ?? newProduct?.product?._id;
-          if (newId) {
-            const imgFd = new FormData();
-            imgFd.append("productImages", imageFile);
-            dispatch(updateProduct({ id: newId, data: imgFd }));
-          }
-        }
         setTimeout(() => dispatch(fetchProducts()), 1500);
       })
       .catch((err) => {
-        console.error("Add product error:", err);
+        console.error('Add product error:', err);
         toast.error(err || "Failed to add product");
       })
       .finally(() => setSaving(false));
