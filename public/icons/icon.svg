@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="102" fill="#16a34a"/>
+  <!-- Stem -->
+  <line x1="256" y1="360" x2="256" y2="230" stroke="white" stroke-width="30" stroke-linecap="round"/>
+  <!-- Right leaf -->
+  <path d="M256 230 C330 160 370 200 256 230Z" fill="white"/>
+  <!-- Left leaf -->
+  <path d="M256 230 C180 165 145 210 256 230Z" fill="white"/>
+  <!-- Ground line -->
+  <line x1="180" y1="360" x2="332" y2="360" stroke="white" stroke-width="24" stroke-linecap="round"/>
+  <!-- KP text -->
+  <text x="256" y="430" font-family="Arial,sans-serif" font-size="72" font-weight="bold" fill="white" text-anchor="middle">KP</text>
+</svg>

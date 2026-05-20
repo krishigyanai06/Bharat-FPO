@@ -1,0 +1,127 @@
+.lang-picker {
+  position: relative;
+  display: inline-block;
+  font-family: inherit;
+  isolation: isolate;
+}
+
+.lang-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: #fff;
+  border: 1.5px solid #d1fae5;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #166534;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  white-space: nowrap;
+}
+
+.lang-trigger:hover {
+  border-color: #16a34a;
+  box-shadow: 0 2px 8px rgba(22,163,74,0.15);
+}
+
+.lang-flag {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.lang-label {
+  letter-spacing: 0.05em;
+}
+
+.lang-chevron {
+  color: #16a34a;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.lang-chevron.open {
+  transform: rotate(180deg);
+}
+
+.lang-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #fff;
+  border: 1.5px solid #d1fae5;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  min-width: 170px;
+  z-index: 9999;
+  max-height: 260px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #bbf7d0 transparent;
+  animation: langFadeIn 0.15s ease;
+  isolation: isolate;
+}
+
+.lang-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+
+.lang-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lang-dropdown::-webkit-scrollbar-thumb {
+  background: #bbf7d0;
+  border-radius: 99px;
+}
+
+@keyframes langFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.lang-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.lang-option:hover {
+  background: #f0fdf4;
+}
+
+.lang-option.active {
+  background: #dcfce7;
+}
+
+.lang-names {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.lang-name-en {
+  font-size: 13px;
+  font-weight: 600;
+  color: #166534;
+  line-height: 1.3;
+}
+
+.lang-name-native {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.3;
+}
+
+.lang-check {
+  flex-shrink: 0;
+}
