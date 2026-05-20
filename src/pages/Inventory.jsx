@@ -194,7 +194,18 @@ function ProductModal({ initial, onClose, onSave, saving }) {
     initial?.productImages?.[0]?.url ?? null,
   );
   const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useState(null);
+
+  // Reset image state when modal opens for new product (when initial changes from null to a value)
+  useEffect(() => {
+    if (!initial) {
+      // Opening for new product - reset image state
+      setImageFile(null);
+      setImagePreview(null);
+    } else {
+      // Opening for edit - set existing image
+      setImagePreview(initial?.productImages?.[0]?.url ?? null);
+    }
+  }, [initial]);
 
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -237,6 +248,7 @@ function ProductModal({ initial, onClose, onSave, saving }) {
     const isEdit = !!initial;
     const missing = [];
     if (!form.productName.trim()) missing.push("Product Name");
+    if (!form.brand.trim()) missing.push("Brand");
     if (!isEdit && !form.productCategory) missing.push("Category");
     
     // Check if image is required for new products
@@ -325,7 +337,7 @@ function ProductModal({ initial, onClose, onSave, saving }) {
                     <option value="other">Herbicides</option>
                   </select>
                 </FIELD>
-                <FIELD label="Brand">
+                <FIELD label="Brand" required>
                   <input
                     value={form.brand}
                     onChange={(e) => setF("brand", e.target.value)}
@@ -910,136 +922,96 @@ function Inventory() {
   const handleSaveProduct = (form, variants, imageFile) => {
     setSaving(true);
 
-    if (editRow) {
-      // For editing, handle the first variant only
-      const firstVariant = variants?.[0] || {};
-      
-      // Create base data object
-      const baseData = {
-        productName: form.productName,
-        productCategory: form.productCategory || editRow.productCategory || "",
-        description: form.description || null,
-        brand: form.brand || null,
-        mrp: Number(firstVariant.mrp || 0),
-        quantity: Number(firstVariant.quantity || 0),
-        unit: firstVariant.unit || "",
-        purchaseDate: firstVariant.purchaseDate || "",
-        expiryDate: firstVariant.expiryDate || null,
-      };
-      
-      // Add optional fields
-      if (form.productTechnicalDetails) baseData.productTechnicalDetails = form.productTechnicalDetails;
-      if (form.howToUse) baseData.howToUse = form.howToUse;
-      if (form.productBenefits) baseData.productBenefits = form.productBenefits;
-      if (firstVariant.parameter) baseData.parameter = firstVariant.parameter;
-      
-      // Handle image separately if provided
-      if (imageFile) {
-        // First update the product data
-        dispatch(updateProduct({ id: editRow._id, data: baseData }))
-          .unwrap()
-          .then(() => {
-            // Then upload the image separately
-            const imageFormData = new FormData();
-            imageFormData.append('productImages', imageFile);
-            return dispatch(updateProduct({ id: editRow._id, data: imageFormData }));
-          })
-          .then(() => {
-            toast.success("Product updated with image");
-            setShowModal(false);
-            setEditRow(null);
-            setTimeout(() => {
-              dispatch(fetchProducts());
-              dispatch(fetchStockSummary());
-            }, 1500);
-          })
-          .catch((err) => {
-            console.error('Update product error:', err);
-            toast.error(typeof err === "string" ? err : err?.message || "Failed to update product");
-          })
-          .finally(() => setSaving(false));
-      } else {
-        // Update without image
-        dispatch(updateProduct({ id: editRow._id, data: baseData }))
-          .unwrap()
-          .then(() => {
-            toast.success("Product updated");
-            setShowModal(false);
-            setEditRow(null);
-            setTimeout(() => {
-              dispatch(fetchProducts());
-              dispatch(fetchStockSummary());
-            }, 1500);
-          })
-          .catch((err) => {
-            console.error('Update product error:', err);
-            toast.error(typeof err === "string" ? err : err?.message || "Failed to update product");
-          })
-          .finally(() => setSaving(false));
-      }
-      return;
-    }
+    const fileToBase64 = (file) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = (error) => reject(error);
+      });
+    };
 
-    // For adding new product
     const crops = form.targetCrops
       ? form.targetCrops.split(",").map((c) => c.trim()).filter(Boolean)
       : ["All"];
 
-    // Create the payload object first
-    const payload = {
-      productName: form.productName,
-      productCategory: form.productCategory,
-      targetCrops: crops,
-      products: variants.map(variant => ({
-        unit: variant.unit,
-        mrp: Number(variant.mrp),
-        quantity: Number(variant.quantity),
-        purchaseDate: variant.purchaseDate,
-        ...(variant.parameter && { parameter: variant.parameter }),
-        ...(variant.expiryDate && { expiryDate: variant.expiryDate }),
-      })),
-    };
-    
-    // Add optional fields
-    if (form.description) payload.description = form.description;
-    if (form.brand) payload.brand = form.brand;
-    if (form.productTechnicalDetails) payload.productTechnicalDetails = form.productTechnicalDetails;
-    if (form.howToUse) payload.howToUse = form.howToUse;
-    if (form.productBenefits) payload.productBenefits = form.productBenefits;
+    const executeSave = async () => {
+      try {
+        let base64Image = null;
+        if (imageFile) {
+          base64Image = await fileToBase64(imageFile);
+        }
 
-    console.log('Adding product payload:', payload);
-    console.log('Image file:', imageFile?.name);
+        const payload = {
+          productName: form.productName,
+          brand: form.brand || "",
+          productCategory: form.productCategory,
+          description: form.description || "",
+          productTechnicalDetails: form.productTechnicalDetails || "",
+          howToUse: form.howToUse || "",
+          productBenefits: form.productBenefits || "",
+          targetCrops: crops,
+          products: variants.map((variant) => ({
+            unit: variant.unit,
+            mrp: Number(variant.mrp),
+            quantity: Number(variant.quantity),
+            purchaseDate: variant.purchaseDate,
+            ...(variant.parameter && { parameter: variant.parameter }),
+            ...(variant.expiryDate && { expiryDate: variant.expiryDate }),
+          })),
+        };
 
-    // Add product first, then upload image if provided
-    dispatch(addProduct(payload))
-      .unwrap()
-      .then((newProduct) => {
-        const productId = newProduct?._id || newProduct?.product?._id || newProduct?.data?._id;
-        console.log('Product created with ID:', productId);
-        
-        if (imageFile && productId) {
-          // Upload image separately
-          const imageFormData = new FormData();
-          imageFormData.append('productImages', imageFile);
-          
-          return dispatch(updateProduct({ id: productId, data: imageFormData }))
+        if (base64Image) {
+          payload.productImages = [base64Image];
+        }
+
+        if (editRow) {
+          dispatch(updateProduct({ id: editRow._id, data: payload }))
             .unwrap()
             .then(() => {
-              toast.success("Product added with image");
-            });
+              toast.success("Product updated successfully");
+              setShowModal(false);
+              setEditRow(null);
+              setTimeout(() => {
+                dispatch(fetchProducts());
+                dispatch(fetchStockSummary());
+              }, 1500);
+            })
+            .catch((err) => {
+              console.error("Update product error:", err);
+              toast.error(
+                typeof err === "string"
+                  ? err
+                  : err?.message || "Failed to update product"
+              );
+            })
+            .finally(() => setSaving(false));
         } else {
-          toast.success("Product added successfully");
+          dispatch(addProduct(payload))
+            .unwrap()
+            .then(() => {
+              toast.success("Product added successfully");
+              setShowModal(false);
+              setTimeout(() => dispatch(fetchProducts()), 1500);
+            })
+            .catch((err) => {
+              console.error("Add product error:", err);
+              toast.error(
+                typeof err === "string"
+                  ? err
+                  : err?.message || "Failed to add product"
+              );
+            })
+            .finally(() => setSaving(false));
         }
-      })
-      .then(() => {
-        setShowModal(false);
-        setTimeout(() => dispatch(fetchProducts()), 1500);
-      })
-      .catch((err) => {
-        console.error('Add product error:', err);
-        toast.error(err || "Failed to add product");
-      })
-      .finally(() => setSaving(false));
+      } catch (err) {
+        console.error("Failed to process image file:", err);
+        toast.error("Failed to process image file");
+        setSaving(false);
+      }
+    };
+
+    executeSave();
   };
 
   // Show loading while waiting for tenant selection (SuperAdmin only)
