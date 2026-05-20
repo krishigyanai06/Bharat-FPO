@@ -141,13 +141,21 @@ const inputCls =
 
 function ProductModal({ initial, onClose, onSave, saving }) {
   const p0 = initial?.products?.[0];
+
+  const getInitialCategory = (initial) => {
+    if (!initial) return "";
+    const cat = (initial.productCategory || initial.category || "").toLowerCase();
+    if (cat === "pesticides") return "insecticides";
+    return cat;
+  };
+
   const [form, setForm] = useState(
     initial
       ? {
           productName: initial.productName ?? "",
           description: initial.description ?? "",
           brand: initial.brand ?? "",
-          productCategory: initial.productCategory?.toLowerCase() ?? "",
+          productCategory: getInitialCategory(initial),
           productTechnicalDetails: initial.productTechnicalDetails ?? "",
           howToUse: initial.howToUse ?? "",
           productBenefits: initial.productBenefits ?? "",
@@ -249,7 +257,7 @@ function ProductModal({ initial, onClose, onSave, saving }) {
     const missing = [];
     if (!form.productName.trim()) missing.push("Product Name");
     if (!form.brand.trim()) missing.push("Brand");
-    if (!isEdit && !form.productCategory) missing.push("Category");
+    if (!form.productCategory) missing.push("Category");
     
     // Check if image is required for new products
     if (!isEdit && !imageFile && !imagePreview) {
@@ -320,7 +328,7 @@ function ProductModal({ initial, onClose, onSave, saving }) {
                     />
                   </FIELD>
                 </div>
-                <FIELD label="Category" required={!isEdit}>
+                <FIELD label="Category" required>
                   <select
                     value={form.productCategory}
                     onChange={(e) => setF("productCategory", e.target.value)}
@@ -329,12 +337,14 @@ function ProductModal({ initial, onClose, onSave, saving }) {
                     <option value="">Select category</option>
                     <option value="fertilizers">Fertilizers</option>
                     <option value="seeds">Seeds</option>
-                    <option value="pesticides">Insecticides</option>
-                    <option value="pesticides">Organic</option>
-                    <option value="animal_feed">Plant Growth Regulator (PGR)</option>
-                    <option value="tools">Animal Feed</option>
-                    <option value="other">Fungicides</option>
-                    <option value="other">Herbicides</option>
+                    <option value="insecticides">Insecticides</option>
+                    <option value="organic">Organic</option>
+                    <option value="pgr">Plant Growth Regulator (PGR)</option>
+                    <option value="animal_feed">Animal Feed</option>
+                    <option value="fungicides">Fungicides</option>
+                    <option value="herbicides">Herbicides</option>
+                    <option value="tools">Tools</option>
+                    <option value="other">Other</option>
                   </select>
                 </FIELD>
                 <FIELD label="Brand" required>
@@ -880,7 +890,7 @@ function Inventory() {
       const matchSearch =
         (p.productName ?? "").toLowerCase().includes(search.toLowerCase()) ||
         (p.brand ?? "").toLowerCase().includes(search.toLowerCase()) ||
-        (p.productCategory ?? "").toLowerCase().includes(search.toLowerCase());
+        (p.productCategory ?? p.category ?? "").toLowerCase().includes(search.toLowerCase());
       const qty = p._stock?.availableQuantity ?? null;
       let matchStatus = true;
       if (statusFilter === "active") matchStatus = p.isActive === true;
