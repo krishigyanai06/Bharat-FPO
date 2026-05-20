@@ -238,6 +238,11 @@ function ProductModal({ initial, onClose, onSave, saving }) {
     const missing = [];
     if (!form.productName.trim()) missing.push("Product Name");
     if (!isEdit && !form.productCategory) missing.push("Category");
+    
+    // Check if image is required for new products
+    if (!isEdit && !imageFile && !imagePreview) {
+      missing.push("Product Image");
+    }
 
     // Validate variants
     variants.forEach((variant, index) => {
@@ -548,12 +553,14 @@ function ProductModal({ initial, onClose, onSave, saving }) {
             {/* Section: Image */}
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                Product Image
+                Product Image {!isEdit && <span className="text-red-500">*</span>}
               </p>
               <div
                 className={`relative border-2 border-dashed rounded-xl transition cursor-pointer ${
                   dragOver
                     ? "border-brand-400 bg-brand-50"
+                    : !isEdit && !imagePreview
+                    ? "border-red-300 hover:border-red-400 bg-red-50/30"
                     : "border-gray-200 hover:border-brand-300 hover:bg-gray-50"
                 }`}
                 onDragOver={(e) => {
@@ -606,14 +613,30 @@ function ProductModal({ initial, onClose, onSave, saving }) {
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-8 gap-2">
-                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-                      <ImageOff size={18} className="text-gray-400" />
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      !isEdit ? "bg-red-100" : "bg-gray-100"
+                    }`}>
+                      <ImageOff size={18} className={!isEdit ? "text-red-400" : "text-gray-400"} />
                     </div>
                     <p className="text-sm text-gray-500">
-                      Drag & drop or{" "}
-                      <span className="text-brand-600 font-medium">browse</span>
+                      {!isEdit ? (
+                        <>
+                          <span className="text-red-600 font-medium">Required:</span> Drag & drop or{" "}
+                          <span className="text-brand-600 font-medium">browse</span>
+                        </>
+                      ) : (
+                        <>
+                          Drag & drop or{" "}
+                          <span className="text-brand-600 font-medium">browse</span>
+                        </>
+                      )}
                     </p>
                     <p className="text-xs text-gray-400">JPG, PNG, WEBP</p>
+                    {!isEdit && (
+                      <p className="text-xs text-red-500 mt-1 font-medium">
+                        At least one product image is required
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
