@@ -166,27 +166,28 @@ function ProductModal({ initial, onClose, onSave, saving }) {
   );
 
   // Product variants state
-  const [variants, setVariants] = useState(
-    initial?.products?.length > 0
-      ? initial.products.map((p) => ({
-          unit: p.unit ?? "",
-          parameter: p.parameter ?? p.sku ?? "",
-          mrp: p.mrp ?? "",
-          quantity: p.quantity ?? "",
-          purchaseDate: p.purchaseDate ? p.purchaseDate.split("T")[0] : "",
-          expiryDate: p.expiryDate ? p.expiryDate.split("T")[0] : "",
-        }))
-      : [
-          {
-            unit: "",
-            parameter: "",
-            mrp: "",
-            quantity: "",
-            purchaseDate: "",
-            expiryDate: "",
-          },
-        ],
-  );
+  const [variants, setVariants] = useState(() => {
+    if (initial?.products?.length > 0) {
+      return initial.products.map((p) => ({
+        unit: p.unit ?? "",
+        parameter: p.parameter ?? p.sku ?? "",
+        mrp: p.mrp ?? "",
+        quantity: p.quantity ?? "",
+        purchaseDate: p.purchaseDate ? p.purchaseDate.split("T")[0] : "",
+        expiryDate: p.expiryDate ? p.expiryDate.split("T")[0] : "",
+      }));
+    }
+    return [
+      {
+        unit: "",
+        parameter: "",
+        mrp: "",
+        quantity: "",
+        purchaseDate: "",
+        expiryDate: "",
+      },
+    ];
+  });
 
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(
@@ -309,12 +310,14 @@ function ProductModal({ initial, onClose, onSave, saving }) {
                     className={inputCls}
                   >
                     <option value="">Select category</option>
-                    <option value="fertilizers">🌱 Fertilizers</option>
-                    <option value="seeds">🌾 Seeds</option>
-                    <option value="pesticides">🧪 Pesticides</option>
-                    <option value="animal_feed">🐄 Animal Feed</option>
-                    <option value="tools">🔧 Tools</option>
-                    <option value="other">📦 Other</option>
+                    <option value="fertilizers">Fertilizers</option>
+                    <option value="seeds">Seeds</option>
+                    <option value="pesticides">Insecticides</option>
+                    <option value="pesticides">Organic</option>
+                    <option value="animal_feed">Plant Growth Regulator (PGR)</option>
+                    <option value="tools">Animal Feed</option>
+                    <option value="other">Fungicides</option>
+                    <option value="other">Herbicides</option>
                   </select>
                 </FIELD>
                 <FIELD label="Brand">
@@ -885,105 +888,127 @@ function Inventory() {
     setSaving(true);
 
     if (editRow) {
-      // For editing, handle the first variant only and include optional fields
-      const firstVariant = variants[0];
-      const data = {
+      // For editing, handle the first variant only
+      const firstVariant = variants?.[0] || {};
+      
+      // Create base data object
+      const baseData = {
         productName: form.productName,
         productCategory: form.productCategory || editRow.productCategory || "",
         description: form.description || null,
         brand: form.brand || null,
-        ...(form.productTechnicalDetails && { productTechnicalDetails: form.productTechnicalDetails }),
-        ...(form.howToUse && { howToUse: form.howToUse }),
-        ...(form.productBenefits && { productBenefits: form.productBenefits }),
-        mrp: Number(firstVariant.mrp),
-        quantity: Number(firstVariant.quantity),
-        unit: firstVariant.unit,
-        purchaseDate: firstVariant.purchaseDate,
+        mrp: Number(firstVariant.mrp || 0),
+        quantity: Number(firstVariant.quantity || 0),
+        unit: firstVariant.unit || "",
+        purchaseDate: firstVariant.purchaseDate || "",
         expiryDate: firstVariant.expiryDate || null,
-        ...(firstVariant.parameter && { parameter: firstVariant.parameter }),
       };
       
-      // If there's an image, create FormData, otherwise send JSON
-      let updatePayload;
-      if (imageFile) {
-        updatePayload = new FormData();
-        Object.keys(data).forEach(key => {
-          if (data[key] !== null && data[key] !== undefined) {
-            updatePayload.append(key, data[key]);
-          }
-        });
-        updatePayload.append('productImages', imageFile);
-      } else {
-        updatePayload = data;
-      }
+      // Add optional fields
+      if (form.productTechnicalDetails) baseData.productTechnicalDetails = form.productTechnicalDetails;
+      if (form.howToUse) baseData.howToUse = form.howToUse;
+      if (form.productBenefits) baseData.productBenefits = form.productBenefits;
+      if (firstVariant.parameter) baseData.parameter = firstVariant.parameter;
       
-      dispatch(updateProduct({ id: editRow._id, data: updatePayload }))
-        .unwrap()
-        .then(() => {
-          toast.success("Product updated");
-          setShowModal(false);
-          setEditRow(null);
-          setTimeout(() => {
-            dispatch(fetchProducts());
-            dispatch(fetchStockSummary());
-          }, 1500);
-        })
-        .catch((err) => {
-          console.error('Update product error:', err);
-          toast.error(
-            typeof err === "string"
-              ? err
-              : err?.message || "Failed to update product",
-          );
-        })
-        .finally(() => setSaving(false));
+      // Handle image separately if provided
+      if (imageFile) {
+        // First update the product data
+        dispatch(updateProduct({ id: editRow._id, data: baseData }))
+          .unwrap()
+          .then(() => {
+            // Then upload the image separately
+            const imageFormData = new FormData();
+            imageFormData.append('productImages', imageFile);
+            return dispatch(updateProduct({ id: editRow._id, data: imageFormData }));
+          })
+          .then(() => {
+            toast.success("Product updated with image");
+            setShowModal(false);
+            setEditRow(null);
+            setTimeout(() => {
+              dispatch(fetchProducts());
+              dispatch(fetchStockSummary());
+            }, 1500);
+          })
+          .catch((err) => {
+            console.error('Update product error:', err);
+            toast.error(typeof err === "string" ? err : err?.message || "Failed to update product");
+          })
+          .finally(() => setSaving(false));
+      } else {
+        // Update without image
+        dispatch(updateProduct({ id: editRow._id, data: baseData }))
+          .unwrap()
+          .then(() => {
+            toast.success("Product updated");
+            setShowModal(false);
+            setEditRow(null);
+            setTimeout(() => {
+              dispatch(fetchProducts());
+              dispatch(fetchStockSummary());
+            }, 1500);
+          })
+          .catch((err) => {
+            console.error('Update product error:', err);
+            toast.error(typeof err === "string" ? err : err?.message || "Failed to update product");
+          })
+          .finally(() => setSaving(false));
+      }
       return;
     }
 
-    // For adding new product - always use FormData to handle image properly
+    // For adding new product
     const crops = form.targetCrops
       ? form.targetCrops.split(",").map((c) => c.trim()).filter(Boolean)
       : ["All"];
 
-    const formData = new FormData();
+    // Create the payload object first
+    const payload = {
+      productName: form.productName,
+      productCategory: form.productCategory,
+      targetCrops: crops,
+      products: variants.map(variant => ({
+        unit: variant.unit,
+        mrp: Number(variant.mrp),
+        quantity: Number(variant.quantity),
+        purchaseDate: variant.purchaseDate,
+        ...(variant.parameter && { parameter: variant.parameter }),
+        ...(variant.expiryDate && { expiryDate: variant.expiryDate }),
+      })),
+    };
     
-    // Add basic product info
-    formData.append('productName', form.productName);
-    formData.append('productCategory', form.productCategory);
-    if (form.description) formData.append('description', form.description);
-    if (form.brand) formData.append('brand', form.brand);
-    if (form.productTechnicalDetails) formData.append('productTechnicalDetails', form.productTechnicalDetails);
-    if (form.howToUse) formData.append('howToUse', form.howToUse);
-    if (form.productBenefits) formData.append('productBenefits', form.productBenefits);
-    formData.append('targetCrops', JSON.stringify(crops));
-    
-    // Add products array
-    const productsArray = variants.map(variant => ({
-      unit: variant.unit,
-      ...(variant.parameter && { parameter: variant.parameter }),
-      mrp: Number(variant.mrp),
-      quantity: Number(variant.quantity),
-      purchaseDate: variant.purchaseDate,
-      ...(variant.expiryDate && { expiryDate: variant.expiryDate }),
-    }));
-    formData.append('products', JSON.stringify(productsArray));
-    
-    // Add image if provided
-    if (imageFile) {
-      formData.append('productImages', imageFile);
-    }
+    // Add optional fields
+    if (form.description) payload.description = form.description;
+    if (form.brand) payload.brand = form.brand;
+    if (form.productTechnicalDetails) payload.productTechnicalDetails = form.productTechnicalDetails;
+    if (form.howToUse) payload.howToUse = form.howToUse;
+    if (form.productBenefits) payload.productBenefits = form.productBenefits;
 
-    console.log('Sending FormData with:', {
-      hasImage: !!imageFile,
-      imageName: imageFile?.name,
-      variantsCount: variants.length,
-      productName: form.productName
-    });
+    console.log('Adding product payload:', payload);
+    console.log('Image file:', imageFile?.name);
 
-    dispatch(addProduct(formData))
+    // Add product first, then upload image if provided
+    dispatch(addProduct(payload))
       .unwrap()
       .then((newProduct) => {
-        toast.success("Product added successfully");
+        const productId = newProduct?._id || newProduct?.product?._id || newProduct?.data?._id;
+        console.log('Product created with ID:', productId);
+        
+        if (imageFile && productId) {
+          // Upload image separately
+          const imageFormData = new FormData();
+          imageFormData.append('productImages', imageFile);
+          
+          return dispatch(updateProduct({ id: productId, data: imageFormData }))
+            .unwrap()
+            .then(() => {
+              toast.success("Product added with image");
+            });
+        } else {
+          toast.success("Product added successfully");
+        }
+      })
+      .then(() => {
         setShowModal(false);
         setTimeout(() => dispatch(fetchProducts()), 1500);
       })
