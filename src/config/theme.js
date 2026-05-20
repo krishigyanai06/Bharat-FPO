@@ -13,7 +13,7 @@ const theme = {
   // API — set VITE_API_BASE in .env
   apiBase:
     import.meta.env.VITE_API_BASE ||
-    "https://bharat-fpo.krishigyanai.com//api",
+    "https://bharat-fpo.krishigyanai.com/api",
 
   // Default login role
   defaultRole: "SuperAdmin",
