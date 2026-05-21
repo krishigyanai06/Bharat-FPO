@@ -71,14 +71,3 @@ Deployed on Vercel. To redeploy:
 ```bash
 vercel --prod
 ```
-
----
-
-### Important Note (You should update this too)
-
-Right now, your **project name is changed**, but your **live URL still shows `kisan-parivar`**.
-
-If you want full branding consistency:
-
-- Change Vercel project name → `beej-se-bazar`
-- Update domain → `beej-se-bazar.vercel.app`
