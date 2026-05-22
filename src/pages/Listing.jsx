@@ -322,7 +322,11 @@ function Listing() {
                   <td className="px-5 py-4">
                     {statusBadge(p.status)}
                     <p className="text-xs text-gray-400 mt-1">
-                      {p.status === "approved" ? "Listed for sale" : p.status === "rejected" ? "Not approved" : "Awaiting review"}
+                      {{
+                        approved: "Listed for sale",
+                        rejected: "Not approved",
+                        pending: "Awaiting review",
+                      }[p.status] ?? p.status}
                     </p>
                   </td>
 
