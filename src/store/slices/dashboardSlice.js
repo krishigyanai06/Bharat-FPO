@@ -11,6 +11,17 @@ const initialState = {
   },
   chartData: [],
   dailyListings: [],
+  monthlyRevenue: [],
+  currentMonthRevenue: 0,
+  prevMonthRevenue: 0,
+  monthlySalesRevenue: [],
+  currentMonthSales: 0,
+  prevMonthSales: 0,
+  totalSalesOrders: 0,
+  monthlyOrdersCount: [],
+  ordersByCrop: [],
+  rawProcurementOrders: [],
+  rawSalesOrders: [],
   stockLevelsData: [],
   recentActivity: [],
   allListings: [], // ✅ ADD
@@ -36,6 +47,17 @@ const dashboardSlice = createSlice({
         state.stats = action.payload.stats;
         state.chartData = action.payload.chartData;
         state.dailyListings = action.payload.dailyListings;
+        state.monthlyRevenue = action.payload.monthlyRevenue || [];
+        state.currentMonthRevenue = action.payload.currentMonthRevenue ?? 0;
+        state.prevMonthRevenue = action.payload.prevMonthRevenue ?? 0;
+        state.monthlySalesRevenue = action.payload.monthlySalesRevenue || [];
+        state.currentMonthSales = action.payload.currentMonthSales ?? 0;
+        state.prevMonthSales = action.payload.prevMonthSales ?? 0;
+        state.totalSalesOrders = action.payload.totalSalesOrders ?? 0;
+        state.monthlyOrdersCount = action.payload.monthlyOrdersCount || [];
+        state.ordersByCrop = action.payload.ordersByCrop || [];
+        state.rawProcurementOrders = action.payload.rawProcurementOrders || [];
+        state.rawSalesOrders = action.payload.rawSalesOrders || [];
         state.stockLevelsData = action.payload.stockLevelsData || [];
         state.recentActivity = action.payload.recentActivity;
         state.allListings = action.payload.allListings;

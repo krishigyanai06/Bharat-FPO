@@ -9,7 +9,6 @@ import {
   ShoppingCart,
   Archive,
   ShoppingBag,
-  Ticket,
   Users,
   BarChart3,
   Settings,
@@ -32,7 +31,6 @@ import { fetchBroadcastHistory } from "../store/thunks/broadcastThunk";
 import { fetchMembers } from "../store/thunks/membersThunk";
 import { fetchProducts } from "../store/thunks/productsThunk";
 import { fetchOrders } from "../store/thunks/procurementThunk";
-import { fetchCoupons } from "../store/thunks/couponsThunk";
 import theme from "../config/theme";
 import { ROUTE_ROLES } from "../config/rbac";
 import GoogleLangPicker from "./google-lang-picker/google-lang-picker";
@@ -45,7 +43,6 @@ const menuItems = [
   { icon: ShoppingCart, label: "Procurement", path: "/procurement" },
   { icon: Archive, label: "Inventory", path: "/inventory" },
   { icon: ShoppingBag, label: "Order Book", path: "/buy" },
-  { icon: Ticket, label: "Coupons", path: "/coupons" },
   { icon: Megaphone, label: "Broadcast", path: "/broadcast" },
   { icon: Users, label: "Members", path: "/members" },
   { icon: BookOpen, label: "Ledger", path: "/ledger" },
@@ -107,7 +104,6 @@ export default function Layout() {
   });
   const { members } = useSelector((s) => s.members);
   const { orders } = useSelector((s) => s.procurement);
-  const { coupons } = useSelector((s) => s.coupons);
   const broadcasts = useSelector((s) =>
     Array.isArray(s.broadcast?.broadcasts) ? s.broadcast.broadcasts : [],
   );
@@ -266,8 +262,6 @@ export default function Layout() {
       if (!members.length) dispatch(fetchMembers());
       if (!products.length) dispatch(fetchProducts());
       if (!orders.length) dispatch(fetchOrders());
-      // Only fetch coupons if user has access to coupons
-      if (!isSuperAdmin && !coupons.length) dispatch(fetchCoupons());
     }
   };
 
@@ -331,22 +325,7 @@ export default function Layout() {
               }),
             );
 
-          // Only include coupons in search for non-SuperAdmin users
-          if (!isSuperAdmin) {
-            coupons
-              ?.filter((c) => c.code?.toLowerCase().includes(term))
-              .slice(0, 3)
-              .forEach((c) =>
-                results.push({
-                  icon: "🎟️",
-                  label: c.code,
-                  sub: `Coupon • ${c.discountType} • ${c.discountValue}`,
-                  path: "/coupons",
-                }),
-              );
-          }
-
-          return results;
+return results;
         })();
 
   return (
