@@ -23,6 +23,7 @@ const Broadcast    = lazy(() => import('./pages/Broadcast'));
 const Ledger       = lazy(() => import('./pages/Ledger'));
 const Advertisement = lazy(() => import('./pages/Advertisement'));
 const CreateTenant = lazy(() => import('./pages/CreateTenant'));
+const TierFeatures = lazy(() => import('./pages/TierFeatures'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-64">
@@ -60,6 +61,7 @@ function App() {
             <Route path="reports"      element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/reports']}><Suspense fallback={<PageLoader />}><Reports /></Suspense></ProtectedRoute>} />
             <Route path="settings"     element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/settings']}><Suspense fallback={<PageLoader />}><Settings /></Suspense></ProtectedRoute>} />
             <Route path="create-tenant" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/create-tenant']}><Suspense fallback={<PageLoader />}><CreateTenant /></Suspense></ProtectedRoute>} />
+            <Route path="tier-features" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/tier-features']}><Suspense fallback={<PageLoader />}><TierFeatures /></Suspense></ProtectedRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>

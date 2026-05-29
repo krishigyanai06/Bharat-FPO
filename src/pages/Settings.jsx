@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchProfile, updateProfile } from "../store/thunks/settingsThunk";
-
 import { clearStatus } from "../store/slices/settingsSlice";
 import { Save } from "lucide-react";
 import { usePermissions } from "../hooks/usePermissions";
 
 function Settings() {
   const dispatch = useDispatch();
-  const { profile, loading, success } = useSelector((s) => s.settings);
+  const { profile, loading, success, error } = useSelector((s) => s.settings);
+  const authUser = useSelector((s) => s.auth.user);
   const { isReadOnly } = usePermissions();
+  const data = profile || authUser;
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -30,21 +31,21 @@ function Settings() {
 
   /* MAP API DATA → FORM */
   useEffect(() => {
-    if (profile) {
+    if (data) {
       setForm({
-        firstName: profile.firstName || "",
-        lastName: profile.lastName || "",
-        phone: profile.phone || "",
-        emailId: profile.emailId || "",
-        village: profile.village || "",
-        district: profile.district || "",
-        state: profile.state || "",
-        gender: profile.gender || "",
-        shopName: profile.shopName || "",
-        gstNumber: profile.gstNumber || "",
+        firstName: data.firstName || "",
+        lastName: data.lastName || "",
+        phone: data.phone || data.mobile || "",
+        emailId: data.emailId || data.email || "",
+        village: data.village || "",
+        district: data.district || "",
+        state: data.state || "",
+        gender: data.gender || "",
+        shopName: data.shopName || "",
+        gstNumber: data.gstNumber || "",
       });
     }
-  }, [profile]);
+  }, [profile, authUser]);
 
   /* SAVE PROFILE */
   const handleSave = (e) => {
@@ -62,9 +63,7 @@ function Settings() {
     }
   }, [success, dispatch]);
 
-  if (!profile) return null;
-
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin h-10 w-10 border-b-2 border-brand-600 rounded-full" />
@@ -89,6 +88,11 @@ function Settings() {
           <h2 className="font-semibold text-sm">Profile Settings</h2>
         </div>
 
+        {error && (
+          <div className="mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {error}
+          </div>
+        )}
         {success && (
           <div className="mb-4 px-4 py-2.5 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700">
             Profile updated successfully!
@@ -137,7 +141,7 @@ function Settings() {
             <div>
               <label className="block text-xs text-gray-500 mb-1">Role</label>
               <input
-                value={profile?.role || "—"}
+                value={data?.role || "—"}
                 disabled
                 className="w-full border px-3 py-2 rounded-lg bg-gray-50 text-sm text-gray-400"
               />

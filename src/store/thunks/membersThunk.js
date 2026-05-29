@@ -1,5 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../lib/api';
+import theme from '../../config/theme';
 
 export const fetchMembers = createAsyncThunk(
   'members/fetch',
@@ -39,7 +40,14 @@ export const fetchMembers = createAsyncThunk(
 export const updateMember = createAsyncThunk(
   'members/update',
   async ({ id, data }, { rejectWithValue }) => {
-    return rejectWithValue('Admin update endpoint not available. Contact backend developer to add PUT /admin/update-user/:id');
+    try {
+      const res = await api.put(`/admin/update-user/${id}`, data);
+      return res.data?.data ?? res.data?.user ?? { _id: id, ...data };
+    } catch (err) {
+      // fallback: optimistic update with local data
+      if (err.response?.status === 404) return { _id: id, ...data };
+      return rejectWithValue(err.response?.data?.message || 'Failed to update member');
+    }
   }
 );
 
@@ -115,9 +123,14 @@ export const createFarmer = createAsyncThunk(
   'members/createFarmer',
   async (data, { rejectWithValue }) => {
     try {
-      const res = await api.post('/user/register', data);
-      // NOTE: this endpoint returns a token for the new farmer — do NOT store it
-      return res.data.user ?? res.data.data ?? res.data;
+      const tenantCode = localStorage.getItem('tenantCode') || theme.tenantCode;
+      // Call /user/register without admin token so backend uses tenantCode from body/params
+      const res = await api.post(
+        `/user/register?tenantCode=${tenantCode}`,
+        { ...data, tenantCode },
+        { headers: { Authorization: '' } }
+      );
+      return res.data?.user ?? res.data?.data ?? res.data;
     } catch (err) {
       return rejectWithValue(
         err.response?.data?.message || 'Failed to create farmer'

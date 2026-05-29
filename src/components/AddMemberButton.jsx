@@ -5,7 +5,7 @@ import {
   createStaff,
   createFarmer,
 } from "../store/thunks/membersThunk";
-import { UserPlus, ChevronDown, X } from "lucide-react";
+import { UserPlus, ChevronDown, X, Eye, EyeOff } from "lucide-react";
 
 /* ─── Shared helpers ──────────────────────────────────────── */
 function ModalShell({ title, onClose, children }) {
@@ -51,20 +51,54 @@ function ModalFooter({ onClose, loading, label }) {
   );
 }
 
-function Field({ label, k, form, set, type = "text", required = false }) {
+function Field({
+  label,
+  k,
+  form,
+  set,
+  type = "text",
+  required = false,
+  error,
+}) {
+  const [show, setShow] = useState(false);
+  const isPassword = type === "password";
   return (
     <div>
       <label className="text-xs text-gray-500 mb-1 block">
         {label}
         {required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
-      <input
-        type={type}
-        value={form[k]}
-        onChange={set(k)}
-        required={required}
-        className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-      />
+      <div className="relative">
+        <input
+          type={isPassword ? (show ? "text" : "password") : type}
+          value={form[k]}
+          onChange={
+            k === "phone"
+              ? (e) => {
+                  const v = e.target.value.replace(/\D/g, "").slice(0, 10);
+                  set(k)({ target: { value: v } });
+                }
+              : set(k)
+          }
+          inputMode={k === "phone" ? "numeric" : undefined}
+          maxLength={k === "phone" ? 10 : undefined}
+          className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${isPassword ? "pr-9" : ""} ${error ? "border-red-400 focus:ring-red-400" : "focus:ring-brand-500"}`}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShow((v) => !v)}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            {show ? (
+              <EyeOff className="w-4 h-4" />
+            ) : (
+              <Eye className="w-4 h-4" />
+            )}
+          </button>
+        )}
+      </div>
+      {error && <p className="text-[11px] text-red-500 mt-0.5">{error}</p>}
     </div>
   );
 }
@@ -117,24 +151,70 @@ function FarmerModal({ onClose }) {
     ifscCode: "",
     accountNumber: "",
   });
+  const [errors, setErrors] = useState({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k) => (e) => {
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+    setErrors((prev) => ({ ...prev, [k]: "" }));
+  };
+
+  const validate = () => {
+    const e = {};
+    if (!form.firstName.trim()) e.firstName = "First name is required";
+    else if (form.firstName.trim().length < 2) e.firstName = "Min 2 characters";
+
+    if (!/^[6-9]\d{9}$/.test(form.phone))
+      e.phone = "Enter valid 10-digit Indian mobile number";
+
+    if (!form.password) e.password = "Password is required";
+    else if (form.password.length < 6) e.password = "Min 6 characters";
+
+    if (
+      form.ifscCode &&
+      !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(form.ifscCode.toUpperCase())
+    )
+      e.ifscCode = "Invalid IFSC (e.g. SBIN0001234)";
+
+    if (form.accountNumber && !/^\d{9,18}$/.test(form.accountNumber))
+      e.accountNumber = "Must be 9–18 digits";
+
+    if (form.bankName && form.bankName.trim().length < 3)
+      e.bankName = "Enter full bank name";
+
+    return e;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
     setError("");
     setLoading(true);
     const payload = {
       role: "Farmer",
       ...Object.fromEntries(Object.entries(form).filter(([, v]) => v !== "")),
+      ...(form.ifscCode && { ifscCode: form.ifscCode.toUpperCase() }),
     };
     const result = await dispatch(createFarmer(payload));
     setLoading(false);
     if (createFarmer.fulfilled.match(result)) {
-      dispatch(fetchMembers());
+      await dispatch(fetchMembers());
       onClose();
-    } else setError(result.payload || "Failed to create farmer");
+    } else {
+      const msg = result.payload || "Failed to create farmer";
+      setError(
+        msg.toLowerCase().includes("already exists")
+          ? "This mobile number is already registered. Please use a different number."
+          : msg,
+      );
+      if (msg.toLowerCase().includes("already exists")) {
+        await dispatch(fetchMembers());
+      }
+    }
   };
 
   return (
@@ -150,9 +230,17 @@ function FarmerModal({ onClose }) {
             form={form}
             set={set}
             required
+            error={errors.firstName}
           />
           <Field label="Last Name" k="lastName" form={form} set={set} />
-          <Field label="Mobile" k="phone" form={form} set={set} required />
+          <Field
+            label="Mobile"
+            k="phone"
+            form={form}
+            set={set}
+            required
+            error={errors.phone}
+          />
           <Field
             label="Password"
             k="password"
@@ -160,6 +248,7 @@ function FarmerModal({ onClose }) {
             set={set}
             type="password"
             required
+            error={errors.password}
           />
           <GenderSelect value={form.gender} onChange={set("gender")} />
           <div>
@@ -173,19 +262,32 @@ function FarmerModal({ onClose }) {
             >
               <option value="small">Small</option>
               <option value="medium">Medium</option>
-              <option value="large">Large</option>
+              <option value="large">Marginal</option>
             </select>
           </div>
         </div>
         <LocationFields form={form} set={set} />
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Bank Name" k="bankName" form={form} set={set} />
-          <Field label="IFSC Code" k="ifscCode" form={form} set={set} />
+          <Field
+            label="Bank Name"
+            k="bankName"
+            form={form}
+            set={set}
+            error={errors.bankName}
+          />
+          <Field
+            label="IFSC Code"
+            k="ifscCode"
+            form={form}
+            set={set}
+            error={errors.ifscCode}
+          />
           <Field
             label="Account Number"
             k="accountNumber"
             form={form}
             set={set}
+            error={errors.accountNumber}
           />
         </div>
         {error && <p className="text-xs text-red-500">{error}</p>}
@@ -259,8 +361,12 @@ function StaffModal({ onClose }) {
     setError("");
     setLoading(true);
     const payload = Object.fromEntries(
-      Object.entries(form).filter(([, v]) => v !== ""),
+      Object.entries(form).filter(([, v]) => v !== "" && v !== null && v !== undefined),
     );
+    // Backend requires unique email — generate a placeholder if not provided
+    if (!payload.emailId) {
+      payload.emailId = `staff.${payload.phone}@noemail.local`;
+    }
     const result = await dispatch(createStaff(payload));
     setLoading(false);
     if (createStaff.fulfilled.match(result)) {
@@ -301,7 +407,7 @@ function StaffModal({ onClose }) {
           />
           <Field label="Last Name" k="lastName" form={form} set={set} />
           <Field label="Mobile" k="phone" form={form} set={set} required />
-          <Field label="Email" k="emailId" form={form} set={set} required />
+          <Field label="Email" k="emailId" form={form} set={set} />
           <Field
             label="Joining Date"
             k="joiningDate"

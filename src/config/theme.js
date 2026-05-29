@@ -8,7 +8,7 @@ const theme = {
   brand: "Bharat FPO",
   shortName: "Bharat FPO",
   tagline: "FPO Admin Panel",
-  logo: "🏬",
+  logo: "/logo.jpeg",
 
   // API — set VITE_API_BASE in .env
   apiBase:

@@ -30,7 +30,9 @@ const membersSlice = createSlice({
         if (action.payload?._id || action.payload?.id) state.members.unshift(action.payload);
       })
       .addCase(createFarmer.fulfilled, (state, action) => {
-        if (action.payload?._id || action.payload?.id) state.members.unshift(action.payload);
+        const member = action.payload?.user ?? action.payload?.data ?? action.payload;
+        if (member?._id || member?.id) state.members.unshift(member);
+        else state.members = state.members; // fetchMembers will sync
       });
   },
 });

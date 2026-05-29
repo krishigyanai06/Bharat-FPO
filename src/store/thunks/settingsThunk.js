@@ -7,7 +7,7 @@ export const fetchProfile = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const res = await api.get('/user/getUserDetails');
-      return res.data.data; // ✅ actual data object
+      return res.data.data?.user ?? res.data.data ?? res.data.user ?? res.data ?? null;
     } catch (err) {
       return rejectWithValue(
         err.response?.data?.message || 'Failed to load profile'
