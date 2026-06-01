@@ -37,8 +37,8 @@ const ORDER_STATUSES = [
     icon: CheckCircle,
   },
   {
-    value: "CANCELLED",
-    label: "Cancelled",
+    value: "REJECT",
+    label: "Reject",
     color: "bg-red-100 text-red-700",
     icon: XCircle,
   },
@@ -58,7 +58,7 @@ const getDueStatus = (o) => {
   if (
     o.paymentMethod !== "CREDIT" ||
     o.status === "SOLD" ||
-    o.status === "CANCELLED"
+    o.status === "REJECTED"
   )
     return null;
   const due = o.dueDate
@@ -428,9 +428,12 @@ function Buy() {
                   <td className="px-4 py-4">
                     <select
                       value={o.status || "PENDING"}
-                      onChange={(e) => !isReadOnly && handleStatusChange(o._id, e.target.value, o.status)}
+                      onChange={(e) =>
+                        !isReadOnly &&
+                        handleStatusChange(o._id, e.target.value, o.status)
+                      }
                       disabled={isReadOnly}
-                      className={`text-xs font-medium px-2 py-1 rounded-lg border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-400 ${sc.color} ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`text-xs font-medium px-2 py-1 rounded-lg border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-400 ${sc.color} ${isReadOnly ? "opacity-50 cursor-not-allowed" : ""}`}
                     >
                       {ORDER_STATUSES.map((s) => (
                         <option key={s.value} value={s.value}>
@@ -630,7 +633,7 @@ function Buy() {
           subMessage="This will update the order status."
           confirmLabel="Yes, Update"
           confirmClassName={
-            confirmStatus.status === "CANCELLED"
+            confirmStatus.status === "REJECTED"
               ? "bg-red-600 hover:bg-red-700"
               : "bg-brand-600 hover:bg-brand-700"
           }

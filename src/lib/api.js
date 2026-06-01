@@ -55,7 +55,8 @@ api.interceptors.request.use(
       
       // Only skip tenant context for these specific routes
       const skipTenantContext = url.includes('/superadmin/tenants') || 
-                                url.includes('/tenant/getAllTenants');
+                                url.includes('/tenant/getAllTenants') ||
+                                url.includes('/tenant/my-features');
       
       if (!skipTenantContext && selectedTenantId && selectedTenantId.trim().length > 0) {
         // ✅ CRITICAL: Backend expects lowercase 'x-tenant-id' header
@@ -144,7 +145,8 @@ api.interceptors.response.use(
         '/ledger',
         '/products',
         '/advertisement',
-        '/superadmin/'
+        '/superadmin/',
+        '/tenant/my-features',
       ];
       const isDataFetch = skipLogoutUrls.some(u => url.includes(u));
       

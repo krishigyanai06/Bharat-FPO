@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchProducts } from "../store/thunks/productsThunk";
+import { fetchProducts, updateListing } from "../store/thunks/productsThunk";
 import { fetchMembers } from "../store/thunks/membersThunk";
 import {
   Search,
@@ -12,6 +12,14 @@ import {
   ImageOff,
   ChevronLeft,
   ChevronRight,
+  MapPin,
+  MoreVertical,
+  Users,
+  Phone,
+  Tag,
+  Layers,
+  X,
+  ExternalLink,
 } from "lucide-react";
 import { SkeletonHeader, SkeletonStatCards, SkeletonTable } from "../components/Skeleton";
 import { usePermissions } from "../hooks/usePermissions";
@@ -71,11 +79,12 @@ function Listing() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCrop, setSelectedCrop] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("pending");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [viewProduct, setViewProduct] = useState(null);
   const [activeImg, setActiveImg] = useState(0);
-  const ITEMS_PER_PAGE = 9;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const ITEMS_PER_PAGE = itemsPerPage;
 
   useEffect(() => {
     dispatch(fetchProducts());
@@ -228,398 +237,410 @@ function Listing() {
       {/* TABLE */}
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
+          <thead className="bg-gray-50 border-b">
             <tr>
-              <th className="px-6 py-4 text-left">#</th>
-              <th className="px-6 py-4 text-left">Image</th>
-              <th className="px-6 py-4 text-left">Farmer</th>
-              <th className="px-6 py-4 text-left">Crop</th>
-              <th className="px-6 py-4 text-left">Quantity</th>
-              <th className="px-6 py-4 text-left">Expected Price</th>
-              <th className="px-6 py-4 text-left">Total Value</th>
-              <th className="px-6 py-4 text-left">Submission Date</th>
-              <th className="px-6 py-4 text-left">Status</th>
-              <th className="px-6 py-4 text-center">Actions</th>
+              {["#", "Crop Details", "Farmer Details", "Quantity & Price", "Total Value", "Submitted On", "Status", "Actions"].map((h) => (
+                <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
+              ))}
             </tr>
           </thead>
-          <tbody className="divide-y">
-            {paginatedProducts.map((p, i) => (
-              <tr
-                key={p._id}
-                className="hover:bg-brand-50/40 cursor-pointer transition-colors"
-                onClick={() => {
-                  setViewProduct(p);
-                  setActiveImg(0);
-                }}
-              >
-                <td className="px-6 py-4 text-gray-400">
-                  {startIndex + i + 1}
-                </td>
-                <td className="px-6 py-4">
-                  <div className="relative w-10 h-10">
-                    {getCropImage(p) ? (
-                      <img
-                        src={getCropImage(p)}
-                        alt={p.cropName}
-                        className="w-10 h-10 rounded-lg object-cover border"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                        <ImageOff size={14} className="text-gray-300" />
-                      </div>
-                    )}
-                    {p.cropImages?.length > 1 && (
-                      <span className="absolute -top-1 -right-1 bg-brand-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                        {p.cropImages.length}
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <p className="font-medium text-gray-800">
-                    {p.userId?.firstName} {p.userId?.lastName}
-                  </p>
-                  <p className="text-xs text-gray-400">Farmer</p>
-                </td>
-                <td className="px-6 py-4">
-                  <p className="font-medium">{p.cropName}</p>
-                  {p.variety && (
-                    <p className="text-xs text-gray-400">{p.variety}</p>
-                  )}
-                </td>
-                <td className="px-6 py-4">{p.quantity} qtl</td>
-                <td className="px-6 py-4">₹{p.price}/qtl</td>
-                <td className="px-6 py-4 font-semibold text-brand-700">
-                  ₹{(p.quantity * p.price).toLocaleString("en-IN")}
-                </td>
-                <td className="px-6 py-4">
-                  {new Date(p.createdAt).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4">{statusBadge(p.status)}</td>
-                <td
-                  className="px-6 py-4 text-center"
-                  onClick={(e) => e.stopPropagation()}
+          <tbody className="divide-y divide-gray-100">
+            {paginatedProducts.map((p, i) => {
+              const member = members.find((m) => m._id === (p.userId?._id ?? p.userId));
+              const phone = member?.phone ?? p.userId?.phone ?? null;
+              const city = p.location?.city ?? member?.city ?? null;
+              const state = p.location?.state ?? member?.state ?? null;
+              const locationStr = [city, state].filter(Boolean).join(", ");
+              const submittedDate = new Date(p.createdAt);
+              return (
+                <tr
+                  key={p._id}
+                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => { setViewProduct(p); setActiveImg(0); }}
                 >
-                  <button
-                    onClick={() => {
-                      setViewProduct(p);
-                      setActiveImg(0);
-                    }}
-                    className="px-3 py-1 text-xs border border-blue-500 text-blue-600 rounded-lg hover:bg-blue-50 flex items-center gap-1 mx-auto"
-                  >
-                    <Eye size={12} /> View
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  {/* # */}
+                  <td className="px-5 py-4 text-gray-400 text-sm">{startIndex + i + 1}</td>
+
+                  {/* Crop Details */}
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="relative flex-shrink-0">
+                        {getCropImage(p) ? (
+                          <img src={getCropImage(p)} alt={p.cropName} className="w-12 h-12 rounded-lg object-cover border border-gray-200" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">
+                            <ImageOff size={16} className="text-gray-300" />
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-800">{p.cropName}</p>
+                        {p.variety && <p className="text-xs text-gray-400 mt-0.5">{p.variety}</p>}
+                        <div className="mt-1">{statusBadge(p.status)}</div>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Farmer Details */}
+                  <td className="px-5 py-4">
+                    <p className="font-semibold text-gray-800">
+                      {p.userId?.firstName} {p.userId?.lastName}
+                    </p>
+                    {phone && <p className="text-xs text-gray-500 mt-0.5">{phone}</p>}
+                    {locationStr && (
+                      <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+                        <MapPin size={10} className="text-gray-400" />{locationStr}
+                      </p>
+                    )}
+                  </td>
+
+                  {/* Quantity & Price */}
+                  <td className="px-5 py-4">
+                    <p className="flex items-center gap-1 text-gray-700">
+                      <Users size={13} className="text-gray-400" />
+                      {p.quantity} qtl
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">₹{Number(p.price).toLocaleString("en-IN")} / qtl</p>
+                  </td>
+
+                  {/* Total Value */}
+                  <td className="px-5 py-4 font-bold text-brand-600 text-base">
+                    ₹{(p.quantity * p.price).toLocaleString("en-IN")}
+                  </td>
+
+                  {/* Submitted On */}
+                  <td className="px-5 py-4">
+                    <p className="text-gray-700">
+                      {submittedDate.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {submittedDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </td>
+
+                  {/* Status */}
+                  <td className="px-5 py-4">
+                    {statusBadge(p.status)}
+                    <p className="text-xs text-gray-400 mt-1">
+                      {{
+                        approved: "Listed for sale",
+                        rejected: "Not approved",
+                        pending: "Awaiting review",
+                      }[p.status] ?? p.status}
+                    </p>
+                  </td>
+
+                  {/* Actions */}
+                  <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => { setViewProduct(p); setActiveImg(0); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-green-500 text-green-600 rounded-lg hover:bg-green-50 transition font-medium"
+                      >
+                        <Eye size={12} /> {p.status === "pending" ? "Review" : "View"}
+                      </button>
+                      <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition">
+                        <MoreVertical size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {!filteredProducts.length && (
               <tr>
-                <td colSpan="10" className="text-center py-14">
+                <td colSpan="8" className="text-center py-14">
                   <div className="flex flex-col items-center gap-2 text-gray-400">
                     <Package size={32} className="text-gray-300" />
-                    <span>
-                      {statusFilter === "all"
-                        ? "No listings found"
-                        : `No ${statusFilter} listings`}
-                    </span>
+                    <span>{statusFilter === "all" ? "No listings found" : `No ${statusFilter} listings`}</span>
                   </div>
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+
+        {/* PAGINATION FOOTER */}
+        <div className="flex items-center justify-between px-5 py-3 border-t bg-white">
+          <p className="text-sm text-gray-500">
+            Showing {filteredProducts.length === 0 ? 0 : startIndex + 1} to{" "}
+            {Math.min(startIndex + ITEMS_PER_PAGE, filteredProducts.length)} of{" "}
+            {filteredProducts.length} listings
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => p - 1)}
+              className="w-8 h-8 flex items-center justify-center border rounded-lg text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              <ChevronLeft size={15} />
+            </button>
+            {Array.from({ length: totalPages }, (_, idx) => idx + 1)
+              .filter((pg) => pg === 1 || pg === totalPages || Math.abs(pg - currentPage) <= 1)
+              .reduce((acc, pg, i, arr) => {
+                if (i > 0 && pg - arr[i - 1] > 1) acc.push("...");
+                acc.push(pg);
+                return acc;
+              }, [])
+              .map((pg, idx) =>
+                pg === "..." ? (
+                  <span key={`ellipsis-${idx}`} className="px-1 text-gray-400 text-sm">…</span>
+                ) : (
+                  <button
+                    key={pg}
+                    onClick={() => setCurrentPage(pg)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition ${
+                      currentPage === pg
+                        ? "bg-brand-600 text-white shadow-sm"
+                        : "border text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {pg}
+                  </button>
+                )
+              )}
+            <button
+              disabled={currentPage === totalPages || totalPages === 0}
+              onClick={() => setCurrentPage((p) => p + 1)}
+              className="w-8 h-8 flex items-center justify-center border rounded-lg text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              <ChevronRight size={15} />
+            </button>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+              className="ml-2 px-3 py-1.5 border rounded-lg text-sm text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              {[5, 10, 20, 50].map((n) => (
+                <option key={n} value={n}>{n} per page</option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
-      {/* PAGINATION */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-3">
-          <button
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((p) => p - 1)}
-            className="px-3 py-1 border rounded text-sm disabled:opacity-50"
-          >
-            Prev
-          </button>
-          <span className="text-sm text-gray-600">
-            Page {currentPage} of {totalPages}
-          </span>
-          <button
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((p) => p + 1)}
-            className="px-3 py-1 border rounded text-sm disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
-      )}
-
       {/* VIEW MODAL */}
-      {viewProduct && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      {viewProduct && (() => {
+        const member = members.find((m) => m._id === (viewProduct.userId?._id ?? viewProduct.userId));
+        const firstName = member?.firstName ?? viewProduct.userId?.firstName ?? "Unknown";
+        const lastName = member?.lastName ?? viewProduct.userId?.lastName ?? "Farmer";
+        const phone = member?.phone ?? viewProduct.userId?.phone ?? null;
+        const city = viewProduct.location?.city ?? member?.city ?? null;
+        const state = viewProduct.location?.state ?? member?.state ?? null;
+        const locationStr = [city, state].filter(Boolean).join(", ");
+        const totalValue = (viewProduct.quantity * viewProduct.price).toLocaleString("en-IN");
+        const statusColors = {
+          approved: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", dot: "bg-emerald-500" },
+          rejected: { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", dot: "bg-red-500" },
+          pending:  { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", dot: "bg-amber-400" },
+        };
+        const sc = statusColors[viewProduct.status] ?? statusColors.pending;
+        return (
           <div
-            className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl flex flex-col"
-            style={{ maxHeight: "90vh" }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ backgroundColor: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
+            onClick={() => setViewProduct(null)}
           >
-            {/* MODAL HEADER */}
-            <div className="flex justify-between items-center px-6 py-4 border-b flex-shrink-0">
-              <h2 className="text-lg font-semibold">Listing Details</h2>
-              <button
-                onClick={() => setViewProduct(null)}
-                className="text-gray-400 hover:text-gray-600 text-xl"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* SCROLLABLE BODY */}
-            <div className="overflow-y-auto flex-1 p-6 space-y-5">
-              {/* STATUS BANNER */}
-              <div
-                className={`rounded-xl px-4 py-3 flex items-center justify-between ${
-                  viewProduct.status === "approved"
-                    ? "bg-brand-50 border border-brand-200"
-                    : viewProduct.status === "rejected"
-                      ? "bg-red-50 border border-red-200"
-                      : "bg-orange-50 border border-orange-200"
-                }`}
-              >
-                <div>
-                  <p
-                    className={`text-xs font-medium ${
-                      viewProduct.status === "approved"
-                        ? "text-brand-500"
-                        : viewProduct.status === "rejected"
-                          ? "text-red-500"
-                          : "text-orange-500"
-                    }`}
-                  >
-                    Current Status
-                  </p>
-                  <p
-                    className={`text-base font-bold capitalize mt-0.5 ${
-                      viewProduct.status === "approved"
-                        ? "text-brand-700"
-                        : viewProduct.status === "rejected"
-                          ? "text-red-700"
-                          : "text-orange-700"
-                    }`}
-                  >
-                    {viewProduct.status || "Pending"}
-                  </p>
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden"
+              style={{ maxHeight: "92vh" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* HEADER */}
+              <div className="flex items-center justify-between px-6 py-4 border-b bg-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-brand-100 flex items-center justify-center">
+                    <Package size={18} className="text-brand-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-gray-800">Listing Details</h2>
+                    <p className="text-xs text-gray-400">ID: {viewProduct._id?.slice(-8).toUpperCase()}</p>
+                  </div>
                 </div>
-                {statusBadge(viewProduct.status)}
+                <div className="flex items-center gap-3">
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${sc.bg} ${sc.border} ${sc.text}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+                    {viewProduct.status?.charAt(0).toUpperCase() + viewProduct.status?.slice(1) || "Pending"}
+                  </span>
+                  <button onClick={() => setViewProduct(null)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition">
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
 
-              {/* IMAGE SLIDER */}
-              {viewProduct.cropImages?.length > 0 ? (
-                <div>
-                  <div className="relative w-full h-56 bg-gray-100 rounded-xl overflow-hidden">
-                    <img
-                      src={viewProduct.cropImages[activeImg]?.url}
-                      alt={`crop-${activeImg}`}
-                      className="w-full h-full object-cover"
-                    />
-                    <span className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-0.5 rounded-full">
-                      {activeImg + 1} / {viewProduct.cropImages.length}
-                    </span>
-                    {viewProduct.cropImages.length > 1 && (
+              {/* BODY — two columns */}
+              <div className="flex flex-col md:flex-row overflow-y-auto flex-1">
+
+                {/* LEFT — image gallery */}
+                <div className="md:w-72 flex-shrink-0 bg-gray-50 border-r p-4 flex flex-col gap-3">
+                  <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-gray-200">
+                    {viewProduct.cropImages?.length > 0 ? (
+                      <img src={viewProduct.cropImages[activeImg]?.url} alt="crop" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ImageOff size={36} className="text-gray-300" />
+                      </div>
+                    )}
+                    {viewProduct.cropImages?.length > 1 && (
                       <>
-                        <button
-                          onClick={() =>
-                            setActiveImg(
-                              (i) =>
-                                (i - 1 + viewProduct.cropImages.length) %
-                                viewProduct.cropImages.length,
-                            )
-                          }
-                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-1 shadow transition"
-                        >
-                          <ChevronLeft size={18} className="text-gray-700" />
+                        <button onClick={() => setActiveImg((i) => (i - 1 + viewProduct.cropImages.length) % viewProduct.cropImages.length)}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white rounded-full p-1.5 shadow-md transition">
+                          <ChevronLeft size={16} className="text-gray-700" />
                         </button>
-                        <button
-                          onClick={() =>
-                            setActiveImg(
-                              (i) => (i + 1) % viewProduct.cropImages.length,
-                            )
-                          }
-                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-1 shadow transition"
-                        >
-                          <ChevronRight size={18} className="text-gray-700" />
+                        <button onClick={() => setActiveImg((i) => (i + 1) % viewProduct.cropImages.length)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white rounded-full p-1.5 shadow-md transition">
+                          <ChevronRight size={16} className="text-gray-700" />
                         </button>
+                        <span className="absolute bottom-2 right-2 bg-black/50 text-white text-[11px] px-2 py-0.5 rounded-full">
+                          {activeImg + 1}/{viewProduct.cropImages.length}
+                        </span>
                       </>
                     )}
                   </div>
-                  {viewProduct.cropImages.length > 1 && (
-                    <div className="flex gap-2 mt-2 overflow-x-auto pb-1">
+                  {viewProduct.cropImages?.length > 1 && (
+                    <div className="flex gap-2 overflow-x-auto pb-1">
                       {viewProduct.cropImages.map((img, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setActiveImg(i)}
+                        <button key={i} onClick={() => setActiveImg(i)}
                           className={`flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition ${
-                            activeImg === i
-                              ? "border-brand-500"
-                              : "border-transparent opacity-60 hover:opacity-100"
-                          }`}
-                        >
-                          <img
-                            src={img.url}
-                            alt={`thumb-${i}`}
-                            className="w-full h-full object-cover"
-                          />
+                            activeImg === i ? "border-brand-500 shadow-sm" : "border-transparent opacity-50 hover:opacity-100"
+                          }`}>
+                          <img src={img.url} alt={`t-${i}`} className="w-full h-full object-cover" />
                         </button>
                       ))}
                     </div>
                   )}
+                  {/* Total value card */}
+                  <div className="mt-auto bg-gradient-to-br from-brand-600 to-brand-700 rounded-xl p-4 text-white">
+                    <p className="text-xs font-medium opacity-80">Total Value</p>
+                    <p className="text-2xl font-bold mt-0.5">₹{totalValue}</p>
+                    <p className="text-xs opacity-70 mt-1">{viewProduct.quantity} qtl × ₹{Number(viewProduct.price).toLocaleString("en-IN")}</p>
+                  </div>
                 </div>
-              ) : (
-                <div className="w-full h-56 rounded-xl bg-gray-100 flex items-center justify-center">
-                  <ImageOff size={32} className="text-gray-300" />
-                </div>
-              )}
 
-              {/* CROP DETAILS */}
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                  Crop Details
-                </p>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-400">Crop Name</p>
-                    <p className="font-semibold mt-0.5">
-                      {viewProduct.cropName}
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-400">Variety</p>
-                    <p className="font-semibold mt-0.5">
-                      {viewProduct.variety || "—"}
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-400">Quantity</p>
-                    <p className="font-semibold mt-0.5">
-                      {viewProduct.quantity} qtl
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-400">Expected Price</p>
-                    <p className="font-semibold mt-0.5">
-                      ₹{viewProduct.price}/qtl
-                    </p>
-                  </div>
-                  <div className="bg-brand-50 rounded-lg p-3 col-span-2">
-                    <p className="text-xs text-brand-600">Total Value</p>
-                    <p className="font-bold text-brand-700 text-lg mt-0.5">
-                      ₹
-                      {(
-                        viewProduct.quantity * viewProduct.price
-                      ).toLocaleString("en-IN")}
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-400">Harvest Date</p>
-                    <p className="font-semibold mt-0.5">
-                      {viewProduct.harvestDate
-                        ? new Date(viewProduct.harvestDate).toLocaleDateString(
-                            "en-IN",
-                            { day: "numeric", month: "short", year: "numeric" },
-                          )
-                        : "—"}
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-400">Submitted On</p>
-                    <p className="font-semibold mt-0.5">
-                      {new Date(viewProduct.createdAt).toLocaleDateString(
-                        "en-IN",
-                        { day: "numeric", month: "short", year: "numeric" },
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
+                {/* RIGHT — details */}
+                <div className="flex-1 p-6 space-y-5 overflow-y-auto">
 
-              {/* FARMER */}
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                  Farmer
-                </p>
-                <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3">
-                  {(() => {
-                    const member = members.find(
-                      (m) => m._id === viewProduct.userId?._id,
-                    );
-                    const firstName =
-                      member?.firstName ??
-                      viewProduct.userId?.firstName ??
-                      "Unknown";
-                    const lastName =
-                      member?.lastName ??
-                      viewProduct.userId?.lastName ??
-                      "Farmer";
-                    const phone =
-                      member?.phone ?? viewProduct.userId?.phone ?? null;
-                    return (
-                      <>
-                        <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-semibold text-sm flex-shrink-0">
-                          {firstName[0]}
-                          {lastName[0]}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-sm">
-                            {firstName} {lastName}
+                  {/* Crop info */}
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">{viewProduct.cropName}</h3>
+                    {viewProduct.variety && <p className="text-sm text-gray-500 mt-0.5">{viewProduct.variety}</p>}
+                  </div>
+
+                  {/* Stats row */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="border rounded-xl p-3">
+                      <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1">
+                        <Layers size={12} /> Quantity
+                      </div>
+                      <p className="font-bold text-gray-800 text-base">{viewProduct.quantity} qtl</p>
+                    </div>
+                    <div className="border rounded-xl p-3">
+                      <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1">
+                        <Tag size={12} /> Price / qtl
+                      </div>
+                      <p className="font-bold text-gray-800 text-base">₹{Number(viewProduct.price).toLocaleString("en-IN")}</p>
+                    </div>
+                  </div>
+
+                  {/* Farmer card */}
+                  <div className="border rounded-xl p-4">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Farmer</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-sm flex-shrink-0">
+                        {firstName[0]}{lastName[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-800">{firstName} {lastName}</p>
+                        {phone ? (
+                          <a href={`tel:${phone}`} className="flex items-center gap-1 text-xs text-brand-600 hover:underline mt-0.5">
+                            <Phone size={11} /> +91 {phone}
+                          </a>
+                        ) : (
+                          <p className="text-xs text-gray-400 mt-0.5">Phone not available</p>
+                        )}
+                        {locationStr && (
+                          <p className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                            <MapPin size={11} /> {locationStr}
                           </p>
-                          {phone ? (
-                            <a
-                              href={`tel:${phone}`}
-                              className="text-xs text-brand-600 hover:underline"
-                            >
-                              +91 {phone}
-                            </a>
-                          ) : (
-                            <p className="text-xs text-gray-400">
-                              Phone not available
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Location map link */}
+                  {viewProduct.location?.coordinates && (
+                    <a
+                      href={`https://www.google.com/maps?q=${viewProduct.location.coordinates[1]},${viewProduct.location.coordinates[0]}`}
+                      target="_blank" rel="noreferrer"
+                      className="flex items-center gap-3 border border-blue-100 bg-blue-50 hover:bg-blue-100 rounded-xl p-3 transition"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center text-base flex-shrink-0">📍</div>
+                      <div>
+                        <p className="text-sm font-medium text-blue-700">View Farm on Google Maps</p>
+                        <p className="text-xs text-blue-400">{viewProduct.location.coordinates[1]}°N, {viewProduct.location.coordinates[0]}°E</p>
+                      </div>
+                      <ExternalLink size={14} className="ml-auto text-blue-400" />
+                    </a>
+                  )}
+
+                  {/* Update Status */}
+                  {!isReadOnly && (
+                    <div className="border rounded-xl p-4 bg-gray-50">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Update Approval Status</p>
+                      {viewProduct.status !== "pending" ? (
+                        <div className={`flex items-center gap-3 px-4 py-3.5 rounded-xl border ${
+                          viewProduct.status === "approved"
+                            ? "bg-emerald-50 border-emerald-200"
+                            : "bg-red-50 border-red-200"
+                        }`}>
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            viewProduct.status === "approved" ? "bg-emerald-100" : "bg-red-100"
+                          }`}>
+                            {viewProduct.status === "approved"
+                              ? <CheckCircle size={18} className="text-emerald-600" />
+                              : <XCircle size={18} className="text-red-500" />}
+                          </div>
+                          <div>
+                            <p className={`text-sm font-bold capitalize ${
+                              viewProduct.status === "approved" ? "text-emerald-700" : "text-red-600"
+                            }`}>
+                              {viewProduct.status === "approved" ? "✓ Listing Approved" : "✕ Listing Rejected"}
                             </p>
-                          )}
+                            <p className="text-xs text-gray-400 mt-0.5">No further changes allowed</p>
+                          </div>
                         </div>
-                      </>
-                    );
-                  })()}
+                      ) : (
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() =>
+                              dispatch(updateListing({ id: viewProduct._id, data: { status: "approved" } })).then(() =>
+                                setViewProduct((prev) => ({ ...prev, status: "approved" }))
+                              )
+                            }
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition border-2 border-emerald-500 text-emerald-600 hover:bg-emerald-500 hover:text-white"
+                          >
+                            <CheckCircle size={16} /> Approve
+                          </button>
+                          <button
+                            onClick={() =>
+                              dispatch(updateListing({ id: viewProduct._id, data: { status: "rejected" } })).then(() =>
+                                setViewProduct((prev) => ({ ...prev, status: "rejected" }))
+                              )
+                            }
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition border-2 border-red-400 text-red-500 hover:bg-red-500 hover:text-white"
+                          >
+                            <XCircle size={16} /> Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* LOCATION */}
-              {viewProduct.location?.coordinates && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                    Location
-                  </p>
-                  <a
-                    href={`https://www.google.com/maps?q=${viewProduct.location.coordinates[1]},${viewProduct.location.coordinates[0]}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-lg p-3 hover:bg-blue-100 transition"
-                  >
-                    <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 text-lg">
-                      📍
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">
-                        View on Google Maps
-                      </p>
-                      <p className="text-xs text-blue-500">
-                        {viewProduct.location.coordinates[1]}°N,{" "}
-                        {viewProduct.location.coordinates[0]}°E
-                      </p>
-                    </div>
-                    <span className="ml-auto text-blue-400 text-xs">↗</span>
-                  </a>
-                </div>
-              )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

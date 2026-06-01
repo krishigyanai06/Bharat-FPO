@@ -152,25 +152,97 @@ export const getDashboardData = createAsyncThunk(
 
       const chartData = Array.from(chartMap.values());
 
-      /* ===== DAILY DOTTED GRAPH ===== */
-      const daysMap = {
-        Mon: 0, Tue: 0, Wed: 0, Thu: 0,
-        Fri: 0, Sat: 0, Sun: 0,
-      };
+      /* ===== MONTHLY REVENUE TREND (last 6 months) ===== */
+      const now = new Date();
 
-      products.forEach((p) => {
-        const day = new Date(p.createdAt).toLocaleString('en-US', {
-          weekday: 'short',
-        });
-        if (daysMap[day] !== undefined) {
-          daysMap[day] += 1;
+      /* ===== MONTHLY SALES REVENUE (from inventory orders, last 6 months) ===== */
+      let salesOrdersRes;
+      try {
+        salesOrdersRes = await api.get('/order/allOrders');
+      } catch {
+        salesOrdersRes = { data: { data: [] } };
+      }
+      const salesOrders = salesOrdersRes.data?.data ?? salesOrdersRes.data ?? [];
+      const salesOrdersArr = Array.isArray(salesOrders) ? salesOrders : [];
+
+      const monthlySalesMap = {};
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        const label = d.toLocaleString('default', { month: 'short' });
+        monthlySalesMap[key] = { month: label, revenue: 0, orders: 0 };
+      }
+      salesOrdersArr.forEach((o) => {
+        const d = new Date(o.placedAt || o.createdAt);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (monthlySalesMap[key] !== undefined) {
+          monthlySalesMap[key].revenue += Number(o.finalAmount) || 0;
+          monthlySalesMap[key].orders += 1;
         }
       });
+      const monthlySalesRevenue = Object.values(monthlySalesMap);
+      const currentMonthSales = monthlySalesRevenue[monthlySalesRevenue.length - 1]?.revenue ?? 0;
+      const prevMonthSales = monthlySalesRevenue[monthlySalesRevenue.length - 2]?.revenue ?? 0;
+      const totalSalesOrders = salesOrdersArr.length;
 
-      const dailyListings = Object.keys(daysMap).map((day) => ({
-        day,
-        count: daysMap[day],
-      }));
+      /* ===== MONTHLY ORDERS COUNT (last 6 months) ===== */
+      const monthlyOrdersCountMap = {};
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        const label = d.toLocaleString('default', { month: 'short' });
+        monthlyOrdersCountMap[key] = { month: label, orders: 0 };
+      }
+      salesOrdersArr.forEach((o) => {
+        const d = new Date(o.placedAt || o.createdAt);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (monthlyOrdersCountMap[key] !== undefined) {
+          monthlyOrdersCountMap[key].orders += 1;
+        }
+      });
+      const monthlyOrdersCount = Object.values(monthlyOrdersCountMap);
+
+      /* ===== ORDERS BY CROP THIS MONTH ===== */
+      const thisMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
+      const cropMap = {};
+      salesOrdersArr.forEach((o) => {
+        const d = new Date(o.placedAt || o.createdAt);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (key !== thisMonthKey) return;
+        o.items?.forEach((it) => {
+          const name = it.item?.itemName ?? 'Other';
+          cropMap[name] = (cropMap[name] || 0) + 1;
+        });
+      });
+      const totalCropOrders = Object.values(cropMap).reduce((s, v) => s + v, 0);
+      const ordersByCrop = Object.entries(cropMap)
+        .map(([name, count]) => ({
+          name,
+          count,
+          share: totalCropOrders > 0 ? Math.round((count / totalCropOrders) * 100) : 0,
+        }))
+        .sort((a, b) => b.count - a.count);
+      const monthlyRevenueMap = {};
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${d.getMonth()}`; // unique per year+month
+        const label = d.toLocaleString('default', { month: 'short' });
+        monthlyRevenueMap[key] = { month: label, revenue: 0, orders: 0 };
+      }
+      orders.forEach((o) => {
+        const d = new Date(o.createdAt);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (monthlyRevenueMap[key] !== undefined) {
+          monthlyRevenueMap[key].revenue += Number(o.totalAmount) || 0;
+          monthlyRevenueMap[key].orders += 1;
+        }
+      });
+      const monthlyRevenue = Object.values(monthlyRevenueMap);
+
+      const currentMonthRevenue = monthlyRevenue[monthlyRevenue.length - 1]?.revenue ?? 0;
+      const prevMonthRevenue = monthlyRevenue[monthlyRevenue.length - 2]?.revenue ?? 0;
+
+      const dailyListings = []; // kept for slice compatibility
 
       /* ===== STOCK LEVELS DATA ===== */
       console.log('[getDashboardData] Processing stock data:', {
@@ -203,6 +275,17 @@ export const getDashboardData = createAsyncThunk(
         recentActivity,
         chartData,
         dailyListings,
+        monthlyRevenue,
+        currentMonthRevenue,
+        prevMonthRevenue,
+        monthlySalesRevenue,
+        currentMonthSales,
+        prevMonthSales,
+        totalSalesOrders,
+        monthlyOrdersCount,
+        ordersByCrop,
+        rawProcurementOrders: orders,
+        rawSalesOrders: salesOrdersArr,
         stockLevelsData,
         allListings: products,
       };

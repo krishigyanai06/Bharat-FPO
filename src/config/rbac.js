@@ -29,7 +29,6 @@ export const ROUTE_ROLES = {
   '/procurement': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN],
   '/inventory': [ROLES.FPO, ROLES.ADMIN, ROLES.VIEWER, ROLES.SUPERADMIN],
   '/buy': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN],
-  '/coupons': [ROLES.FPO, ROLES.ADMIN],
   '/broadcast': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN],
   '/members': [ROLES.FPO, ROLES.ADMIN, ROLES.VIEWER, ROLES.SUPERADMIN],
   '/documents': [ROLES.FPO, ROLES.ADMIN, ROLES.VIEWER, ROLES.SUPERADMIN],
@@ -38,6 +37,7 @@ export const ROUTE_ROLES = {
   '/reports': [ROLES.FPO, ROLES.ADMIN, ROLES.VIEWER],
   '/settings': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN],
   '/create-tenant': [ROLES.SUPERADMIN],
+  '/tier-features': [ROLES.SUPERADMIN],
 };
 
 // Helper to check if role has permission

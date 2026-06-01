@@ -11,6 +11,10 @@ import {
   CheckCircle,
   ImageOff,
   Trash2,
+  Search,
+  SlidersHorizontal,
+  ChevronDown,
+  MoreVertical,
 } from "lucide-react";
 import {
   BarChart,
@@ -19,6 +23,8 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  Cell,
+  LabelList,
 } from "recharts";
 import {
   fetchProducts,
@@ -54,28 +60,24 @@ function StatusBadge({ isActive }) {
 function StockBadge({ qty, inStockSystem }) {
   if (!inStockSystem)
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-400">
-        <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-400 border border-gray-200">
         No Entry
       </span>
     );
   if (qty === 0)
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-600">
-        <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-200">
         Out of Stock
       </span>
     );
   if (qty <= 5)
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-600">
-        <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-orange-50 text-orange-600 border border-orange-200">
         Low Stock
       </span>
     );
   return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-100 text-brand-700">
-      <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />
+    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
       In Stock
     </span>
   );
@@ -94,18 +96,16 @@ function ExpiryCell({ date }) {
   const d = new Date(date);
   const now = new Date();
   const diff = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
-  const label = d.toISOString().split("T")[0];
+  const label = d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
   if (diff < 0)
-    return (
-      <span className="text-red-600 font-semibold">{label} (Expired)</span>
-    );
+    return <span className="text-red-600 font-medium">{label}<br/><span className="text-red-400">(Expired)</span></span>;
   if (diff <= 30)
     return (
-      <span className="text-orange-500 font-semibold">
-        {label} ({diff}d left)
+      <span className="text-gray-700">{label}<br/>
+        <span className="text-orange-500 font-medium">({diff}d left)</span>
       </span>
     );
-  return <span className="text-gray-500">{label}</span>;
+  return <span className="text-gray-600">{label}</span>;
 }
 
 function ProductImage({ url, name }) {
@@ -202,16 +202,22 @@ function ProductModal({ initial, onClose, onSave, saving }) {
     initial?.productImages?.[0]?.url ?? null,
   );
   const [dragOver, setDragOver] = useState(false);
+  const [videoFile, setVideoFile] = useState(null);
+  const [videoPreview, setVideoPreview] = useState(
+    initial?.productVideos?.[0]?.url ?? null,
+  );
+  const [videoDragOver, setVideoDragOver] = useState(false);
 
-  // Reset image state when modal opens for new product (when initial changes from null to a value)
+  // Reset image/video state when modal opens
   useEffect(() => {
     if (!initial) {
-      // Opening for new product - reset image state
       setImageFile(null);
       setImagePreview(null);
+      setVideoFile(null);
+      setVideoPreview(null);
     } else {
-      // Opening for edit - set existing image
       setImagePreview(initial?.productImages?.[0]?.url ?? null);
+      setVideoPreview(initial?.productVideos?.[0]?.url ?? null);
     }
   }, [initial]);
 
@@ -251,6 +257,20 @@ function ProductModal({ initial, onClose, onSave, saving }) {
     setImagePreview(URL.createObjectURL(file));
   };
 
+  const handleVideo = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      toast.error("Please upload a valid video file");
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error("Video must be under 50MB");
+      return;
+    }
+    setVideoFile(file);
+    setVideoPreview(URL.createObjectURL(file));
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     const isEdit = !!initial;
@@ -279,7 +299,7 @@ function ProductModal({ initial, onClose, onSave, saving }) {
       toast.error(`Required: ${missing.join(", ")}`);
       return;
     }
-    onSave(form, variants, imageFile);
+    onSave(form, variants, imageFile, videoFile);
   };
 
   const isEdit = !!initial;
@@ -663,6 +683,64 @@ function ProductModal({ initial, onClose, onSave, saving }) {
                 )}
               </div>
             </div>
+
+            {/* Section: Video */}
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                Product Video <span className="text-gray-300 font-normal normal-case">(optional, max 50MB)</span>
+              </p>
+              <div
+                className={`relative border-2 border-dashed rounded-xl transition cursor-pointer ${
+                  videoDragOver ? "border-brand-400 bg-brand-50" : "border-gray-200 hover:border-brand-300 hover:bg-gray-50"
+                }`}
+                onDragOver={(e) => { e.preventDefault(); setVideoDragOver(true); }}
+                onDragLeave={() => setVideoDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setVideoDragOver(false); handleVideo(e.dataTransfer.files[0]); }}
+                onClick={() => document.getElementById("product-video-input").click()}
+              >
+                <input
+                  id="product-video-input"
+                  type="file"
+                  accept="video/mp4,video/webm,video/ogg"
+                  className="hidden"
+                  onChange={(e) => handleVideo(e.target.files[0])}
+                />
+                {videoPreview ? (
+                  <div className="flex items-center gap-4 p-4">
+                    <video
+                      src={videoPreview}
+                      className="w-20 h-20 rounded-xl object-cover border shadow-sm flex-shrink-0"
+                      muted
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-700 truncate">
+                        {videoFile ? videoFile.name : "Current video"}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">Click or drag to replace</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setVideoPreview(null); setVideoFile(null); }}
+                      className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition flex-shrink-0"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8 gap-2">
+                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                      </svg>
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      Drag & drop or <span className="text-brand-600 font-medium">browse</span>
+                    </p>
+                    <p className="text-xs text-gray-400">MP4, WEBM, OGG · Max 50MB</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Footer */}
@@ -929,7 +1007,7 @@ function Inventory() {
     }
   };
 
-  const handleSaveProduct = (form, variants, imageFile) => {
+  const handleSaveProduct = (form, variants, imageFile, videoFile) => {
     setSaving(true);
 
     const fileToBase64 = (file) => {
@@ -948,9 +1026,10 @@ function Inventory() {
     const executeSave = async () => {
       try {
         let base64Image = null;
-        if (imageFile) {
-          base64Image = await fileToBase64(imageFile);
-        }
+        if (imageFile) base64Image = await fileToBase64(imageFile);
+
+        let base64Video = null;
+        if (videoFile) base64Video = await fileToBase64(videoFile);
 
         const payload = {
           productName: form.productName,
@@ -971,9 +1050,8 @@ function Inventory() {
           })),
         };
 
-        if (base64Image) {
-          payload.productImages = [base64Image];
-        }
+        if (base64Image) payload.productImages = [base64Image];
+        if (base64Video) payload.productVideos = [base64Video];
 
         if (editRow) {
           dispatch(updateProduct({ id: editRow._id, data: payload }))
@@ -1191,46 +1269,49 @@ function Inventory() {
         <div className="flex justify-between items-center mb-4">
           <div>
             <h2 className="font-semibold text-gray-800">Stock Levels</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Live available quantity per item
-            </p>
+            <p className="text-xs text-gray-400 mt-0.5">Live available quantity per item</p>
           </div>
-          <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">
-            Top 10 items
-          </span>
+          <button className="flex items-center gap-1.5 text-xs text-gray-600 bg-white border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition shadow-sm">
+            Top 10 items <ChevronDown size={13} />
+          </button>
         </div>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={monthlyStockData} barSize={24} barCategoryGap="30%">
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={monthlyStockData} barSize={32} barCategoryGap="35%" margin={{ top: 20, right: 10, left: -10, bottom: 40 }}>
+            <defs>
+              <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#16a34a" stopOpacity={1} />
+                <stop offset="100%" stopColor="#86efac" stopOpacity={0.7} />
+              </linearGradient>
+            </defs>
             <XAxis
               dataKey="name"
               tick={{ fontSize: 10, fill: "#9ca3af" }}
               interval={0}
-              angle={-20}
-              textAnchor="end"
-              height={48}
+              angle={0}
+              textAnchor="middle"
+              height={50}
               axisLine={false}
               tickLine={false}
+              tickFormatter={(v) => {
+                const parts = v.split(" ");
+                return parts.length > 2 ? parts.slice(0, 2).join(" ") + "..." : v;
+              }}
             />
             <YAxis
               allowDecimals={false}
               tick={{ fontSize: 10, fill: "#9ca3af" }}
               axisLine={false}
               tickLine={false}
+              tickCount={5}
             />
             <Tooltip
-              contentStyle={{
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                fontSize: 12,
-              }}
+              contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
               formatter={(v) => [v, "Available Qty"]}
+              cursor={{ fill: "rgba(0,0,0,0.04)" }}
             />
-            <Bar
-              dataKey="available"
-              fill="#22c55e"
-              radius={[6, 6, 0, 0]}
-              minPointSize={4}
-            />
+            <Bar dataKey="available" fill="url(#greenGrad)" radius={[5, 5, 0, 0]} minPointSize={4}>
+              <LabelList dataKey="available" position="top" style={{ fontSize: 11, fontWeight: 600, fill: "#374151" }} />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -1240,105 +1321,42 @@ function Inventory() {
         {/* Table Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
           <div>
-            <h2 className="font-semibold text-gray-800">
-              Products & Live Stock
-            </h2>
+            <h2 className="font-semibold text-gray-800">Products & Live Stock</h2>
             <p className="text-xs text-gray-400 mt-0.5">
               {filteredData.length} of {products.length} products
-              {statusFilter !== "all" && (
-                <span className="ml-2 text-brand-600 font-medium">
-                  · Filtered: {statusFilter}
-                </span>
-              )}
             </p>
           </div>
-          <div className="flex gap-2">
-            {statusFilter !== "all" && (
-              <button
-                onClick={() => {
-                  setStatusFilter("all");
-                  setCurrentPage(1);
-                }}
-                className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-              >
-                <svg
-                  className="w-3 h-3"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-                Clear filter
-              </button>
-            )}
+          <div className="flex items-center gap-2">
+            {/* Search */}
             <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search by name, brand or category..."
+                placeholder="Search products..."
                 value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="border border-gray-200 rounded-lg pl-8 pr-8 py-2 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
+                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                className="border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
               />
-              <svg
-                className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              {search && (
-                <button
-                  onClick={() => {
-                    setSearch("");
-                    setCurrentPage(1);
-                  }}
-                  className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 transition"
-                >
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              )}
             </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-            >
-              <option value="all">All Products</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="instock">In Stock</option>
-              <option value="outofstock">Out of Stock</option>
-            </select>
+            {/* Category filter */}
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                className="appearance-none border border-gray-200 rounded-lg pl-3 pr-8 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white cursor-pointer"
+              >
+                <option value="all">All Categories</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="instock">In Stock</option>
+                <option value="outofstock">Out of Stock</option>
+              </select>
+              <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+            {/* Filters button */}
+            <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition">
+              <SlidersHorizontal size={14} /> Filters
+            </button>
           </div>
         </div>
 
@@ -1357,9 +1375,6 @@ function Inventory() {
                 </th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
                   MRP
-                </th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Buy Price
                 </th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
                   Live Qty
@@ -1398,7 +1413,20 @@ function Inventory() {
                 const stockValue =
                   qty != null && purchasePrice ? qty * purchasePrice : 0;
                 const rawCat = row.productCategory || row.category || "";
-                const catLabel = rawCat ? rawCat.replace(/_/g, " ") : null;
+                const catLabel = rawCat ? rawCat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : null;
+                const catColors = {
+                  insecticides: "bg-purple-50 text-purple-600 border-purple-100",
+                  fungicides: "bg-blue-50 text-blue-600 border-blue-100",
+                  fertilizers: "bg-green-50 text-green-700 border-green-100",
+                  seeds: "bg-yellow-50 text-yellow-700 border-yellow-100",
+                  herbicides: "bg-orange-50 text-orange-600 border-orange-100",
+                  organic: "bg-teal-50 text-teal-600 border-teal-100",
+                  animal_feed: "bg-amber-50 text-amber-700 border-amber-100",
+                  tools: "bg-gray-100 text-gray-600 border-gray-200",
+                  pgr: "bg-pink-50 text-pink-600 border-pink-100",
+                  other: "bg-gray-50 text-gray-500 border-gray-200",
+                };
+                const catColorCls = catColors[rawCat.toLowerCase()] ?? "bg-indigo-50 text-indigo-600 border-indigo-100";
                 const isOOS = qty === 0;
                 const isLow = qty != null && qty > 0 && qty <= 5;
                 const rowBg = isOOS
@@ -1449,7 +1477,7 @@ function Inventory() {
                     {/* Category */}
                     <td className="px-5 py-4">
                       {catLabel ? (
-                        <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-600 capitalize whitespace-nowrap">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${catColorCls}`}>
                           {catLabel}
                         </span>
                       ) : (
@@ -1462,17 +1490,6 @@ function Inventory() {
                       <span className="font-semibold text-gray-800">
                         ₹{row.products?.[0]?.mrp ?? "—"}
                       </span>
-                    </td>
-
-                    {/* Buy Price */}
-                    <td className="px-5 py-4 text-right">
-                      {purchasePrice ? (
-                        <span className="text-gray-600">
-                          ₹{purchasePrice.toLocaleString("en-IN")}
-                        </span>
-                      ) : (
-                        <span className="text-gray-300 text-xs">—</span>
-                      )}
                     </td>
 
                     {/* Live Qty */}
@@ -1509,12 +1526,7 @@ function Inventory() {
 
                     {/* Expiry */}
                     <td className="px-5 py-4 text-xs">
-                      <ExpiryCell
-                        date={
-                          stock?.item?.expiryDate ??
-                          row.products?.[0]?.expiryDate
-                        }
-                      />
+                      <ExpiryCell date={stock?.item?.expiryDate ?? row.products?.[0]?.expiryDate} />
                     </td>
 
                     {/* Stock Badge */}
@@ -1530,67 +1542,40 @@ function Inventory() {
                       <button
                         onClick={() => {
                           if (isReadOnly) return;
-                          dispatch(
-                            toggleProductStatus({
-                              id: row._id,
-                              isActive: !row.isActive,
-                            }),
-                          )
+                          dispatch(toggleProductStatus({ id: row._id, isActive: !row.isActive }))
                             .unwrap()
-                            .then(() =>
-                              toast.success(
-                                `Marked ${!row.isActive ? "Active" : "Inactive"}`,
-                              ),
-                            )
-                            .catch(() =>
-                              toast.error("Failed to update status"),
-                            );
+                            .then(() => toast.success(`Marked ${!row.isActive ? "Active" : "Inactive"}`))
+                            .catch(() => toast.error("Failed to update status"));
                         }}
                         disabled={isReadOnly}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
                           row.isActive
-                            ? "bg-brand-100 text-brand-700 hover:bg-red-50 hover:text-red-600"
-                            : "bg-gray-100 text-gray-500 hover:bg-brand-50 hover:text-brand-600"
+                            ? "bg-green-50 text-green-700 border-green-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                            : "bg-gray-100 text-gray-500 border-gray-200 hover:bg-green-50 hover:text-green-700"
                         } ${isReadOnly ? "opacity-50 cursor-not-allowed" : ""}`}
                       >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${row.isActive ? "bg-brand-500" : "bg-gray-400"}`}
-                        />
                         {row.isActive ? "Active" : "Inactive"}
                       </button>
                     </td>
 
                     {/* Actions */}
                     <td className="px-5 py-4">
-                      <div className="flex items-center justify-center gap-1.5">
-                        {!isReadOnly && (
+                      <div className="flex items-center justify-center gap-1">
+                        {!isReadOnly ? (
                           <>
                             <button
-                              onClick={() => {
-                                setEditRow(row);
-                                setShowModal(true);
-                              }}
-                              className="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition"
+                              onClick={() => { setEditRow(row); setShowModal(true); }}
+                              className="p-2 rounded-lg hover:bg-blue-50 text-blue-500 transition"
                               title="Edit"
                             >
-                              <Pencil size={13} />
+                              <Pencil size={14} />
                             </button>
-                            <button
-                              onClick={() => {
-                                setConfirmType("product");
-                                setConfirmId(row._id);
-                              }}
-                              className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition"
-                              title="Delete"
-                            >
-                              <Trash2 size={13} />
+                            <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 transition">
+                              <MoreVertical size={14} />
                             </button>
                           </>
-                        )}
-                        {isReadOnly && (
-                          <span className="text-xs text-gray-400">
-                            View only
-                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">View only</span>
                         )}
                       </div>
                     </td>

@@ -11,12 +11,12 @@ import dashboardReducer from './slices/dashboardSlice';
 import layoutReducer from './slices/layoutSlice';
 import settingsReducer from './slices/settingsSlice';
 import registerReducer from "./slices/registerSlice";
-import couponsReducer from './slices/couponsSlice';
 import broadcastReducer from './slices/broadcastSlice';
 import farmReducer from './slices/farmSlice';
 import ledgerReducer from './slices/ledgerSlice';
 import advertisementReducer from './slices/advertisementSlice';
 import orderReducer from './slices/orderSlice';
+import featuresReducer from './slices/featuresSlice';
 
 export const store = configureStore({
   reducer: {
@@ -32,11 +32,11 @@ export const store = configureStore({
       layout: layoutReducer,
     settings: settingsReducer,
      register: registerReducer,
-    coupons: couponsReducer,
     broadcast: broadcastReducer,
     farm: farmReducer,
     ledger: ledgerReducer,
     advertisement: advertisementReducer,
     orders: orderReducer,
+    features: featuresReducer,
   },
 });

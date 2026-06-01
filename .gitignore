@@ -21,6 +21,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.example
 
 .vercel
 temp_token.txt

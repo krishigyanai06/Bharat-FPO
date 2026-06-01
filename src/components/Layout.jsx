@@ -9,7 +9,6 @@ import {
   ShoppingCart,
   Archive,
   ShoppingBag,
-  Ticket,
   Users,
   BarChart3,
   Settings,
@@ -25,6 +24,8 @@ import {
   BookOpen,
   ImagePlus,
   FileText,
+  Building2,
+  Layers,
 } from "lucide-react";
 import { fetchMe, fetchTenants } from "../store/thunks/layoutThunk";
 import { setSelectedTenant } from "../store/slices/layoutSlice";
@@ -32,7 +33,6 @@ import { fetchBroadcastHistory } from "../store/thunks/broadcastThunk";
 import { fetchMembers } from "../store/thunks/membersThunk";
 import { fetchProducts } from "../store/thunks/productsThunk";
 import { fetchOrders } from "../store/thunks/procurementThunk";
-import { fetchCoupons } from "../store/thunks/couponsThunk";
 import theme from "../config/theme";
 import { ROUTE_ROLES } from "../config/rbac";
 import GoogleLangPicker from "./google-lang-picker/google-lang-picker";
@@ -45,13 +45,14 @@ const menuItems = [
   { icon: ShoppingCart, label: "Procurement", path: "/procurement" },
   { icon: Archive, label: "Inventory", path: "/inventory" },
   { icon: ShoppingBag, label: "Order Book", path: "/buy" },
-  { icon: Ticket, label: "Coupons", path: "/coupons" },
   { icon: Megaphone, label: "Broadcast", path: "/broadcast" },
   { icon: Users, label: "Members", path: "/members" },
   { icon: BookOpen, label: "Ledger", path: "/ledger" },
   { icon: ImagePlus, label: "Advertisement", path: "/advertisement" },
   { icon: BarChart3, label: "Reports", path: "/reports" },
   { icon: Settings, label: "Settings", path: "/settings" },
+  { icon: Building2, label: "Create Tenant", path: "/create-tenant", roles: ["superadmin"] },
+  { icon: Layers, label: "Tier & Features", path: "/tier-features", roles: ["superadmin"] },
 ];
 
 const timeAgo = (date) => {
@@ -101,13 +102,13 @@ export default function Layout() {
     isSuperAdmin,
   );
 
-  const visibleMenuItems = menuItems.filter(({ path }) => {
+  const visibleMenuItems = menuItems.filter(({ path, roles }) => {
+    if (roles && !roles.includes(userRole)) return false;
     const allowed = ROUTE_ROLES[path];
     return !allowed || allowed.includes(userRole);
   });
   const { members } = useSelector((s) => s.members);
   const { orders } = useSelector((s) => s.procurement);
-  const { coupons } = useSelector((s) => s.coupons);
   const broadcasts = useSelector((s) =>
     Array.isArray(s.broadcast?.broadcasts) ? s.broadcast.broadcasts : [],
   );
@@ -246,6 +247,46 @@ export default function Layout() {
   }, []);
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [weather, setWeather] = useState(null);
+
+  useEffect(() => {
+    const WMO_MAP = {
+      0: { label: "Clear Sky", emoji: "☀️" },
+      1: { label: "Mainly Clear", emoji: "🌤️" },
+      2: { label: "Partly Cloudy", emoji: "⛅" },
+      3: { label: "Overcast", emoji: "☁️" },
+      45: { label: "Foggy", emoji: "🌫️" }, 48: { label: "Foggy", emoji: "🌫️" },
+      51: { label: "Drizzle", emoji: "🌦️" }, 53: { label: "Drizzle", emoji: "🌦️" }, 55: { label: "Drizzle", emoji: "🌦️" },
+      61: { label: "Rain", emoji: "🌧️" }, 63: { label: "Rain", emoji: "🌧️" }, 65: { label: "Heavy Rain", emoji: "🌧️" },
+      71: { label: "Snow", emoji: "❄️" }, 73: { label: "Snow", emoji: "❄️" }, 75: { label: "Heavy Snow", emoji: "❄️" },
+      80: { label: "Showers", emoji: "🌦️" }, 81: { label: "Showers", emoji: "🌦️" }, 82: { label: "Heavy Showers", emoji: "🌦️" },
+      95: { label: "Thunderstorm", emoji: "⛈️" }, 96: { label: "Thunderstorm", emoji: "⛈️" }, 99: { label: "Thunderstorm", emoji: "⛈️" },
+    };
+    navigator.geolocation?.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const res = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,weathercode&temperature_unit=celsius`
+          );
+          const data = await res.json();
+          const code = data.current.weathercode;
+          const temp = Math.round(data.current.temperature_2m);
+          setWeather({ temp, ...(WMO_MAP[code] || { label: "Clear", emoji: "🌤️" }) });
+        } catch {}
+      },
+      () => {
+        // fallback: fetch for a default location (New Delhi)
+        fetch("https://api.open-meteo.com/v1/forecast?latitude=28.6&longitude=77.2&current=temperature_2m,weathercode&temperature_unit=celsius")
+          .then((r) => r.json())
+          .then((data) => {
+            const code = data.current.weathercode;
+            const temp = Math.round(data.current.temperature_2m);
+            setWeather({ temp, ...(WMO_MAP[code] || { label: "Clear", emoji: "🌤️" }) });
+          })
+          .catch(() => {});
+      }
+    );
+  }, []);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -266,8 +307,6 @@ export default function Layout() {
       if (!members.length) dispatch(fetchMembers());
       if (!products.length) dispatch(fetchProducts());
       if (!orders.length) dispatch(fetchOrders());
-      // Only fetch coupons if user has access to coupons
-      if (!isSuperAdmin && !coupons.length) dispatch(fetchCoupons());
     }
   };
 
@@ -331,22 +370,7 @@ export default function Layout() {
               }),
             );
 
-          // Only include coupons in search for non-SuperAdmin users
-          if (!isSuperAdmin) {
-            coupons
-              ?.filter((c) => c.code?.toLowerCase().includes(term))
-              .slice(0, 3)
-              .forEach((c) =>
-                results.push({
-                  icon: "🎟️",
-                  label: c.code,
-                  sub: `Coupon • ${c.discountType} • ${c.discountValue}`,
-                  path: "/coupons",
-                }),
-              );
-          }
-
-          return results;
+return results;
         })();
 
   return (
@@ -361,60 +385,100 @@ export default function Layout() {
       )}
 
       <aside
-        className={`fixed lg:static z-40 h-full w-64 bg-gradient-to-b from-brand-900 to-brand-800 text-white flex flex-col transition-transform duration-300 ${
+        className={`fixed lg:static z-40 h-full w-64 flex flex-col transition-transform duration-300 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
+        style={{ background: "#0a1f0f" }}
       >
-        {/* BRAND */}
-        <div className="px-6 py-5 border-b border-brand-700/50">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
-              <span className="text-lg">{theme.logo}</span>
+        {/* BRAND CARD */}
+        <div className="mx-3 mt-4 mb-3 rounded-2xl p-4 relative overflow-hidden"
+          style={{
+            background: "linear-gradient(135deg, #0d2b14 0%, #1a4a24 50%, #0d2b14 100%)",
+            border: "1px solid rgba(212,175,55,0.35)",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+          }}
+        >
+          {/* decorative lines */}
+          <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
+            backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(212,175,55,0.3) 20px, rgba(212,175,55,0.3) 21px)",
+          }} />
+          <div className="flex items-center gap-3 relative z-10">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden bg-white"
+              style={{ border: "1px solid rgba(212,175,55,0.4)" }}
+            >
+              <img src={theme.logo} alt={theme.brand} className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="text-base font-bold tracking-wide">
+              <h1 className="text-sm font-bold" style={{ color: "#d4af37" }}>
                 {me?.tenant?.businessName ||
                   me?.businessName ||
                   user?.tenant?.businessName ||
                   user?.businessName ||
                   theme.brand}
               </h1>
-              <p className="text-xs text-brand-300">
-                {user?.role || me?.role || theme.tagline}
+              <p className="text-xs mt-0.5" style={{ color: "#6dbf7e" }}>
+                {user?.role || me?.role || "admin"}
               </p>
             </div>
           </div>
         </div>
 
         {/* NAV */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-0.5">
           {visibleMenuItems.map((item) => {
             const Icon = item.icon;
             const active = location.pathname === item.path;
             return (
               <button
                 key={item.path}
-                onClick={() => {
-                  navigate(item.path);
-                  setSidebarOpen(false);
+                onClick={() => { navigate(item.path); setSidebarOpen(false); }}
+                className="relative w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group"
+                style={active ? {
+                  background: "linear-gradient(135deg, #1a5c2a 0%, #0f3d1a 100%)",
+                  boxShadow: "0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(109,191,126,0.2)",
+                  color: "#ffffff",
+                } : {
+                  background: "transparent",
+                  border: "1px solid transparent",
+                  color: "rgba(109,191,126,0.85)",
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
-                  active
-                    ? "bg-white text-brand-900 shadow-sm"
-                    : "text-brand-100 hover:bg-white/10"
-                }`}
               >
-                <Icon
-                  className={`w-4 h-4 flex-shrink-0 ${active ? "text-brand-700" : ""}`}
-                />
-                {item.label}
+                {/* left accent bar for active */}
                 {active && (
-                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-600" />
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full" style={{ background: "#d4af37" }} />
+                )}
+                <Icon className="w-5 h-5 flex-shrink-0" style={{ color: active ? "#6dbf7e" : "#4a9e5c" }} />
+                <span className="flex-1 text-left">{item.label}</span>
+                {active ? (
+                  <span className="w-2 h-2 rounded-full" style={{ background: "#4ade80", boxShadow: "0 0 6px #4ade80" }} />
+                ) : (
+                  <svg className="w-3.5 h-3.5 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
                 )}
               </button>
             );
           })}
         </nav>
+
+        {/* WEATHER WIDGET */}
+        <div className="mx-3 mb-4 rounded-2xl px-4 py-3 flex items-center gap-3"
+          style={{
+            background: "linear-gradient(135deg, #1a3a10 0%, #2a5a18 50%, #1a3a10 100%)",
+            border: "1px solid rgba(212,175,55,0.3)",
+          }}
+        >
+          <span className="text-3xl">{weather ? weather.emoji : "⛅"}</span>
+          <div>
+            <p className="text-lg font-bold leading-none" style={{ color: "#d4af37" }}>
+              {weather ? `${weather.temp}°C` : "--°C"}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: "#6dbf7e" }}>
+              {weather ? weather.label : "Loading..."}
+            </p>
+          </div>
+        </div>
       </aside>
 
       {/* ===================== MAIN ===================== */}
@@ -441,74 +505,7 @@ export default function Layout() {
             </p>
           </div>
 
-          {/* SEARCH */}
-          <div className="flex-1 max-w-lg mx-auto" ref={searchRef}>
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={globalSearch}
-                onChange={handleSearchChange}
-                onFocus={() => setShowResults(true)}
-                placeholder="Search members, crops, orders..."
-                className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition"
-              />
-              {globalSearch && (
-                <button
-                  onClick={() => {
-                    setGlobalSearch("");
-                    setShowResults(false);
-                  }}
-                  className="absolute right-3 top-2.5"
-                >
-                  <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-                </button>
-              )}
 
-              {/* SEARCH DROPDOWN */}
-              {showResults && globalSearch.trim().length >= 2 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
-                  {searchResults.length === 0 ? (
-                    <div className="px-4 py-6 text-center">
-                      <p className="text-sm text-gray-500">
-                        No results for "{globalSearch}"
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="px-4 py-2 bg-gray-50 border-b">
-                        <p className="text-xs text-gray-500 font-medium">
-                          {searchResults.length} results found
-                        </p>
-                      </div>
-
-                      <div className="max-h-72 overflow-y-auto">
-                        {searchResults.map((r, i) => (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              navigate(r.path);
-                              setGlobalSearch("");
-                              setShowResults(false);
-                            }}
-                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-brand-50 border-b last:border-b-0 transition text-left"
-                          >
-                            <span className="text-lg">{r.icon}</span>
-                            <div>
-                              <p className="text-sm font-medium text-gray-800">
-                                {r.label}
-                              </p>
-                              <p className="text-xs text-gray-500">{r.sub}</p>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
           <GoogleLangPicker classes="d-none d-xl-block" />
           {/* RIGHT ACTIONS */}
           <div className="flex items-center gap-2 ml-auto">

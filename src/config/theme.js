@@ -8,11 +8,11 @@ const theme = {
   brand: "Bharat FPO",
   shortName: "Bharat FPO",
   tagline: "FPO Admin Panel",
-  logo: "🏬",
+  logo: "/logo.jpeg",
 
   // API — set VITE_API_BASE in .env
   apiBase:
-    import.meta.env.VITE_API_BASE,
+    import.meta.env.VITE_API_BASE || "https://bharat-fpo.krishigyanai.com/api",
   // Default login role
   defaultRole: "SuperAdmin",
 

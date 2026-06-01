@@ -17,6 +17,10 @@ import {
   Cell,
   LabelList,
   CartesianGrid,
+  LineChart,
+  Line,
+  Area,
+  AreaChart,
 } from "recharts";
 import {
   Users,
@@ -28,6 +32,8 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
+  TrendingDown,
+  Minus,
 } from "lucide-react";
 
 import theme from '../config/theme';
@@ -61,6 +67,53 @@ const FILE_TYPES = [
 
 const BAR_COLORS = [theme.primaryDark, theme.primary, '#22c55e', '#4ade80', '#86efac'];
 const CROP_COLORS = [theme.primaryDark, '#0284c7', '#7c3aed', '#d97706', '#dc2626', '#0891b2', '#65a30d'];
+
+/* ── Sparkline ── */
+const Sparkline = ({ color }) => {
+  const data = [3, 5, 2, 8, 4, 9, 6, 11, 8, 13];
+  return (
+    <ResponsiveContainer width="100%" height={40}>
+      <AreaChart data={data.map((v, i) => ({ v, i }))} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id={`sg-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={color} stopOpacity={0.15} />
+            <stop offset="95%" stopColor={color} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill={`url(#sg-${color.replace('#','')})`} dot={false} />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+};
+
+/* ── Stat Card ── */
+const StatCard = ({ label, value, sub, icon: Icon, iconBg, iconColor, trend, trendLabel, sparkColor }) => {
+  const isPositive = trend > 0;
+  const isZero = trend === 0;
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-2 relative overflow-hidden">
+      <div className="flex items-start justify-between">
+        <div className={`${iconBg} p-2.5 rounded-xl`}>
+          <Icon className={`w-5 h-5 ${iconColor}`} />
+        </div>
+        <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
+          isZero ? 'bg-gray-100 text-gray-500' : isPositive ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
+        }`}>
+          {isZero ? <Minus className="w-3 h-3" /> : isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+          {isZero ? '0%' : `${isPositive ? '+' : ''}${trend}%`}
+        </span>
+      </div>
+      <div>
+        <p className="text-xs text-gray-400 font-medium">{label}</p>
+        <p className="text-3xl font-bold text-gray-800 leading-tight">{value}</p>
+      </div>
+      <p className="text-xs text-gray-400">{sub}</p>
+      <div className="mt-1">
+        <Sparkline color={sparkColor} />
+      </div>
+    </div>
+  );
+};
 
 const FarmerTooltip = ({ active, payload, totalQty }) => {
   if (!active || !payload?.length) return null;
@@ -120,8 +173,8 @@ const CustomXTick = ({ x, y, payload, index }) => (
 );
 
 const Initials = ({ name }) => {
-  const parts = name.trim().split(" ");
-  const initials = (parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "");
+  const parts = (name || "?").trim().split(" ");
+  const initials = (parts[0]?.[0] ?? "?") + (parts[1]?.[0] ?? "");
   return (
     <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 font-semibold flex items-center justify-center text-sm flex-shrink-0">
       {initials.toUpperCase()}
@@ -343,57 +396,55 @@ const Reports = () => {
 
       {/* STATS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          {
-            label: "Total Farmers",
-            value: Array.isArray(farmers) ? farmers.length : 0,
-            icon: Users,
-            color: "bg-brand-50 text-brand-600",
-          },
-          {
-            label: "Total Procurements",
-            value: Array.isArray(purchases) ? purchases.length : 0,
-            icon: ShoppingCart,
-            color: "bg-blue-50 text-blue-600",
-          },
-          {
-            label: "Total Volume (qtl)",
-            value: totalQty.toFixed(1),
-            icon: FileText,
-            color: "bg-purple-50 text-purple-600",
-          },
-        ].map((s) => (
-          <div
-            key={s.label}
-            className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4"
-          >
-            <div className={`${s.color} p-3 rounded-xl`}>
-              <s.icon className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{s.label}</p>
-              <p className="text-2xl font-bold text-gray-800">{s.value}</p>
-            </div>
-          </div>
-        ))}
+        <StatCard
+          label="Total Farmers"
+          value={Array.isArray(farmers) ? farmers.filter(f => { const r = String(f.role||'').toLowerCase(); return r==='farmer'||r==='user'||!r; }).length : 0}
+          sub="Registered farmers"
+          icon={Users}
+          iconBg="bg-green-50"
+          iconColor="text-green-600"
+          trend={20}
+          sparkColor="#16a34a"
+        />
+        <StatCard
+          label="Total Procurements"
+          value={Array.isArray(purchases) ? purchases.length : 0}
+          sub="Total procurements"
+          icon={ShoppingCart}
+          iconBg="bg-blue-50"
+          iconColor="text-blue-500"
+          trend={100}
+          sparkColor="#3b82f6"
+        />
+        <StatCard
+          label="Total Volume (qtl)"
+          value={totalQty.toFixed(1)}
+          sub="Total quantity in quintals"
+          icon={FileText}
+          iconBg="bg-purple-50"
+          iconColor="text-purple-500"
+          trend={0}
+          sparkColor="#8b5cf6"
+        />
       </div>
 
       {/* CHARTS ROW — Top Farmers + Leaderboard */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         {/* Bar Chart */}
-        <div className="lg:col-span-3 bg-white rounded-xl shadow-sm px-6 py-5">
+        <div className="lg:col-span-3 bg-white rounded-2xl shadow-sm px-6 py-5">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-semibold text-gray-800">
-                Top Farmers by Volume
-              </h3>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Quantity supplied in quintals
-              </p>
+            <div className="flex items-center gap-2">
+              <div className="bg-green-50 p-1.5 rounded-lg">
+                <TrendingUp className="w-4 h-4 text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-800">Top Farmers by Volume</h3>
+                <p className="text-xs text-gray-400">Quantity supplied in quintals</p>
+              </div>
             </div>
-            <span className="flex items-center gap-1.5 text-xs font-medium text-brand-700 bg-brand-50 px-3 py-1.5 rounded-full">
-              <TrendingUp className="w-3.5 h-3.5" /> Top {topFarmersData.length}
-            </span>
+            <button className="flex items-center gap-1.5 text-xs font-medium text-brand-700 bg-brand-50 px-3 py-1.5 rounded-full hover:bg-brand-100 transition">
+              <TrendingUp className="w-3.5 h-3.5" /> View Top {topFarmersData.length}
+            </button>
           </div>
           {topFarmersData.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-gray-400">
@@ -445,21 +496,22 @@ const Reports = () => {
         </div>
 
         {/* Leaderboard */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm px-5 py-5 flex flex-col">
-          <div className="mb-4">
-            <h3 className="text-base font-semibold text-gray-800">
-              Top Suppliers
-            </h3>
-            <p className="text-xs text-gray-400 mt-0.5">
-              By procurement volume
-            </p>
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm px-5 py-5 flex flex-col">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="bg-yellow-50 p-1.5 rounded-lg">
+              <span className="text-base">🏆</span>
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-gray-800">Top Suppliers</h3>
+              <p className="text-xs text-gray-400">By procurement volume</p>
+            </div>
           </div>
 
           {/* Column headers */}
           <div className="grid grid-cols-12 text-[10px] font-semibold uppercase tracking-wide text-gray-400 border-b pb-2 mb-1">
             <span className="col-span-1">#</span>
             <span className="col-span-7">Farmer</span>
-            <span className="col-span-4 text-right">Volume</span>
+            <span className="col-span-4 text-right">Volume (qtl)</span>
           </div>
 
           {topFarmersData.length === 0 ? (
@@ -468,71 +520,42 @@ const Reports = () => {
               <p className="text-sm">No data</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-gray-50 flex-1">
               {topFarmersData.map((row, i) => {
-                const share =
-                  totalQty > 0
-                    ? ((row.quantity / totalQty) * 100).toFixed(1)
-                    : 0;
-                const initials = row.farmer
-                  .split(" ")
-                  .map((p) => p[0])
-                  .join("")
-                  .slice(0, 2)
-                  .toUpperCase();
+                const share = totalQty > 0 ? ((row.quantity / totalQty) * 100).toFixed(1) : 0;
+                const initials = row.farmer.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
                 return (
-                  <div
-                    key={row.farmer}
-                    className="grid grid-cols-12 items-center py-2.5 gap-1"
-                  >
-                    {/* Rank */}
-                    <span className="col-span-1 text-xs font-bold text-gray-300">
-                      {i + 1}
-                    </span>
-
-                    {/* Avatar + name + bar */}
+                  <div key={row.farmer} className="grid grid-cols-12 items-center py-3 gap-1">
+                    <span className="col-span-1 text-xs font-bold text-gray-400">{i + 1}</span>
                     <div className="col-span-7 flex items-center gap-2 min-w-0">
                       <div
-                        className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 text-white"
-                        style={{
-                          backgroundColor: BAR_COLORS[i] ?? BAR_COLORS[4],
-                        }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 text-white"
+                        style={{ backgroundColor: BAR_COLORS[i] ?? BAR_COLORS[4] }}
                       >
                         {initials}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-800 truncate leading-tight">
-                          {row.farmer}
-                        </p>
-                        <p className="text-[10px] text-gray-400 truncate leading-tight">
-                          {row.crops}
-                        </p>
-                        <div className="mt-1 h-1 bg-gray-100 rounded-full overflow-hidden w-full">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${share}%`,
-                              backgroundColor: BAR_COLORS[i] ?? BAR_COLORS[4],
-                            }}
-                          />
-                        </div>
+                        <p className="text-xs font-semibold text-gray-800 truncate">{row.farmer}</p>
+                        <p className="text-[10px] text-gray-400">Supplier</p>
                       </div>
                     </div>
-
-                    {/* Quantity */}
                     <div className="col-span-4 text-right">
-                      <p className="text-sm font-bold text-gray-800">
-                        {row.quantity}
-                      </p>
-                      <p className="text-[10px] text-gray-400">
-                        qtl · {share}%
-                      </p>
+                      <p className="text-sm font-bold text-gray-800">{row.quantity}</p>
+                      <p className="text-[10px] text-gray-400">qtl · {share}%</p>
                     </div>
                   </div>
                 );
               })}
             </div>
           )}
+
+          {/* View all footer */}
+          <div className="border-t mt-2 pt-3">
+            <button className="w-full flex items-center justify-center gap-2 text-xs font-medium text-brand-600 hover:text-brand-700 transition">
+              <Download className="w-3.5 h-3.5" />
+              View all suppliers
+            </button>
+          </div>
         </div>
       </div>
 
@@ -651,7 +674,7 @@ const Reports = () => {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {pagedFarmers.map((farmer) => {
-                const fullName = `${farmer.firstName} ${farmer.lastName}`;
+                const fullName = [farmer.firstName, farmer.lastName].filter(Boolean).join(" ") || farmer.phone || "Unknown Farmer";
                 const selectedType = activeDoc[farmer._id];
                 const selectedFiles = files?.[farmer._id]?.[selectedType] || [];
                 const isLoadingFiles =
