@@ -63,6 +63,8 @@ function CreateTenant() {
         lastName: lastName.trim(),
         phone: phone.trim(),
         businessName: businessName.trim(),
+        tier: "BASIC",
+        features: [],
       });
 
       console.log("[CreateTenant] Success:", response.data);

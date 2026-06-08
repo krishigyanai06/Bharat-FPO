@@ -141,8 +141,6 @@ function FarmerModal({ onClose }) {
     firstName: "",
     lastName: "",
     phone: "",
-    gender: "male",
-    password: "",
     village: "",
     district: "",
     state: "",
@@ -166,9 +164,6 @@ function FarmerModal({ onClose }) {
 
     if (!/^[6-9]\d{9}$/.test(form.phone))
       e.phone = "Enter valid 10-digit Indian mobile number";
-
-    if (!form.password) e.password = "Password is required";
-    else if (form.password.length < 6) e.password = "Min 6 characters";
 
     if (
       form.ifscCode &&
@@ -199,6 +194,9 @@ function FarmerModal({ onClose }) {
       ...Object.fromEntries(Object.entries(form).filter(([, v]) => v !== "")),
       ...(form.ifscCode && { ifscCode: form.ifscCode.toUpperCase() }),
     };
+    if (!payload.emailId) {
+      payload.emailId = `farmer.${form.phone}@noemail.local`;
+    }
     const result = await dispatch(createFarmer(payload));
     setLoading(false);
     if (createFarmer.fulfilled.match(result)) {
@@ -241,16 +239,6 @@ function FarmerModal({ onClose }) {
             required
             error={errors.phone}
           />
-          <Field
-            label="Password"
-            k="password"
-            form={form}
-            set={set}
-            type="password"
-            required
-            error={errors.password}
-          />
-          <GenderSelect value={form.gender} onChange={set("gender")} />
           <div>
             <label className="text-xs text-gray-500 mb-1 block">
               Farmer Category
@@ -344,7 +332,6 @@ function StaffModal({ onClose }) {
     firstName: "",
     lastName: "",
     phone: "",
-    gender: "male",
     village: "",
     district: "",
     state: "",
@@ -415,7 +402,6 @@ function StaffModal({ onClose }) {
             set={set}
             type="date"
           />
-          <GenderSelect value={form.gender} onChange={set("gender")} />
         </div>
         <LocationFields form={form} set={set} />
         {error && <p className="text-xs text-red-500">{error}</p>}
@@ -432,8 +418,6 @@ function FPOModal({ onClose }) {
     firstName: "",
     lastName: "",
     phone: "",
-    gender: "male",
-    password: "",
     village: "",
     district: "",
     state: "",
@@ -453,6 +437,9 @@ function FPOModal({ onClose }) {
       role: "FPO",
       ...Object.fromEntries(Object.entries(form).filter(([, v]) => v !== "")),
     };
+    if (!payload.emailId) {
+      payload.emailId = `fpo.${form.phone}@noemail.local`;
+    }
     const result = await dispatch(createStaff(payload));
     setLoading(false);
     if (createStaff.fulfilled.match(result)) {
@@ -468,17 +455,9 @@ function FPOModal({ onClose }) {
           <Field label="First Name" k="firstName" form={form} set={set} />
           <Field label="Last Name" k="lastName" form={form} set={set} />
           <Field label="Mobile" k="phone" form={form} set={set} required />
-          <Field
-            label="Password"
-            k="password"
-            form={form}
-            set={set}
-            type="password"
-          />
           <Field label="Email" k="emailId" form={form} set={set} />
           <Field label="Shop Name" k="shopName" form={form} set={set} />
           <Field label="GST Number" k="gstNumber" form={form} set={set} />
-          <GenderSelect value={form.gender} onChange={set("gender")} />
         </div>
         <LocationFields form={form} set={set} />
         {error && <p className="text-xs text-red-500">{error}</p>}

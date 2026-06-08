@@ -5,7 +5,7 @@
 
 const theme = {
   // Branding
-  brand: "Bharat FPO",
+  brand: "Bharat FPO Connect",
   shortName: "Bharat FPO",
   tagline: "FPO Admin Panel",
   logo: "/logo.jpeg",
