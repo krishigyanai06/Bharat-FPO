@@ -123,17 +123,13 @@ export const createFarmer = createAsyncThunk(
   'members/createFarmer',
   async (data, { rejectWithValue }) => {
     try {
-      const tenantCode = localStorage.getItem('tenantCode') || theme.tenantCode;
-      // Call /user/register without admin token so backend uses tenantCode from body/params
-      const res = await api.post(
-        `/user/register?tenantCode=${tenantCode}`,
-        { ...data, tenantCode },
-        { headers: { Authorization: '' } }
-      );
+      const res = await api.post('/admin/create-farmer', data);
       return res.data?.user ?? res.data?.data ?? res.data;
     } catch (err) {
       return rejectWithValue(
-        err.response?.data?.message || 'Failed to create farmer'
+        err.response?.data?.message
+          ? `${err.response.data.message} ${err.response.data.error || JSON.stringify(err.response.data.errors || {})}`
+          : 'Failed to create farmer'
       );
     }
   }
