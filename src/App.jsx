@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Provider } from "react-redux";
 import { Toaster } from "react-hot-toast";
@@ -6,9 +6,10 @@ import { store } from "./store/store";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
 import { ROUTE_ROLES } from "./config/rbac";
+
+const Login    = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
 
 const Dashboard    = lazy(() => import('./pages/Dashboard'));
 const Listing      = lazy(() => import('./pages/Listing'));
@@ -32,13 +33,21 @@ const PageLoader = () => (
 );
 
 function App() {
+  useEffect(() => {
+    const handleLogout = () => {
+      store.dispatch({ type: "auth/logout" });
+    };
+    window.addEventListener("unauthorized-logout", handleLogout);
+    return () => window.removeEventListener("unauthorized-logout", handleLogout);
+  }, []);
+
   return (
     <Provider store={store}>
       <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<Suspense fallback={<PageLoader />}><Login /></Suspense>} />
+          <Route path="/register" element={<Suspense fallback={<PageLoader />}><Register /></Suspense>} />
           <Route
             path="/"
             element={

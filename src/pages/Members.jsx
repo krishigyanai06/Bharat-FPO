@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchMembers, updateMember, updateKyc } from "../store/thunks/membersThunk";
 import { updateMemberLocal } from "../store/slices/membersSlice";
-import FarmModal from "../components/FarmModal";
+
+const FarmModal = lazy(() => import("../components/FarmModal"));
 import {
   X,
   User,
@@ -582,7 +583,9 @@ function Members() {
       </div>
 
       {farmMember && (
-        <FarmModal member={farmMember} onClose={() => setFarmMember(null)} />
+        <Suspense fallback={<div className="p-4 text-center">Loading Map...</div>}>
+          <FarmModal member={farmMember} onClose={() => setFarmMember(null)} />
+        </Suspense>
       )}
 
       {/* DETAIL MODAL */}
