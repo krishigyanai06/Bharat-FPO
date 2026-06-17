@@ -53,7 +53,7 @@ const menuItems = [
   { icon: Users, label: "Members", path: "/members" },
   { icon: BookOpen, label: "Ledger", path: "/ledger" },
   { icon: ImagePlus, label: "Advertisement", path: "/advertisement" },
-  { icon: BarChart3, label: "Reports", path: "/reports" },
+  // { icon: BarChart3, label: "Reports", path: "/reports" },
   { icon: Settings, label: "Settings", path: "/settings" },
 
   {
