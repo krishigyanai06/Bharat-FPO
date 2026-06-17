@@ -13,8 +13,6 @@ import {
   Cell,
   CartesianGrid,
 } from "recharts";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 import {
   Download,
   CheckCircle,
@@ -477,192 +475,199 @@ function FinancialStatements({ purchases, salesOrders, activeTab, setActiveTab }
   const clCash = opCash + ncf;
 
   // Standard software compliant template export (Xero/QuickBooks style)
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    const dateStr = new Date().toLocaleDateString("en-IN");
+  const exportPDF = async () => {
+    try {
+      const { jsPDF } = await import("jspdf");
+      const { default: autoTable } = await import("jspdf-autotable");
+      const doc = new jsPDF();
+      const dateStr = new Date().toLocaleDateString("en-IN");
 
-    // Header bar with FPO Brand styling
-    doc.setFillColor(22, 163, 74); // Green
-    doc.rect(0, 0, 210, 28, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.text("Marjeevi Pragatisheel FPO", 14, 12);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Financial Report · Generated: ${dateStr}`, 14, 20);
+      // Header bar with FPO Brand styling
+      doc.setFillColor(22, 163, 74); // Green
+      doc.rect(0, 0, 210, 28, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text("Marjeevi Pragatisheel FPO", 14, 12);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Financial Report · Generated: ${dateStr}`, 14, 20);
 
-    let reportTitle = "";
-    let rows = [];
+      let reportTitle = "";
+      let rows = [];
 
-    // Format full INR values
-    const fmtFullINR = (v) => {
-      if (v == null) return "—";
-      const abs = Math.abs(v);
-      const s = "Rs. " + abs.toLocaleString("en-IN");
-      return v < 0 ? `(${s})` : s;
-    };
+      // Format full INR values
+      const fmtFullINR = (v) => {
+        if (v == null) return "—";
+        const abs = Math.abs(v);
+        const s = "Rs. " + abs.toLocaleString("en-IN");
+        return v < 0 ? `(${s})` : s;
+      };
 
-    if (activeTab === "pl") {
-      reportTitle = "Profit & Loss Statement";
-      rows = [
-        { label: "INCOME (GST EXEMPT)", isSection: true },
-        { label: "  Revenue from Agri-Produce Sales", value: Math.round(rev * 0.96), indent: true },
-        { label: "  Revenue from Member Agri-Input Services", value: Math.round(rev * 0.04), indent: true },
-        { label: "Total Income", value: Math.round(rev), total: true },
+      if (activeTab === "pl") {
+        reportTitle = "Profit & Loss Statement";
+        rows = [
+          { label: "INCOME (GST EXEMPT)", isSection: true },
+          { label: "  Revenue from Agri-Produce Sales", value: Math.round(rev * 0.96), indent: true },
+          { label: "  Revenue from Member Agri-Input Services", value: Math.round(rev * 0.04), indent: true },
+          { label: "Total Income", value: Math.round(rev), total: true },
 
-        { label: "COST OF GOODS SOLD", isSection: true },
-        { label: "  Member Farmer Crop Procurement Payout", value: Math.round(rawMaterialCost), indent: true },
-        { label: "  Agri-Logistics & Cold Storage", value: Math.round(logisticsCost), indent: true },
-        { label: "  Crop Sorting, Grading & Wastage", value: Math.round(wastageCost), indent: true },
-        { label: "Total Cost of Goods Sold (COGS)", value: Math.round(cogs), total: true },
-        { label: "Gross Profit", value: Math.round(gp), total: true },
+          { label: "COST OF GOODS SOLD", isSection: true },
+          { label: "  Member Farmer Crop Procurement Payout", value: Math.round(rawMaterialCost), indent: true },
+          { label: "  Agri-Logistics & Cold Storage", value: Math.round(logisticsCost), indent: true },
+          { label: "  Crop Sorting, Grading & Wastage", value: Math.round(wastageCost), indent: true },
+          { label: "Total Cost of Goods Sold (COGS)", value: Math.round(cogs), total: true },
+          { label: "Gross Profit", value: Math.round(gp), total: true },
 
-        { label: "OPERATING EXPENSES (OPEX)", isSection: true },
-        { label: "  Staff Salaries & Extension Officers", value: Math.round(opex * 0.45), indent: true },
-        { label: "  Warehouse Rent & Power", value: Math.round(opex * 0.15), indent: true },
-        { label: "  FPO Digital Platform & ERP Software", value: Math.round(opex * 0.10), indent: true },
-        { label: "  Farmer Training & Member Outreach", value: Math.round(opex * 0.12), indent: true },
-        { label: "  Administrative & Board Meeting Expenses", value: Math.round(opex * 0.18), indent: true },
-        { label: "Total Operating Expenses", value: Math.round(opex), total: true },
-        { label: "EBITDA", value: Math.round(ebitda), total: true },
+          { label: "OPERATING EXPENSES (OPEX)", isSection: true },
+          { label: "  Staff Salaries & Extension Officers", value: Math.round(opex * 0.45), indent: true },
+          { label: "  Warehouse Rent & Power", value: Math.round(opex * 0.15), indent: true },
+          { label: "  FPO Digital Platform & ERP Software", value: Math.round(opex * 0.10), indent: true },
+          { label: "  Farmer Training & Member Outreach", value: Math.round(opex * 0.12), indent: true },
+          { label: "  Administrative & Board Meeting Expenses", value: Math.round(opex * 0.18), indent: true },
+          { label: "Total Operating Expenses", value: Math.round(opex), total: true },
+          { label: "EBITDA", value: Math.round(ebitda), total: true },
 
-        { label: "DEPRECIATION, FINANCE COSTS & TAX", isSection: true },
-        { label: "  Depreciation & Amortisation", value: Math.round(dep), indent: true },
-        { label: "Operating Profit (EBIT)", value: Math.round(ebit), total: true },
-        { label: "  Interest on Working Capital (NABARD/SFAC)", value: Math.round(int_), indent: true },
-        { label: "Profit Before Tax (PBT)", value: Math.round(pbt), total: true },
-        { label: "  Income Tax & GST (Sec 80P & Agri Exempt - 0%)", value: Math.round(tax), indent: true },
-        { label: "Net Profit After Tax (PAT)", value: Math.round(pat), isFinal: true }
-      ];
-    } else if (activeTab === "bs") {
-      reportTitle = "Balance Sheet";
-      rows = [
-        { label: "ASSETS - CURRENT ASSETS", isSection: true },
-        { label: "  Cash & Cash Equivalents", value: Math.round(ca * 0.22), indent: true },
-        { label: "  Trade Receivables", value: Math.round(ca * 0.30), indent: true },
-        { label: "  Inventories (Crop Stock)", value: Math.round(ca * 0.32), indent: true },
-        { label: "  Advances & Prepayments", value: Math.round(ca * 0.16), indent: true },
-        { label: "Total Current Assets", value: Math.round(ca), total: true },
+          { label: "DEPRECIATION, FINANCE COSTS & TAX", isSection: true },
+          { label: "  Depreciation & Amortisation", value: Math.round(dep), indent: true },
+          { label: "Operating Profit (EBIT)", value: Math.round(ebit), total: true },
+          { label: "  Interest on Working Capital (NABARD/SFAC)", value: Math.round(int_), indent: true },
+          { label: "Profit Before Tax (PBT)", value: Math.round(pbt), total: true },
+          { label: "  Income Tax & GST (Sec 80P & Agri Exempt - 0%)", value: Math.round(tax), indent: true },
+          { label: "Net Profit After Tax (PAT)", value: Math.round(pat), isFinal: true }
+        ];
+      } else if (activeTab === "bs") {
+        reportTitle = "Balance Sheet";
+        rows = [
+          { label: "ASSETS - CURRENT ASSETS", isSection: true },
+          { label: "  Cash & Cash Equivalents", value: Math.round(ca * 0.22), indent: true },
+          { label: "  Trade Receivables", value: Math.round(ca * 0.30), indent: true },
+          { label: "  Inventories (Crop Stock)", value: Math.round(ca * 0.32), indent: true },
+          { label: "  Advances & Prepayments", value: Math.round(ca * 0.16), indent: true },
+          { label: "Total Current Assets", value: Math.round(ca), total: true },
 
-        { label: "FIXED ASSETS", isSection: true },
-        { label: "  Land & Buildings", value: Math.round(fa * 0.45), indent: true },
-        { label: "  Plant & Machinery", value: Math.round(fa * 0.30), indent: true },
-        { label: "  Vehicles & Equipment", value: Math.round(fa * 0.15), indent: true },
-        { label: "  Less: Accumulated Depreciation", value: -Math.round(fa * 0.12), indent: true },
-        { label: "Net Fixed Assets", value: Math.round(fa * 0.88), total: true },
+          { label: "FIXED ASSETS", isSection: true },
+          { label: "  Land & Buildings", value: Math.round(fa * 0.45), indent: true },
+          { label: "  Plant & Machinery", value: Math.round(fa * 0.30), indent: true },
+          { label: "  Vehicles & Equipment", value: Math.round(fa * 0.15), indent: true },
+          { label: "  Less: Accumulated Depreciation", value: -Math.round(fa * 0.12), indent: true },
+          { label: "Net Fixed Assets", value: Math.round(fa * 0.88), total: true },
 
-        { label: "OTHER ASSETS", isSection: true },
-        { label: "  Intangibles & Goodwill", value: Math.round(oa * 0.50), indent: true },
-        { label: "  Long-term Investments", value: Math.round(oa * 0.50), indent: true },
-        { label: "Total Assets", value: Math.round(ta), isFinal: true },
+          { label: "OTHER ASSETS", isSection: true },
+          { label: "  Intangibles & Goodwill", value: Math.round(oa * 0.50), indent: true },
+          { label: "  Long-term Investments", value: Math.round(oa * 0.50), indent: true },
+          { label: "Total Assets", value: Math.round(ta), isFinal: true },
 
-        { label: "EQUITY & LIABILITIES - SHAREHOLDERS' EQUITY", isSection: true },
-        { label: "  Share Capital", value: Math.round(eq * 0.50), indent: true },
-        { label: "  Retained Earnings", value: Math.round(eq * 0.38), indent: true },
-        { label: "  Reserves & Surplus", value: Math.round(eq * 0.12), indent: true },
-        { label: "Total Shareholders' Equity", value: Math.round(eq), total: true },
+          { label: "EQUITY & LIABILITIES - SHAREHOLDERS' EQUITY", isSection: true },
+          { label: "  Share Capital", value: Math.round(eq * 0.50), indent: true },
+          { label: "  Retained Earnings", value: Math.round(eq * 0.38), indent: true },
+          { label: "  Reserves & Surplus", value: Math.round(eq * 0.12), indent: true },
+          { label: "Total Shareholders' Equity", value: Math.round(eq), total: true },
 
-        { label: "LONG-TERM LIABILITIES", isSection: true },
-        { label: "  Term Loans (Banks)", value: Math.round(ltd * 0.65), indent: true },
-        { label: "  Government Grants", value: Math.round(ltd * 0.20), indent: true },
-        { label: "  Other LT Liabilities", value: Math.round(ltd * 0.15), indent: true },
-        { label: "Total Long-Term Liabilities", value: Math.round(ltd), total: true },
+          { label: "LONG-TERM LIABILITIES", isSection: true },
+          { label: "  Term Loans (Banks)", value: Math.round(ltd * 0.65), indent: true },
+          { label: "  Government Grants", value: Math.round(ltd * 0.20), indent: true },
+          { label: "  Other LT Liabilities", value: Math.round(ltd * 0.15), indent: true },
+          { label: "Total Long-Term Liabilities", value: Math.round(ltd), total: true },
 
-        { label: "CURRENT LIABILITIES", isSection: true },
-        { label: "  Trade Payables", value: Math.round(cl * 0.35), indent: true },
-        { label: "  Short-term Borrowings", value: Math.round(cl * 0.30), indent: true },
-        { label: "  Statutory Dues & Tax", value: Math.round(cl * 0.20), indent: true },
-        { label: "  Other Current Liabilities", value: Math.round(cl * 0.15), indent: true },
-        { label: "Total Current Liabilities", value: Math.round(cl), total: true },
-        { label: "Total Equity & Liabilities", value: Math.round(ta), isFinal: true }
-      ];
-    } else if (activeTab === "cf") {
-      reportTitle = "Cash Flow Statement";
-      rows = [
-        { label: "OPERATING ACTIVITIES", isSection: true },
-        { label: "  Net Profit After Tax", value: Math.round(pat), indent: true },
-        { label: "  Add: Depreciation & Amortisation", value: Math.round(dep), indent: true },
-        { label: "  Less: Increase in Working Capital", value: -Math.round(rev * 0.04), indent: true },
-        { label: "  Less: Income Tax Paid", value: -Math.round(tax), indent: true },
-        { label: "Net Cash from Operating Activities", value: Math.round(ocf), total: true },
+          { label: "CURRENT LIABILITIES", isSection: true },
+          { label: "  Trade Payables", value: Math.round(cl * 0.35), indent: true },
+          { label: "  Short-term Borrowings", value: Math.round(cl * 0.30), indent: true },
+          { label: "  Statutory Dues & Tax", value: Math.round(cl * 0.20), indent: true },
+          { label: "  Other Current Liabilities", value: Math.round(cl * 0.15), indent: true },
+          { label: "Total Current Liabilities", value: Math.round(cl), total: true },
+          { label: "Total Equity & Liabilities", value: Math.round(ta), isFinal: true }
+        ];
+      } else if (activeTab === "cf") {
+        reportTitle = "Cash Flow Statement";
+        rows = [
+          { label: "OPERATING ACTIVITIES", isSection: true },
+          { label: "  Net Profit After Tax", value: Math.round(pat), indent: true },
+          { label: "  Add: Depreciation & Amortisation", value: Math.round(dep), indent: true },
+          { label: "  Less: Increase in Working Capital", value: -Math.round(rev * 0.04), indent: true },
+          { label: "  Less: Income Tax Paid", value: -Math.round(tax), indent: true },
+          { label: "Net Cash from Operating Activities", value: Math.round(ocf), total: true },
 
-        { label: "INVESTING ACTIVITIES", isSection: true },
-        { label: "  Purchase of Fixed Assets (Capex)", value: -Math.round(rev * 0.07), indent: true },
-        { label: "  Proceeds from Asset Sales", value: Math.round(rev * 0.01), indent: true },
-        { label: "  Investment in Govt. Securities", value: -Math.round(rev * 0.02), indent: true },
-        { label: "Net Cash from Investing Activities", value: Math.round(icf), total: true },
+          { label: "INVESTING ACTIVITIES", isSection: true },
+          { label: "  Purchase of Fixed Assets (Capex)", value: -Math.round(rev * 0.07), indent: true },
+          { label: "  Proceeds from Asset Sales", value: Math.round(rev * 0.01), indent: true },
+          { label: "  Investment in Govt. Securities", value: -Math.round(rev * 0.02), indent: true },
+          { label: "Net Cash from Investing Activities", value: Math.round(icf), total: true },
 
-        { label: "FINANCING ACTIVITIES", isSection: true },
-        { label: "  Proceeds from Term Loans", value: Math.round(rev * 0.05), indent: true },
-        { label: "  Repayment of Borrowings", value: -Math.round(rev * 0.065), indent: true },
-        { label: "  Dividend Paid", value: -Math.round(pat * 0.20), indent: true },
-        { label: "Net Cash from Financing Activities", value: Math.round(fcf), total: true },
+          { label: "FINANCING ACTIVITIES", isSection: true },
+          { label: "  Proceeds from Term Loans", value: Math.round(rev * 0.05), indent: true },
+          { label: "  Repayment of Borrowings", value: -Math.round(rev * 0.065), indent: true },
+          { label: "  Dividend Paid", value: -Math.round(pat * 0.20), indent: true },
+          { label: "Net Cash from Financing Activities", value: Math.round(fcf), total: true },
 
-        { label: "SUMMARY", isSection: true },
-        { label: "  Net Increase / (Decrease) in Cash", value: Math.round(ncf), indent: true },
-        { label: "  Opening Cash & Cash Equivalents", value: Math.round(opCash), indent: true },
-        { label: "Closing Cash & Cash Equivalents", value: Math.round(clCash), isFinal: true }
-      ];
+          { label: "SUMMARY", isSection: true },
+          { label: "  Net Increase / (Decrease) in Cash", value: Math.round(ncf), indent: true },
+          { label: "  Opening Cash & Cash Equivalents", value: Math.round(opCash), indent: true },
+          { label: "Closing Cash & Cash Equivalents", value: Math.round(clCash), isFinal: true }
+        ];
+      }
+
+      // Title info block
+      doc.setTextColor(30, 41, 59); // slate-800
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text(reportTitle, 14, 38);
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 116, 139); // slate-500
+      doc.text(`Period: ${periodLabel}   |   As of: ${asOfDate}   |   Currency: INR (Rs.)`, 14, 44);
+
+      // Render table
+      autoTable(doc, {
+        startY: 50,
+        head: [["Particulars", "Amount"]],
+        body: rows.map(r => [r.label, r.isSection ? "" : fmtFullINR(r.value)]),
+        headStyles: { fillColor: [22, 163, 74], textColor: 255, fontSize: 9, fontStyle: "bold" },
+        bodyStyles: { fontSize: 8.5, textColor: [51, 65, 85] },
+        columnStyles: { 1: { halign: "right" } },
+        margin: { left: 14, right: 14 },
+        didParseCell: (data) => {
+          const rowIndex = data.row.index;
+          const rowMeta = rows[rowIndex];
+          if (!rowMeta) return;
+
+          if (rowMeta.isSection) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.textColor = [30, 41, 59]; // slate-800
+            data.cell.styles.fillColor = [241, 245, 249]; // slate-100
+            data.cell.styles.fontSize = 8.5;
+          } else if (rowMeta.isFinal) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.textColor = [15, 23, 42]; // slate-900
+            data.cell.styles.fillColor = [248, 250, 252]; // slate-50
+            data.cell.styles.lineColor = [15, 23, 42];
+            data.cell.styles.lineWidth = { top: 0.5, bottom: 1.5, left: 0, right: 0 };
+          } else if (rowMeta.total) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.textColor = [30, 41, 59]; // slate-800
+            data.cell.styles.lineColor = [203, 213, 225]; // slate-300
+            data.cell.styles.lineWidth = { top: 0.5, bottom: 0.5, left: 0, right: 0 };
+          }
+        },
+        alternateRowStyles: { fillColor: [255, 255, 255] } // keep it clean
+      });
+
+      // Add note/signature block at the bottom
+      const pageH = doc.internal.pageSize.height;
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.text(`Subject to audit. 100% Tax-Exempt under Section 80P of the Income Tax Act for FPOs.`, 14, pageH - 14);
+      doc.text(`Generated automatically by Marjeevi Pragatisheel FPO Enterprise Suite. Software Compliant Template (Xero Style).`, 14, pageH - 10);
+      doc.text(`Page 1 of 1`, 196, pageH - 10, { align: "right" });
+
+      // Save PDF
+      const filename = `${reportTitle.replace(/ /g, "_")}_MarjeeviFPO_${periodLabel.replace(/ /g, "_")}.pdf`;
+      doc.save(filename);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate report. Please try again.");
     }
-
-    // Title info block
-    doc.setTextColor(30, 41, 59); // slate-800
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text(reportTitle, 14, 38);
-
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(100, 116, 139); // slate-500
-    doc.text(`Period: ${periodLabel}   |   As of: ${asOfDate}   |   Currency: INR (Rs.)`, 14, 44);
-
-    // Render table
-    autoTable(doc, {
-      startY: 50,
-      head: [["Particulars", "Amount"]],
-      body: rows.map(r => [r.label, r.isSection ? "" : fmtFullINR(r.value)]),
-      headStyles: { fillColor: [22, 163, 74], textColor: 255, fontSize: 9, fontStyle: "bold" },
-      bodyStyles: { fontSize: 8.5, textColor: [51, 65, 85] },
-      columnStyles: { 1: { halign: "right" } },
-      margin: { left: 14, right: 14 },
-      didParseCell: (data) => {
-        const rowIndex = data.row.index;
-        const rowMeta = rows[rowIndex];
-        if (!rowMeta) return;
-
-        if (rowMeta.isSection) {
-          data.cell.styles.fontStyle = "bold";
-          data.cell.styles.textColor = [30, 41, 59]; // slate-800
-          data.cell.styles.fillColor = [241, 245, 249]; // slate-100
-          data.cell.styles.fontSize = 8.5;
-        } else if (rowMeta.isFinal) {
-          data.cell.styles.fontStyle = "bold";
-          data.cell.styles.textColor = [15, 23, 42]; // slate-900
-          data.cell.styles.fillColor = [248, 250, 252]; // slate-50
-          data.cell.styles.lineColor = [15, 23, 42];
-          data.cell.styles.lineWidth = { top: 0.5, bottom: 1.5, left: 0, right: 0 };
-        } else if (rowMeta.total) {
-          data.cell.styles.fontStyle = "bold";
-          data.cell.styles.textColor = [30, 41, 59]; // slate-800
-          data.cell.styles.lineColor = [203, 213, 225]; // slate-300
-          data.cell.styles.lineWidth = { top: 0.5, bottom: 0.5, left: 0, right: 0 };
-        }
-      },
-      alternateRowStyles: { fillColor: [255, 255, 255] } // keep it clean
-    });
-
-    // Add note/signature block at the bottom
-    const pageH = doc.internal.pageSize.height;
-    doc.setFontSize(7.5);
-    doc.setTextColor(148, 163, 184); // slate-400
-    doc.text(`Subject to audit. 100% Tax-Exempt under Section 80P of the Income Tax Act for FPOs.`, 14, pageH - 14);
-    doc.text(`Generated automatically by Marjeevi Pragatisheel FPO Enterprise Suite. Software Compliant Template (Xero Style).`, 14, pageH - 10);
-    doc.text(`Page 1 of 1`, 196, pageH - 10, { align: "right" });
-
-    // Save PDF
-    const filename = `${reportTitle.replace(/ /g, "_")}_MarjeeviFPO_${periodLabel.replace(/ /g, "_")}.pdf`;
-    doc.save(filename);
   };
 
   const exportExcel = () => {

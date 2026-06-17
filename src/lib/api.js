@@ -151,9 +151,7 @@ api.interceptors.response.use(
       const isDataFetch = skipLogoutUrls.some(u => url.includes(u));
       
       if (!isDataFetch) {
-        import("../store/store").then(({ store }) => {
-          store.dispatch({ type: "auth/logout" });
-        });
+        window.dispatchEvent(new CustomEvent("unauthorized-logout"));
       }
     }
     return Promise.reject(error);

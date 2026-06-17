@@ -36,8 +36,10 @@ export const ROUTE_ROLES = {
   '/advertisement': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN],
   '/reports': [ROLES.FPO, ROLES.ADMIN, ROLES.VIEWER],
   '/settings': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN],
+  '/party': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN, ROLES.VIEWER],
   '/create-tenant': [ROLES.SUPERADMIN],
   '/tier-features': [ROLES.SUPERADMIN],
+
 };
 
 // Helper to check if role has permission
