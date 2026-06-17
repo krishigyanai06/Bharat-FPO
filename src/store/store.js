@@ -17,6 +17,7 @@ import ledgerReducer from './slices/ledgerSlice';
 import advertisementReducer from './slices/advertisementSlice';
 import orderReducer from './slices/orderSlice';
 import featuresReducer from './slices/featuresSlice';
+import partyReducer from './slices/partySlice';
 
 export const store = configureStore({
   reducer: {
@@ -25,18 +26,19 @@ export const store = configureStore({
     procurement: procurementReducer,
     purchases: purchasesReducer,
     documents: documentsReducer,
-      inventory: inventoryReducer,
+    inventory: inventoryReducer,
     members: membersReducer,
     reports: reportsReducer,
     dashboard: dashboardReducer,
-      layout: layoutReducer,
+    layout: layoutReducer,
     settings: settingsReducer,
-     register: registerReducer,
+    register: registerReducer,
     broadcast: broadcastReducer,
     farm: farmReducer,
     ledger: ledgerReducer,
     advertisement: advertisementReducer,
     orders: orderReducer,
     features: featuresReducer,
+    party: partyReducer,
   },
 });

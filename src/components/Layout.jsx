@@ -44,6 +44,7 @@ import "./google-lang-picker/google-translate.css";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+  { icon: Users, label: "Parties", path: "/party" },
   { icon: Package, label: "Listing Approvals", path: "/listing" },
   { icon: ShoppingCart, label: "Procurement", path: "/procurement" },
   { icon: Archive, label: "Inventory", path: "/inventory" },
@@ -54,6 +55,7 @@ const menuItems = [
   { icon: ImagePlus, label: "Advertisement", path: "/advertisement" },
   { icon: BarChart3, label: "Reports", path: "/reports" },
   { icon: Settings, label: "Settings", path: "/settings" },
+
   {
     icon: Building2,
     label: "Create Tenant",
@@ -296,63 +298,63 @@ export default function Layout() {
     globalSearch.trim().length < 2
       ? []
       : (() => {
-          const term = globalSearch.toLowerCase();
-          const results = [];
+        const term = globalSearch.toLowerCase();
+        const results = [];
 
-          members
-            ?.filter(
-              (m) =>
-                `${m.firstName} ${m.lastName}`.toLowerCase().includes(term) ||
-                m.phone?.includes(term),
-            )
-            .slice(0, 3)
-            .forEach((m) =>
-              results.push({
-                icon: "👤",
-                label: `${m.firstName} ${m.lastName}`,
-                sub: `Member • +91 ${m.phone}`,
-                path: "/members",
-              }),
-            );
+        members
+          ?.filter(
+            (m) =>
+              `${m.firstName} ${m.lastName}`.toLowerCase().includes(term) ||
+              m.phone?.includes(term),
+          )
+          .slice(0, 3)
+          .forEach((m) =>
+            results.push({
+              icon: "👤",
+              label: `${m.firstName} ${m.lastName}`,
+              sub: `Member • +91 ${m.phone}`,
+              path: "/members",
+            }),
+          );
 
-          products
-            ?.filter(
-              (p) =>
-                p.cropName?.toLowerCase().includes(term) ||
-                `${p.userId?.firstName} ${p.userId?.lastName}`
-                  .toLowerCase()
-                  .includes(term),
-            )
-            .slice(0, 3)
-            .forEach((p) =>
-              results.push({
-                icon: "🌾",
-                label: p.cropName,
-                sub: `Listing • ${p.userId?.firstName} ${p.userId?.lastName} • ${p.status}`,
-                path: "/listing",
-              }),
-            );
+        products
+          ?.filter(
+            (p) =>
+              p.cropName?.toLowerCase().includes(term) ||
+              `${p.userId?.firstName} ${p.userId?.lastName}`
+                .toLowerCase()
+                .includes(term),
+          )
+          .slice(0, 3)
+          .forEach((p) =>
+            results.push({
+              icon: "🌾",
+              label: p.cropName,
+              sub: `Listing • ${p.userId?.firstName} ${p.userId?.lastName} • ${p.status}`,
+              path: "/listing",
+            }),
+          );
 
-          orders
-            ?.filter(
-              (o) =>
-                `${o.farmer?.firstName} ${o.farmer?.lastName}`
-                  .toLowerCase()
-                  .includes(term) ||
-                o.crops?.some((c) => c.cropName?.toLowerCase().includes(term)),
-            )
-            .slice(0, 3)
-            .forEach((o) =>
-              results.push({
-                icon: "🛒",
-                label: `${o.farmer?.firstName} ${o.farmer?.lastName}`,
-                sub: `Procurement • ${o.crops?.map((c) => c.cropName).join(", ")}`,
-                path: "/procurement",
-              }),
-            );
+        orders
+          ?.filter(
+            (o) =>
+              `${o.farmer?.firstName} ${o.farmer?.lastName}`
+                .toLowerCase()
+                .includes(term) ||
+              o.crops?.some((c) => c.cropName?.toLowerCase().includes(term)),
+          )
+          .slice(0, 3)
+          .forEach((o) =>
+            results.push({
+              icon: "🛒",
+              label: `${o.farmer?.firstName} ${o.farmer?.lastName}`,
+              sub: `Procurement • ${o.crops?.map((c) => c.cropName).join(", ")}`,
+              path: "/procurement",
+            }),
+          );
 
-          return results;
-        })();
+        return results;
+      })();
 
   return (
     <div className="h-screen bg-gray-50 flex overflow-hidden">
@@ -366,9 +368,8 @@ export default function Layout() {
       )}
 
       <aside
-        className={`fixed lg:static z-40 h-full w-64 flex flex-col transition-transform duration-300 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        className={`fixed lg:static z-40 h-full w-64 flex flex-col transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          }`}
         style={{ background: "#0a1f0f" }}
       >
         {/* BRAND CARD */}
@@ -438,18 +439,18 @@ export default function Layout() {
                     style={
                       active
                         ? {
-                            background:
-                              "linear-gradient(135deg, #1a5c2a 0%, #0f3d1a 100%)",
-                            boxShadow:
-                              "0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)",
-                            border: "1px solid rgba(109,191,126,0.2)",
-                            color: "#ffffff",
-                          }
+                          background:
+                            "linear-gradient(135deg, #1a5c2a 0%, #0f3d1a 100%)",
+                          boxShadow:
+                            "0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)",
+                          border: "1px solid rgba(109,191,126,0.2)",
+                          color: "#ffffff",
+                        }
                         : {
-                            background: "transparent",
-                            border: "1px solid transparent",
-                            color: "rgba(109,191,126,0.85)",
-                          }
+                          background: "transparent",
+                          border: "1px solid transparent",
+                          color: "rgba(109,191,126,0.85)",
+                        }
                     }
                   >
                     {active && (
@@ -464,9 +465,8 @@ export default function Layout() {
                     />
                     <span className="flex-1 text-left">{item.label}</span>
                     <ChevronDown
-                      className={`w-3.5 h-3.5 transition-transform duration-200 opacity-60 ${
-                        reportsOpen ? "rotate-180" : ""
-                      }`}
+                      className={`w-3.5 h-3.5 transition-transform duration-200 opacity-60 ${reportsOpen ? "rotate-180" : ""
+                        }`}
                     />
                   </button>
 
@@ -487,11 +487,10 @@ export default function Layout() {
                               navigate(`/reports?tab=${sub.key}&scroll=1`);
                               setSidebarOpen(false);
                             }}
-                            className={`w-full flex items-center gap-2.5 py-2 px-3.5 rounded-lg text-xs font-semibold transition-all duration-150 ${
-                              subActive
-                                ? "bg-green-700/50 text-white shadow-sm border border-green-600/30"
-                                : "text-green-100/60 hover:text-white hover:bg-green-800/20"
-                            }`}
+                            className={`w-full flex items-center gap-2.5 py-2 px-3.5 rounded-lg text-xs font-semibold transition-all duration-150 ${subActive
+                              ? "bg-green-700/50 text-white shadow-sm border border-green-600/30"
+                              : "text-green-100/60 hover:text-white hover:bg-green-800/20"
+                              }`}
                           >
                             <SubIcon className="w-3.5 h-3.5 flex-shrink-0" />
                             <span className="flex-1">{sub.label}</span>
@@ -518,18 +517,18 @@ export default function Layout() {
                 style={
                   active
                     ? {
-                        background:
-                          "linear-gradient(135deg, #1a5c2a 0%, #0f3d1a 100%)",
-                        boxShadow:
-                          "0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(109,191,126,0.2)",
-                        color: "#ffffff",
-                      }
+                      background:
+                        "linear-gradient(135deg, #1a5c2a 0%, #0f3d1a 100%)",
+                      boxShadow:
+                        "0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(109,191,126,0.2)",
+                      color: "#ffffff",
+                    }
                     : {
-                        background: "transparent",
-                        border: "1px solid transparent",
-                        color: "rgba(109,191,126,0.85)",
-                      }
+                      background: "transparent",
+                      border: "1px solid transparent",
+                      color: "rgba(109,191,126,0.85)",
+                    }
                 }
               >
                 {/* left accent bar for active */}
@@ -832,9 +831,9 @@ export default function Layout() {
           {/* For SuperAdmin, only show loader for dashboard routes that need tenant context */}
           {/* Allow other routes to render while tenant selection is in progress */}
           {isSuperAdmin &&
-          !selectedTenantId &&
-          location.pathname === "/dashboard" &&
-          !tenantLoadTimeout ? (
+            !selectedTenantId &&
+            location.pathname === "/dashboard" &&
+            !tenantLoadTimeout ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-500">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600 mb-4" />
               <p>Loading tenant workspace...</p>
