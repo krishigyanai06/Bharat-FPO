@@ -19,6 +19,7 @@ const Members = lazy(() => import('./pages/Members'));
 const Documents = lazy(() => import('./pages/Documents'));
 const Reports = lazy(() => import('./pages/Reports'));
 const Settings = lazy(() => import('./pages/Settings'));
+const CounterSales = lazy(() => import('./pages/CounterSales'));
 const Procurement = lazy(() => import('./pages/Procurement'));
 const Broadcast = lazy(() => import('./pages/Broadcast'));
 const Ledger = lazy(() => import('./pages/Ledger'));
@@ -71,6 +72,7 @@ function App() {
             <Route path="advertisement" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/advertisement']}><Suspense fallback={<PageLoader />}><Advertisement /></Suspense></ProtectedRoute>} />
             <Route path="reports" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/reports']}><Suspense fallback={<PageLoader />}><Reports /></Suspense></ProtectedRoute>} />
             <Route path="settings" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/settings']}><Suspense fallback={<PageLoader />}><Settings /></Suspense></ProtectedRoute>} />
+            <Route path="sell" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterSales /></Suspense></ProtectedRoute>} />
             <Route path="create-tenant" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/create-tenant']}><Suspense fallback={<PageLoader />}><CreateTenant /></Suspense></ProtectedRoute>} />
             <Route path="tier-features" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/tier-features']}><Suspense fallback={<PageLoader />}><TierFeatures /></Suspense></ProtectedRoute>} />
             <Route path="party" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/party']}><Suspense fallback={<PageLoader />}><Party /></Suspense></ProtectedRoute>} />

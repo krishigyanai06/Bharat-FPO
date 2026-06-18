@@ -12,7 +12,7 @@ const theme = {
 
   // API — set VITE_API_BASE in .env
   apiBase:
-    import.meta.env.VITE_API_BASE || "https://master-app-h957.onrender.com/api" || "https://bharat-fpo.krishigyanai.com/api",
+    import.meta.env.VITE_API_BASE || "https://master-app-h957.onrender.com/api",
   // Default login role
   defaultRole: "SuperAdmin",
 

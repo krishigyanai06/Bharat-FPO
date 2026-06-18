@@ -18,6 +18,7 @@ import advertisementReducer from './slices/advertisementSlice';
 import orderReducer from './slices/orderSlice';
 import featuresReducer from './slices/featuresSlice';
 import partyReducer from './slices/partySlice';
+import sellReducer from './slices/sellSlice';
 
 export const store = configureStore({
   reducer: {
@@ -40,5 +41,6 @@ export const store = configureStore({
     orders: orderReducer,
     features: featuresReducer,
     party: partyReducer,
+    sell: sellReducer,
   },
 });

@@ -66,12 +66,12 @@ export const addProduct = createAsyncThunk(
   }
 );
 
-// PUT /product/updateProduct/:id
+// PATCH /product/updateProduct/:id
 export const updateProduct = createAsyncThunk(
   'inventory/updateProduct',
   async ({ id, data }, { rejectWithValue }) => {
     try {
-      const res = await api.put(`/product/updateProduct/${id}`, data);
+      const res = await api.patch(`/product/updateProduct/${id}`, data);
       return res.data.data ?? res.data;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to update product');
@@ -79,12 +79,12 @@ export const updateProduct = createAsyncThunk(
   }
 );
 
-// PUT /product/updateProduct/:id — toggle active status
+// PATCH /product/toggleProductStatus/:id — toggle active status
 export const toggleProductStatus = createAsyncThunk(
   'inventory/toggleProductStatus',
   async ({ id, isActive }, { rejectWithValue }) => {
     try {
-      await api.put(`/product/updateProduct/${id}`, { isActive });
+      await api.patch(`/product/toggleProductStatus/${id}`, { isActive });
       return { id, isActive };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to update status');
