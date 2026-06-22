@@ -23,6 +23,7 @@ import {
     RefreshCw
 } from "lucide-react";
 import toast from "react-hot-toast";
+import SearchableStateSelect from "../components/SearchableStateSelect";
 
 // State Options for Dropdowns
 const STATES = [
@@ -34,10 +35,11 @@ const STATES = [
 ];
 
 const GST_TYPES = [
+    "Unregistered/Consumer",
     "Registered-Regular",
     "Registered-Composition",
-    "Unregistered",
-    "Consumer"
+    "Overseas",
+    "SEZ"
 ];
 
 export default function Party() {
@@ -59,12 +61,12 @@ export default function Party() {
         name: "",
         phoneNumber: "",
         gstin: "",
-        gstType: "Unregistered",
+        gstType: "Unregistered/Consumer",
         state: "",
         email: "",
         billingAddress: "",
         shippingAddress: "",
-        openingBalance: 0,
+        openingBalance: "",
         openingBalanceType: "CREDIT",
     });
     const [errors, setErrors] = useState({});
@@ -122,7 +124,7 @@ export default function Party() {
             name: "",
             phoneNumber: "",
             gstin: "",
-            gstType: "Unregistered",
+            gstType: "Unregistered/Consumer",
             state: "Uttar Pradesh",
             email: "",
             billingAddress: "",
@@ -140,7 +142,7 @@ export default function Party() {
             name: party.name || "",
             phoneNumber: party.phoneNumber || "",
             gstin: party.gstin || "",
-            gstType: party.gstType || "Unregistered",
+            gstType: party.gstType || "Unregistered/Consumer",
             state: party.state || "Uttar Pradesh",
             email: party.email || "",
             billingAddress: party.billingAddress || "",
@@ -419,8 +421,8 @@ export default function Party() {
                                                         <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${party.gstType?.startsWith("Registered")
                                                                 ? "bg-purple-50 text-purple-700 border border-purple-100"
                                                                 : "bg-gray-100 text-gray-600"
-                                                            }`}>
-                                                            {party.gstType || "Unregistered"}
+                                                                }`}>
+                                                            {party.gstType || "Unregistered/Consumer"}
                                                         </span>
                                                         {party.gstin && (
                                                             <p className="text-xs font-mono text-gray-500 mt-1.5 uppercase tracking-wider">{party.gstin}</p>
@@ -528,24 +530,11 @@ export default function Party() {
                                     {/* State */}
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-500 mb-1">State</label>
-                                        <div className="relative">
-                                            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                                                <MapPin className="w-4 h-4" />
-                                            </span>
-                                            <select
-                                                value={form.state}
-                                                onChange={(e) => setForm({ ...form, state: e.target.value })}
-                                                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white appearance-none cursor-pointer"
-                                            >
-                                                <option value="">Select State</option>
-                                                {STATES.map((s) => (
-                                                    <option key={s} value={s}>{s}</option>
-                                                ))}
-                                            </select>
-                                            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                                            </div>
-                                        </div>
+                                        <SearchableStateSelect
+                                            value={form.state}
+                                            onChange={(val) => setForm({ ...form, state: val })}
+                                            height="h-[38px]"
+                                        />
                                     </div>
 
                                     {/* Mobile Number */}

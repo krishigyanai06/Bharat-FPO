@@ -40,6 +40,7 @@ Multi-tenant, single-database agri-tech platform backend built with **Node.js**,
   - [Party](#28-party)
   - [Purchase](#29-purchase)
   - [Reports](#30-reports)
+  - [HSN (Tax Codes)](#31-hsn-tax-codes)
 
 ---
 
@@ -916,18 +917,23 @@ Returns aggregated inventory with product details, images, and pricing.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/purchase/add` | 🔒 | Create purchase (BILL or ORDER) |
+| `POST` | `/purchase/add` | 🔒 | Create purchase (BILL or ORDER) (Supports file upload under `image`) |
 | `GET` | `/purchase/list` | 🔒 | Get all purchases (paginated, filterable) |
 | `GET` | `/purchase/:id` | 🔒 | Get a purchase by ID |
-| `PATCH` | `/purchase/update/:id` | 🔒 | Update an existing purchase |
+| `PATCH` | `/purchase/update/:id` | 🔒 | Update an existing purchase (Supports file upload under `image`) |
 | `DELETE` | `/purchase/delete/:id` | 🔒 | Delete a purchase |
+| `POST` | `/purchase/convert-to-purchase/:id` | 🔒 | Convert a Purchase Order to a final Purchase Bill |
 
-**POST** `/purchase/add`
+**POST** `/purchase/add` *(Supports JSON or multipart/form-data)*
 ```json
 {
   "purchaseType": "BILL",
   "billNumber": "PUR-2026-001",
   "billingType": "Credit",
+  "paymentType": "UPI",
+  "referenceNo": "TXN123456",
+  "paidAmount": 2000,
+  "unpaidAmount": 2484,
   "party": "PARTY_ID_STRING",
   "billDate": "2026-06-15",
   "dueDate": "2026-07-15",
@@ -952,6 +958,23 @@ Returns aggregated inventory with product details, images, and pricing.
 }
 ```
 
+> [!NOTE]
+> - **File Upload**: Both `/purchase/add` and `/purchase/update/:id` support file uploads (images or PDFs) under the form-data field name `image`. Uploads are secured and stored in the private `purchase-bills` directory on S3.
+> - **Payment Resolution**:
+>   - `paidAmount` and `unpaidAmount` track the transaction settlement status. For cash bills, they default to `totalAmount` and `0`. For credit bills, they default to `0` and `totalAmount` unless specific values are passed.
+>   - `paymentType` enum supports `["Cash", "UPI", "Cheque", "Bank Transfer", "Card"]`.
+
+> [!IMPORTANT]
+> **Atomic Payment Out Creation** — When a Purchase Bill is saved with `paidAmount > 0`, the backend **automatically creates a matching Payment Out receipt** in the same MongoDB transaction. This means:
+> - A single API call to `/purchase/add` creates both the `PurchaseBill` and the linked `PaymentOut` atomically.
+> - If anything fails, **neither record is saved** — no partial data.
+> - The `PaymentOut` record carries a `linkedPurchaseBill` field referencing the source bill for full traceability.
+> - On **update**, the linked `PaymentOut` is automatically adjusted to reflect the new `paidAmount` (created, updated, or deleted as needed).
+> - On **delete**, the linked `PaymentOut` and its ledger entry are cascade-deleted together with the bill.
+> - On **convert-to-purchase** (Order → Bill), if the order had a `paidAmount > 0`, a `PaymentOut` is auto-created as well.
+>
+> Manual `PaymentOut` entries (via `/purchase/payment-out`) are still supported for standalone payments not tied to a bill.
+
 **GET** `/purchase/list` *(Query Filters)*
 `?page=1&limit=10&purchaseType=BILL&billingType=Credit&party=PARTY_ID&startDate=2026-06-01&endDate=2026-06-30&search=PUR-2026`
 
@@ -959,13 +982,16 @@ Returns aggregated inventory with product details, images, and pricing.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/purchase/payment-out` | 🔒 | Record a vendor payment-out receipt |
-| `GET` | `/purchase/payment-out/list` | 🔒 | Get all payment-out receipts |
+| `POST` | `/purchase/payment-out` | 🔒 | Record a standalone vendor payment-out receipt |
+| `GET` | `/purchase/payment-out/list` | 🔒 | Get all payment-out receipts (manual + auto-generated) |
 | `GET` | `/purchase/payment-out/:id` | 🔒 | Get specific payment-out receipt details |
 | `PATCH` | `/purchase/payment-out/update/:id` | 🔒 | Update a payment-out receipt |
 | `DELETE` | `/purchase/payment-out/delete/:id` | 🔒 | Delete a payment-out receipt |
 
-**POST** `/purchase/payment-out`
+> [!NOTE]
+> Payment-out receipts created automatically from a Purchase Bill carry a `linkedPurchaseBill` field. These are managed by the purchase lifecycle (create/update/delete bill) and should generally not be manually edited to avoid inconsistency.
+
+**POST** `/purchase/payment-out` *(for standalone payments not tied to a bill)*
 ```json
 {
   "party": "PARTY_ID_STRING",
@@ -975,7 +1001,7 @@ Returns aggregated inventory with product details, images, and pricing.
     { "paymentType": "UPI", "amount": 3000, "referenceNo": "TXN123456" }
   ],
   "paidAmount": 3000,
-  "description": "Part payment for PUR-2026-001"
+  "description": "Additional payment for outstanding dues"
 }
 ```
 
@@ -1092,6 +1118,61 @@ Returns aggregated inventory with product details, images, and pricing.
 
 ---
 
+### 31. HSN (Tax Codes)
+
+Read-only lookup API for Indian **Harmonised System of Nomenclature (HSN)** codes. Used to attach correct GST rates to products and purchase/sell items. All routes require authentication.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|--------------|
+| `GET` | `/hsn/list` | 🔒 | Search & list HSN codes (paginated) |
+| `GET` | `/hsn/gst-rates` | 🔒 | Get all distinct GST rate slabs |
+| `GET` | `/hsn/code/:code` | 🔒 | Get a single HSN entry by code |
+| `GET` | `/hsn/children/:parentCode` | 🔒 | Get all child codes under a parent |
+
+**GET** `/hsn/list` *(Query Filters)*
+`?search=rice&gstRate=5&level=2&page=1&limit=20`
+
+| Query Param | Type | Description |
+|-------------|------|-------------|
+| `search` | string | Numeric prefix (code match) or text (description full-text search) |
+| `gstRate` | number | Filter by GST rate slab (e.g. `0`, `5`, `12`, `18`, `28`) |
+| `level` | number | Filter by hierarchy level (`1` = chapter, `2` = heading, `4` = subheading, etc.) |
+| `page` | number | Page number (default `1`) |
+| `limit` | number | Results per page (default `20`) |
+
+**Sample Response** (list item):
+```json
+{
+  "code": "1006",
+  "description": "Rice",
+  "level": 2,
+  "parentCode": "10",
+  "gstRate": 5,
+  "cgst": 2.5,
+  "sgst": 2.5,
+  "igst": 5
+}
+```
+
+**GET** `/hsn/gst-rates`
+Returns all distinct GST rate slabs present in the database, sorted ascending.
+```json
+{ "success": true, "data": [0, 5, 12, 18, 28] }
+```
+
+**GET** `/hsn/code/1006`
+Fetch the full record for a specific HSN code. Returns `404` if not found.
+
+**GET** `/hsn/children/10`
+Returns all direct children of chapter/heading `10` (e.g., all headings under cereals).
+
+> [!NOTE]
+> - HSN data is **tenant-independent** — the same master dataset is shared across all tenants.
+> - Numeric `search` values perform a **prefix match** on the code (e.g., `search=01` returns all codes starting with `01`).
+> - Non-numeric `search` values trigger a **full-text search** on the description field.
+
+---
+
 ## Architecture
 
 ```
@@ -1109,6 +1190,7 @@ modules/
 ├── farm/              # Farm GeoJSON mapping
 ├── fcm/               # Firebase Cloud Messaging tokens
 ├── fileUpload/        # S3 upload schema
+├── hsn/               # HSN/SAC tax code master (read-only lookup)
 ├── inventory/         # Inventory items & stock tracking
 ├── kisanDiary/        # Kisan Khata income/expense tracking
 ├── ledger/            # Financial ledger (debit/credit)

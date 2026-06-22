@@ -377,7 +377,7 @@ export default function CounterSales() {
                     <th className="px-6 py-4">Invoice #</th>
                     <th className="px-6 py-4">Date</th>
                     <th className="px-6 py-4">Buyer/Party</th>
-                    <th className="px-6 py-4">Billing Type</th>
+                    <th className="px-6 py-4">Payment</th>
                     <th className="px-6 py-4">Type</th>
                     <th className="px-6 py-4 text-right">Total Amount</th>
                     <th className="px-6 py-4 text-right">Actions</th>
@@ -410,7 +410,7 @@ export default function CounterSales() {
                               ? "bg-amber-50 text-amber-700 border border-amber-100"
                               : "bg-green-50 text-green-700 border border-green-100"
                           }`}>
-                            {sale.billingType}
+                            {sale.billingType === "Cash" ? "Pay Now" : "Pay Later"}
                           </span>
                         </td>
                         <td className="px-6 py-4">
@@ -1019,7 +1019,7 @@ function NewInvoiceModal({ editRecord = null, parties, products, stockSummary = 
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Payment Method</label>
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Payment</label>
               <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50/50 w-full h-[38px] items-center">
                 <button
                   type="button"
@@ -1028,7 +1028,7 @@ function NewInvoiceModal({ editRecord = null, parties, products, stockSummary = 
                     billingType === "Credit" ? "bg-brand-600 text-white shadow-sm" : "text-gray-500"
                   }`}
                 >
-                  Book to Credit
+                  Pay Later
                 </button>
                 <button
                   type="button"
@@ -1037,7 +1037,7 @@ function NewInvoiceModal({ editRecord = null, parties, products, stockSummary = 
                     billingType === "Cash" ? "bg-brand-600 text-white shadow-sm" : "text-gray-500"
                   }`}
                 >
-                  Cash (OTC)
+                  Pay Now
                 </button>
               </div>
             </div>
@@ -1844,8 +1844,8 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt }) {
           {type === "sale" && (
             <>
               <div>
-                <p className="text-gray-400 font-semibold uppercase tracking-wider">Billing Setup</p>
-                <p className="font-bold text-gray-800 mt-0.5">{item.billingType}</p>
+                <p className="text-gray-400 font-semibold uppercase tracking-wider">Payment</p>
+                <p className="font-bold text-gray-800 mt-0.5">{item.billingType === "Cash" ? "Pay Now" : "Pay Later"}</p>
               </div>
               <div>
                 <p className="text-gray-400 font-semibold uppercase tracking-wider">Type</p>

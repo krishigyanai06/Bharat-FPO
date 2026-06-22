@@ -31,6 +31,7 @@ import {
   IndianRupee,
   Receipt,
   RefreshCw,
+  CreditCard,
 } from "lucide-react";
 import { fetchMe, fetchTenants } from "../store/thunks/layoutThunk";
 import { setSelectedTenant } from "../store/slices/layoutSlice";
@@ -47,11 +48,13 @@ import "./google-lang-picker/google-translate.css";
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: Users, label: "Parties", path: "/party" },
+  { icon: Receipt, label: "Sales", path: "/sell" },
+  { icon: CreditCard, label: "Purchases", path: "/purchase" },
   { icon: Package, label: "Listing Approvals", path: "/listing" },
   { icon: ShoppingCart, label: "Procurement", path: "/procurement" },
   { icon: Archive, label: "Inventory", path: "/inventory" },
   { icon: ShoppingBag, label: "Order Book", path: "/buy" },
-  { icon: Receipt, label: "Counter Sales", path: "/sell" },
+
   { icon: Megaphone, label: "Broadcast", path: "/broadcast" },
   { icon: Users, label: "Members", path: "/members" },
   { icon: BookOpen, label: "Ledger", path: "/ledger" },

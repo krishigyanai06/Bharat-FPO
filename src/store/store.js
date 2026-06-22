@@ -2,7 +2,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import authReducer from './slices/authSlice';
 import productsReducer from './slices/productsSlice';
 import procurementReducer from './slices/procurementSlice';
-import purchasesReducer from './slices/purchasesSlice';
+import purchaseReducer from './slices/purchaseSlice';
 import documentsReducer from './slices/documentsSlice';
 import inventoryReducer from './slices/inventorySlice';
 import membersReducer from './slices/membersSlice';
@@ -25,7 +25,7 @@ export const store = configureStore({
     auth: authReducer,
     products: productsReducer,
     procurement: procurementReducer,
-    purchases: purchasesReducer,
+    purchase: purchaseReducer,
     documents: documentsReducer,
     inventory: inventoryReducer,
     members: membersReducer,
