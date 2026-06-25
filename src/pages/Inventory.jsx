@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, Fragment } from "react";
+import { useEffect, useMemo, useState, Fragment, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import toast from "react-hot-toast";
 import {
@@ -23,6 +23,7 @@ import {
   Save,
   X,
   Video,
+  Info,
 } from "lucide-react";
 import {
   BarChart,
@@ -44,12 +45,15 @@ import {
   toggleProductStatus,
 } from "../store/thunks/inventoryThunk";
 import ConfirmDialog from "../components/ConfirmDialog";
+import ProductDetailView from "../components/ProductDetailView";
 import {
   SkeletonHeader,
   SkeletonStatCards,
   SkeletonTable,
 } from "../components/Skeleton";
 import { usePermissions } from "../hooks/usePermissions";
+import api from "../lib/api";
+import ProductModal from "../components/ProductModal";
 
 const ITEMS_PER_PAGE = 8;
 
@@ -132,1180 +136,202 @@ function ProductImage({ url, name }) {
       onError={() => setErr(true)}
     />
   );
-}function ProductGridCard({ p, isReadOnly, expandedRowId, setExpandedRowId, setEditRow, setShowModal, setConfirmId, setConfirmType }) {
-  const dispatch = useDispatch();
-  const [showMenu, setShowMenu] = useState(false);
-  
-  const qty = p._stock?.availableQuantity ?? 0;
-  const isOOS = qty === 0;
-  const isLow = qty > 0 && qty <= 5;
-  const hasExpiry = p.products?.some(v => {
-    if (!v.expiryDate) return false;
-    const diff = Math.ceil((new Date(v.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
-    return diff >= 0 && diff <= 30;
-  });
+}
 
-  let minExpiryDiff = null;
-  p.products?.forEach(v => {
-    if (!v.expiryDate) return;
-    const diff = Math.ceil((new Date(v.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
-    if (minExpiryDiff === null || diff < minExpiryDiff) {
-      minExpiryDiff = diff;
-    }
-  });
-
-  let badgeLabel = "Active";
-  let badgeStyle = "bg-green-50 text-green-700 border border-green-200";
-  let badgeIcon = <Leaf size={10} className="inline mr-1" />;
-  
-  if (!p.isActive) {
-    badgeLabel = "Inactive";
-    badgeStyle = "bg-gray-100 text-gray-500 border border-gray-200";
-    badgeIcon = (
-      <svg className="w-2.5 h-2.5 inline mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-      </svg>
-    );
-  } else if (isOOS) {
-    badgeLabel = "Out of Stock";
-    badgeStyle = "bg-red-50 text-red-600 border border-red-200";
-    badgeIcon = <AlertTriangle size={10} className="inline mr-1 text-red-500" />;
-  } else if (isLow) {
-    badgeLabel = "Low Stock";
-    badgeStyle = "bg-amber-50 text-amber-700 border border-amber-200";
-    badgeIcon = <AlertTriangle size={10} className="inline mr-1 text-amber-500" />;
-  } else if (hasExpiry) {
-    badgeLabel = "Expiring Soon";
-    badgeStyle = "bg-purple-50 text-purple-700 border border-purple-200";
-    badgeIcon = (
-      <svg className="w-2.5 h-2.5 inline mr-1 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-    );
+const getMockRating = (name) => {
+  if (!name) return { rating: "4.5", reviews: 5 };
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
+  const rating = (4.0 + (Math.abs(hash) % 11) / 10).toFixed(1);
+  const reviews = (Math.abs(hash) % 15) + 1;
+  return { rating, reviews };
+};
 
-  const rawCat = p.productCategory || p.category || "";
-  const catLabel = rawCat ? rawCat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : null;
+function ProductGridCard({ p, isReadOnly, expandedRowId, setExpandedRowId, setEditRow, setShowModal, setConfirmId, setConfirmType, setSelectedProductDetailId }) {
+  const dispatch = useDispatch();
+  const { stockSummary } = useSelector((s) => s.inventory);
+  
+  const [activeVariantIdx, setActiveVariantIdx] = useState(0);
+  const [isFavorite, setIsFavorite] = useState(false);
 
-  const minMrp = p.products?.length > 0 ? Math.min(...p.products.map(v => Number(v.mrp || 0)).filter(Boolean)) : 0;
-  const maxMrp = p.products?.length > 0 ? Math.max(...p.products.map(v => Number(v.mrp || 0)).filter(Boolean)) : 0;
-  const priceRangeText = minMrp === maxMrp ? `₹${minMrp}` : `₹${minMrp} - ₹${maxMrp}`;
+  const activeVariant = p.products?.[activeVariantIdx] || p.products?.[0];
+  
+  const mrp = Number(activeVariant?.mrp ?? 0);
+  const salePrice = Number(activeVariant?.salePrice ?? 0);
+  const saveAmount = mrp > salePrice ? mrp - salePrice : 0;
+  const discountPercentage = mrp > salePrice ? Math.round((saveAmount / mrp) * 100) : 0;
 
-  const variantsCountText = p.products?.length === 1 ? "1 Variant" : `${p.products?.length || 0} Variants`;
+  const variantStock = (stockSummary || []).find(
+    (s) => s.item?.variantId === activeVariant?._id || s.item?._id === activeVariant?._id || (
+           s.item?.sourceRef === p._id &&
+           String(s.item?.parameter).trim().toLowerCase() === String(activeVariant?.parameter).trim().toLowerCase() &&
+           String(s.item?.unit).trim().toLowerCase() === String(activeVariant?.unit).trim().toLowerCase()
+    )
+  );
+  const qty = variantStock ? (variantStock.availableQuantity ?? 0) : (activeVariant?.quantity ?? 0);
+
+  const ratingData = useMemo(() => getMockRating(p.productName || p._id), [p.productName, p._id]);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between relative hover:shadow-md transition duration-200">
-      {/* Top Row: Badge & Heart */}
-      <div className="flex justify-between items-center mb-3">
-        <span className={`flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${badgeStyle}`}>
-          {badgeIcon}
-          {badgeLabel}
-        </span>
-        <button className="text-gray-300 hover:text-red-500 transition">
-          <svg className="w-4 h-4 fill-none stroke-current" viewBox="0 0 24 24">
+    <div className="bg-white border border-gray-150 rounded-2xl p-4 shadow-sm flex flex-col justify-between relative hover:shadow-md hover:-translate-y-1 transition-all duration-300 ease-in-out w-full group/card min-h-[360px]">
+      {/* Top Left Badge: Inactive or Discount */}
+      {!p.isActive ? (
+        <div className="absolute top-3 left-0 bg-gray-500 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-r-lg shadow-sm z-10">
+          INACTIVE
+        </div>
+      ) : discountPercentage > 0 ? (
+        <div className="absolute top-3 left-0 bg-[#ff8f17] text-white text-[10px] font-extrabold px-2.5 py-1 rounded-r-lg shadow-sm z-10">
+          {discountPercentage}% OFF
+        </div>
+      ) : null}
+
+      {/* Floating Action Buttons */}
+      <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+        {!isReadOnly && (
+          <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditRow(p);
+                setShowModal(true);
+              }}
+              className="w-7 h-7 rounded-full bg-white/90 hover:bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-brand-600 shadow-xs transition"
+              title="Edit Product"
+            >
+              <Pencil size={12} />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfirmId(p._id);
+                setConfirmType("product");
+              }}
+              className="w-7 h-7 rounded-full bg-white/90 hover:bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-red-500 shadow-xs transition"
+              title="Delete Product"
+            >
+              <Trash2 size={12} />
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsFavorite(!isFavorite);
+          }}
+          className={`w-7 h-7 rounded-full bg-white/90 hover:bg-white border border-gray-200 flex items-center justify-center shadow-xs transition ${
+            isFavorite ? "text-red-500" : "text-gray-400 hover:text-red-500"
+          }`}
+          title="Favorite"
+        >
+          <svg className={`w-3.5 h-3.5 ${isFavorite ? "fill-current" : "fill-none stroke-current"}`} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
           </svg>
         </button>
       </div>
 
-      {/* Middle Content */}
-      <div className="flex gap-4 items-stretch min-h-[120px] mb-4">
-        <div className="flex-1 flex flex-col justify-between min-w-0">
-          <div>
-            <h3 className="font-bold text-gray-850 text-[15px] leading-snug truncate" title={p.productName}>
-              {p.productName}
-            </h3>
-            <p className="text-xs text-gray-400 font-medium mt-0.5 truncate">{p.brand || "No brand"}</p>
-          </div>
-          
-          <div className="mt-2 space-y-1.5">
-            {catLabel && (
-              <span className="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-gray-100 text-gray-500 border border-gray-150">
-                {catLabel}
-              </span>
-            )}
-            <p className="text-[10px] text-gray-400 font-semibold">{variantsCountText}</p>
-          </div>
-
-          <p className="font-extrabold text-gray-900 text-base mt-2.5 leading-tight">
-            {priceRangeText}
-          </p>
-        </div>
-
-        <div className="w-24 h-28 flex-shrink-0 flex items-center justify-center bg-gray-50/50 rounded-xl border border-gray-150 overflow-hidden">
+      {/* Main Card Content Area (Clicking navigates to detailed view) */}
+      <div
+        onClick={() => setSelectedProductDetailId(p._id)}
+        className="cursor-pointer flex flex-col flex-1"
+      >
+        {/* Product Image Frame */}
+        <div className="w-full h-44 bg-gray-50/60 border border-gray-150 rounded-xl overflow-hidden flex items-center justify-center p-3 relative mt-2.5">
           {p.productImages?.[0]?.url ? (
-            <img 
-              src={p.productImages[0].url} 
-              alt={p.productName} 
-              className="w-full h-full object-contain hover:scale-105 transition duration-300"
+            <img
+              src={p.productImages[0].url}
+              alt={p.productName}
+              className="w-full h-full object-contain"
             />
           ) : (
             <ImageOff size={24} className="text-gray-300" />
           )}
-        </div>
-      </div>
 
-      {/* Bottom Actions Row */}
-      <div className="flex items-center justify-between border-t border-gray-100 pt-3.5 relative">
-        <div className="flex items-center border border-gray-200 rounded-full px-2.5 py-1 bg-white shadow-xs z-10">
-          <button 
-            type="button"
-            onClick={() => setExpandedRowId(expandedRowId === p._id ? null : p._id)}
-            className={`p-1 rounded-full transition ${expandedRowId === p._id ? "text-brand-600 bg-brand-50" : "text-gray-400 hover:text-gray-600"}`}
-            title="View Variants"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-          </button>
-          
-          <span className="h-3 w-[1px] bg-gray-200 mx-1.5" />
-          
-          {!isReadOnly ? (
-            <>
-              <button 
-                type="button"
-                onClick={() => { setEditRow(p); setShowModal(true); }}
-                className="p-1 text-gray-400 hover:text-blue-500 transition"
-                title="Edit Product"
-              >
-                <Pencil size={13} />
-              </button>
-              
-              <span className="h-3 w-[1px] bg-gray-200 mx-1.5" />
-              
-              <button 
-                type="button"
-                onClick={() => setShowMenu(!showMenu)}
-                className={`p-1 transition ${showMenu ? "text-brand-600" : "text-gray-400 hover:text-gray-600"}`}
-                title="More Options"
-              >
-                <MoreVertical size={13} />
-              </button>
-            </>
-          ) : (
-            <span className="px-1 text-[9px] text-gray-400 font-medium">View</span>
-          )}
-        </div>
-
-        {/* Local Dropdown Menu */}
-        {showMenu && (
-          <>
-            <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)} />
-            <div className="absolute left-0 bottom-12 bg-white border border-gray-150 rounded-xl shadow-lg py-1.5 min-w-[130px] z-30 text-xs animate-in fade-in slide-in-from-bottom-2 duration-150">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowMenu(false);
-                  dispatch(toggleProductStatus({ id: p._id, isActive: !p.isActive }))
-                    .unwrap()
-                    .then(() => toast.success(`Marked ${!p.isActive ? "Active" : "Inactive"}`))
-                    .catch(() => toast.error("Failed to update status"));
-                }}
-                className="w-full text-left px-3 py-1.5 hover:bg-gray-50 font-medium text-gray-700 flex items-center gap-1.5"
-              >
-                {p.isActive ? "Mark Inactive" : "Mark Active"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowMenu(false);
-                  setConfirmId(p._id);
-                  setConfirmType("product");
-                }}
-                className="w-full text-left px-3 py-1.5 hover:bg-red-50 font-semibold text-red-650 flex items-center gap-1.5 border-t border-gray-100"
-              >
-                Delete Product
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Stock Details */}
-        <div className="text-right">
-          {hasExpiry && minExpiryDiff !== null ? (
-            <>
-              <p className="text-[10px] text-red-500 font-bold leading-tight">Expires in {minExpiryDiff} day{minExpiryDiff !== 1 ? "s" : ""}</p>
-              <p className="text-[10px] text-green-600 font-semibold mt-0.5">Stock: {qty} units</p>
-            </>
-          ) : isOOS ? (
-            <span className="text-xs font-semibold text-gray-400">Stock: 0 units</span>
-          ) : isLow ? (
-            <span className="text-xs font-semibold text-red-500">Stock: {qty} units</span>
-          ) : (
-            <span className="text-xs font-semibold text-green-650">Stock: {qty} units</span>
-          )}
-        </div>
-      </div>
-
-      {/* Collapsible Variants Inline Detail inside the card */}
-      {expandedRowId === p._id && (
-        <div className="mt-4 border-t border-gray-100 pt-3 space-y-2 max-h-[180px] overflow-y-auto">
-          <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Variant Details</h4>
-          {(p.products || []).map((v, idx) => (
-            <div key={idx} className="bg-gray-50/50 rounded-lg p-2 flex justify-between items-center text-[11px] border border-gray-150">
-              <div>
-                <p className="font-bold text-gray-700">{v.parameter} {v.unit}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">MRP: ₹{v.mrp} | Sale: ₹{v.salePrice}</p>
-              </div>
-              <span className="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-[10px] font-bold text-gray-500">
-                Qty: {v.quantity}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const FIELD = ({ label, required, helperText, children }) => (
-  <div>
-    <label className="block text-xs font-medium text-gray-500 mb-1.5">
-      {label}
-      {required && <span className="text-red-500 ml-0.5">*</span>}
-    </label>
-    {children}
-    {helperText && (
-      <p className="text-[10px] text-gray-400 mt-1 leading-normal">
-        {helperText}
-      </p>
-    )}
-  </div>
-);
-
-const inputCls =
-  "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition";
-
-function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemove }) {
-  const [isOpen, setIsOpen] = useState(true);
-
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-      {/* Card Header */}
-      <div className="flex justify-between items-center bg-gray-50 border-b border-gray-200 px-4 py-3">
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2 font-semibold text-sm text-gray-700 hover:text-brand-600 transition"
-        >
-          <span className={`text-[10px] text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}>
-            ▶
-          </span>
-          Variant #{index + 1}
-        </button>
-        {showRemove && (
-          <button
-            type="button"
-            onClick={onRemove}
-            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition"
-          >
-            <Trash2 size={14} />
-          </button>
-        )}
-      </div>
-
-      {/* Card Body */}
-      {isOpen && (
-        <div className="p-4 space-y-4">
-          {/* Row 1 (5 items) */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <FIELD label="Size / Measure" required helperText="Numeric measure (e.g. 500, 1)">
-              <input
-                value={variant.parameter}
-                onChange={(e) => onUpdate("parameter", e.target.value)}
-                className={inputCls}
-                placeholder="e.g. 500"
-              />
-            </FIELD>
-            <FIELD label="Unit" required helperText="Measurement unit (e.g. ml, kg)">
-              <select
-                value={variant.unit}
-                onChange={(e) => onUpdate("unit", e.target.value)}
-                className={inputCls}
-              >
-                <option value="">Select unit</option>
-                <option value="ml">ml</option>
-                <option value="L">L</option>
-                <option value="kg">kg</option>
-                <option value="gm">gm</option>
-                <option value="pcs">pcs</option>
-                <option value="box">box</option>
-              </select>
-            </FIELD>
-            <FIELD label="MRP" required helperText="Max printed retail price">
-              <input
-                type="number"
-                min="0"
-                value={variant.mrp}
-                onChange={(e) => onUpdate("mrp", e.target.value)}
-                className={inputCls}
-                placeholder="Enter MRP"
-              />
-            </FIELD>
-            <FIELD label="Stock Quantity" required helperText="Available unit count">
-              <input
-                type="number"
-                min="0"
-                value={variant.quantity}
-                onChange={(e) => onUpdate("quantity", e.target.value)}
-                className={inputCls}
-                placeholder="Enter quantity"
-              />
-            </FIELD>
-            <FIELD label="Item Code / SKU" required helperText="Unique barcode identifier">
-              <input
-                value={variant.itemCode}
-                onChange={(e) => onUpdate("itemCode", e.target.value)}
-                className={inputCls}
-                placeholder="Enter item code"
-              />
-            </FIELD>
-          </div>
- 
-          {/* Row 2 (4 items) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <FIELD label="Purchase Price" required helperText="Cost price per unit paid">
-              <input
-                type="number"
-                min="0"
-                value={variant.purchasePrice}
-                onChange={(e) => onUpdate("purchasePrice", e.target.value)}
-                className={inputCls}
-                placeholder="Purchase price"
-              />
-            </FIELD>
-            <FIELD label="Purchase Tax Type" required helperText="Tax inclusion details">
-              <select
-                value={variant.purchasePriceTaxType}
-                onChange={(e) => onUpdate("purchasePriceTaxType", e.target.value)}
-                className={inputCls}
-              >
-                <option value="Without Tax">Without Tax</option>
-                <option value="With Tax">With Tax</option>
-              </select>
-            </FIELD>
-            <FIELD label="Purchase Date" required helperText="Date stock was acquired">
-              <input
-                type="date"
-                value={variant.purchaseDate}
-                onChange={(e) => onUpdate("purchaseDate", e.target.value)}
-                className={inputCls}
-              />
-            </FIELD>
-            <FIELD label="Expiry Date" required helperText="Variant shelf life limit">
-              <input
-                type="date"
-                value={variant.expiryDate}
-                onChange={(e) => onUpdate("expiryDate", e.target.value)}
-                className={inputCls}
-              />
-            </FIELD>
-          </div>
- 
-          {/* Row 3 (4 items) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <FIELD label="Sale Price" required helperText="Retail selling price per unit">
-              <input
-                type="number"
-                min="0"
-                value={variant.salePrice}
-                onChange={(e) => onUpdate("salePrice", e.target.value)}
-                className={inputCls}
-                placeholder="Sale price"
-              />
-            </FIELD>
-            <FIELD label="Sale Tax Type" required helperText="Tax inclusion details">
-              <select
-                value={variant.salePriceTaxType}
-                onChange={(e) => onUpdate("salePriceTaxType", e.target.value)}
-                className={inputCls}
-              >
-                <option value="Without Tax">Without Tax</option>
-                <option value="With Tax">With Tax</option>
-              </select>
-            </FIELD>
-            <FIELD label="Retail Discount" helperText="Discount value applied to sale">
-              <input
-                type="number"
-                min="0"
-                value={variant.discountOnSalePrice}
-                onChange={(e) => onUpdate("discountOnSalePrice", e.target.value)}
-                className={inputCls}
-                placeholder="Discount value"
-              />
-            </FIELD>
-            <FIELD label="Discount Type" helperText="Percentage or fixed amount">
-              <select
-                value={variant.discountType}
-                onChange={(e) => onUpdate("discountType", e.target.value)}
-                className={inputCls}
-              >
-                <option value="Percentage">Percentage</option>
-                <option value="Fixed Amount">Fixed Amount</option>
-              </select>
-            </FIELD>
-          </div>
- 
-          {/* Row 4 (3 items) */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div className="md:col-span-2">
-              <FIELD label="Wholesale Price" helperText="Price charged for bulk quantity purchases">
-                <input
-                  type="number"
-                  min="0"
-                  value={variant.wholesalePrice}
-                  onChange={(e) => onUpdate("wholesalePrice", e.target.value)}
-                  className={inputCls}
-                  placeholder="Wholesale price"
-                />
-              </FIELD>
-            </div>
-            <FIELD label="Wholesale Tax Type" helperText="Tax inclusion details">
-              <select
-                value={variant.wholesalePriceTaxType}
-                onChange={(e) => onUpdate("wholesalePriceTaxType", e.target.value)}
-                className={inputCls}
-              >
-                <option value="Without Tax">Without Tax</option>
-                <option value="With Tax">With Tax</option>
-              </select>
-            </FIELD>
-            <FIELD label="Min Wholesale Qty" helperText="Min units required for bulk price">
-              <input
-                type="number"
-                min="0"
-                value={variant.minWholesaleQty}
-                onChange={(e) => onUpdate("minWholesaleQty", e.target.value)}
-                className={inputCls}
-                placeholder="Min qty"
-              />
-            </FIELD>
-          </div>
- 
-          {/* Row 5 (4 items) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <FIELD label="Opening Stock Price" helperText="Cost valuation at initialization date">
-              <input
-                type="number"
-                min="0"
-                value={variant.openingStockPrice}
-                onChange={(e) => onUpdate("openingStockPrice", e.target.value)}
-                className={inputCls}
-                placeholder="Opening stock price"
-              />
-            </FIELD>
-            <FIELD label="As Of Date" helperText="Valuation date of opening stock">
-              <input
-                type="date"
-                value={variant.asOfDate}
-                onChange={(e) => onUpdate("asOfDate", e.target.value)}
-                className={inputCls}
-              />
-            </FIELD>
-            <FIELD label="Min Stock to Maintain" helperText="Notify when stock falls below this">
-              <input
-                type="number"
-                min="0"
-                value={variant.minStockToMaintain}
-                onChange={(e) => onUpdate("minStockToMaintain", e.target.value)}
-                className={inputCls}
-                placeholder="Min stock level"
-              />
-            </FIELD>
-            <FIELD label="Storage Location" helperText="Shelf/aisle in warehouse (e.g. Aisle 3)">
-              <input
-                value={variant.location}
-                onChange={(e) => onUpdate("location", e.target.value)}
-                className={inputCls}
-                placeholder="e.g. Aisle 3"
-              />
-            </FIELD>
+          {/* Rating Badge Overlay */}
+          <div className="absolute bottom-2.5 left-2.5 bg-[#15803d] text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-sm">
+            <span>{ratingData.rating} ★</span>
+            <span className="opacity-60">|</span>
+            <span>{ratingData.reviews}</span>
           </div>
         </div>
-      )}
-    </div>
-  );
-}
 
-function ProductModal({ initial, onClose, onSave, saving }) {
-  const p0 = initial?.products?.[0];
-
-  const getInitialCategory = (initial) => {
-    if (!initial) return "";
-    const cat = (initial.productCategory || initial.category || "").toLowerCase();
-    if (cat === "pesticides") return "insecticides";
-    return cat;
-  };
-
-  const [form, setForm] = useState(
-    initial
-      ? {
-          productName: initial.productName ?? "",
-          description: initial.description ?? "",
-          brand: initial.brand ?? "",
-          productCategory: getInitialCategory(initial),
-          productTechnicalDetails: initial.productTechnicalDetails ?? "",
-          howToUse: initial.howToUse ?? "",
-          productBenefits: initial.productBenefits ?? "",
-          itemType: initial.itemType ?? "PRODUCT",
-          hsnCode: initial.hsnCode ?? "",
-          taxRate: initial.taxRate ?? "",
-        }
-      : {
-          productName: "",
-          description: "",
-          brand: "",
-          productCategory: "",
-          productTechnicalDetails: "",
-          howToUse: "",
-          productBenefits: "",
-          itemType: "PRODUCT",
-          hsnCode: "",
-          taxRate: "",
-        },
-  );
-
-  // Product variants state
-  const [variants, setVariants] = useState(() => {
-    if (initial?.products?.length > 0) {
-      return initial.products.map((p) => ({
-        unit: p.unit ?? "",
-        parameter: p.parameter ?? p.sku ?? "",
-        mrp: p.mrp ?? "",
-        quantity: p.quantity ?? "",
-        purchaseDate: p.purchaseDate ? p.purchaseDate.split("T")[0] : "",
-        expiryDate: p.expiryDate ? p.expiryDate.split("T")[0] : "",
-        itemCode: p.itemCode ?? "",
-        purchasePrice: p.purchasePrice ?? "",
-        purchasePriceTaxType: p.purchasePriceTaxType ?? "Without Tax",
-        salePrice: p.salePrice ?? "",
-        salePriceTaxType: p.salePriceTaxType ?? "Without Tax",
-        discountOnSalePrice: p.discountOnSalePrice ?? "",
-        discountType: p.discountType ?? "Percentage",
-        wholesalePrice: p.wholesalePrice ?? "",
-        wholesalePriceTaxType: p.wholesalePriceTaxType ?? "Without Tax",
-        minWholesaleQty: p.minWholesaleQty ?? "",
-        openingStockPrice: p.openingStockPrice ?? "",
-        asOfDate: p.asOfDate ? p.asOfDate.split("T")[0] : "",
-        minStockToMaintain: p.minStockToMaintain ?? "",
-        location: p.location ?? "",
-      }));
-    }
-    return [
-      {
-        unit: "",
-        parameter: "",
-        mrp: "",
-        quantity: "",
-        purchaseDate: "",
-        expiryDate: "",
-        itemCode: "",
-        purchasePrice: "",
-        purchasePriceTaxType: "Without Tax",
-        salePrice: "",
-        salePriceTaxType: "Without Tax",
-        discountOnSalePrice: "",
-        discountType: "Percentage",
-        wholesalePrice: "",
-        wholesalePriceTaxType: "Without Tax",
-        minWholesaleQty: "",
-        openingStockPrice: "",
-        asOfDate: "",
-        minStockToMaintain: "",
-        location: "",
-      },
-    ];
-  });
-
-  const [images, setImages] = useState(() => {
-    if (initial?.productImages?.length > 0) {
-      return initial.productImages.map((img) => ({
-        url: typeof img === "string" ? img : img.url,
-        file: null,
-      }));
-    }
-    return [];
-  });
-  const [dragOver, setDragOver] = useState(false);
-  const [videos, setVideos] = useState(() => {
-    if (initial?.productVideos?.length > 0) {
-      return initial.productVideos.map((vid) => ({
-        url: typeof vid === "string" ? vid : vid.url,
-        file: null,
-      }));
-    }
-    return [];
-  });
-  const [videoDragOver, setVideoDragOver] = useState(false);
-
-  // Reset image/video state when modal opens
-  useEffect(() => {
-    if (!initial) {
-      setImages([]);
-      setVideos([]);
-    } else {
-      setImages(
-        (initial.productImages || []).map((img) => ({
-          url: typeof img === "string" ? img : img.url,
-          file: null,
-        }))
-      );
-      setVideos(
-        (initial.productVideos || []).map((vid) => ({
-          url: typeof vid === "string" ? vid : vid.url,
-          file: null,
-        }))
-      );
-    }
-  }, [initial]);
-
-  const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
-  const addVariant = () => {
-    setVariants((prev) => [
-      ...prev,
-      {
-        unit: "",
-        parameter: "",
-        mrp: "",
-        quantity: "",
-        purchaseDate: "",
-        expiryDate: "",
-        itemCode: "",
-        purchasePrice: "",
-        purchasePriceTaxType: "Without Tax",
-        salePrice: "",
-        salePriceTaxType: "Without Tax",
-        discountOnSalePrice: "",
-        discountType: "Percentage",
-        wholesalePrice: "",
-        wholesalePriceTaxType: "Without Tax",
-        minWholesaleQty: "",
-        openingStockPrice: "",
-        asOfDate: "",
-        minStockToMaintain: "",
-        location: "",
-      },
-    ]);
-  };
-
-  const removeVariant = (index) => {
-    if (variants.length > 1) {
-      setVariants((prev) => prev.filter((_, i) => i !== index));
-    }
-  };
-
-  const updateVariant = (index, field, value) => {
-    setVariants((prev) =>
-      prev.map((variant, i) =>
-        i === index ? { ...variant, [field]: value } : variant,
-      ),
-    );
-  };
-
-  const handleImagesSelect = (filesList) => {
-    if (!filesList) return;
-    const array = Array.from(filesList);
-    if (images.length + array.length > 5) {
-      toast.error("Maximum 5 images allowed");
-      return;
-    }
-    const newItems = array.map((file) => ({
-      url: URL.createObjectURL(file),
-      file,
-    }));
-    setImages((prev) => [...prev, ...newItems]);
-  };
-
-  const removeImage = (idx) => {
-    setImages((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const handleVideosSelect = (filesList) => {
-    if (!filesList) return;
-    const array = Array.from(filesList);
-    if (videos.length + array.length > 3) {
-      toast.error("Maximum 3 videos allowed");
-      return;
-    }
-    for (let file of array) {
-      if (!file.type.startsWith("video/")) {
-        toast.error("Please upload valid video files");
-        return;
-      }
-      if (file.size > 50 * 1024 * 1024) {
-        toast.error("Videos must be under 50MB");
-        return;
-      }
-    }
-    const newItems = array.map((file) => ({
-      url: URL.createObjectURL(file),
-      file,
-    }));
-    setVideos((prev) => [...prev, ...newItems]);
-  };
-
-  const removeVideo = (idx) => {
-    setVideos((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const [customCropText, setCustomCropText] = useState("");
-  const [cropOptions, setCropOptions] = useState(["Cotton", "Wheat", "Soybean", "Maize", "Rice"]);
-  const [selectedCrops, setSelectedCrops] = useState(() => {
-    if (initial?.targetCrops?.length > 0) {
-      return initial.targetCrops;
-    }
-    return ["Cotton", "Wheat"];
-  });
-
-  const toggleCrop = (crop) => {
-    setSelectedCrops((prev) =>
-      prev.includes(crop) ? prev.filter((c) => c !== crop) : [...prev, crop]
-    );
-  };
-
-  const addCustomCrop = () => {
-    if (!customCropText.trim()) return;
-    const cleanCrop = customCropText.trim();
-    if (!cropOptions.includes(cleanCrop)) {
-      setCropOptions((prev) => [...prev, cleanCrop]);
-    }
-    if (!selectedCrops.includes(cleanCrop)) {
-      setSelectedCrops((prev) => [...prev, cleanCrop]);
-    }
-    setCustomCropText("");
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const isEdit = !!initial;
-    const missing = [];
-    if (!form.productName.trim()) missing.push("Product Name");
-    if (!form.brand.trim()) missing.push("Brand");
-    if (!form.productCategory) missing.push("Category");
-    
-    if (!isEdit && images.length === 0) {
-      missing.push("Product Image");
-    }
-
-    // Validate variants
-    variants.forEach((variant, index) => {
-      if (variant.mrp === "" || variant.mrp === null)
-        missing.push(`Variant ${index + 1} MRP`);
-      if (variant.quantity === "" || variant.quantity === null)
-        missing.push(`Variant ${index + 1} Quantity`);
-      if (!variant.unit.trim()) missing.push(`Variant ${index + 1} Unit`);
-      if (variant.purchasePrice === "" || variant.purchasePrice === null)
-        missing.push(`Variant ${index + 1} Purchase Price`);
-      if (!variant.purchaseDate)
-        missing.push(`Variant ${index + 1} Purchase Date`);
-    });
-
-    if (missing.length) {
-      toast.error(`Required: ${missing.join(", ")}`);
-      return;
-    }
-    onSave(form, variants, images, videos, selectedCrops);
-  };
-
-  const isEdit = !!initial;
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/55 z-50 flex items-center justify-center p-4 overflow-y-auto"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-8 flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
+        {/* Product Info (Left-Aligned) */}
+        <div className="mt-3 flex-1 flex flex-col justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">
-              {isEdit ? "Edit Product" : "Add New Product"}
-            </h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Add product details, variants, images and other information.
-            </p>
+            <h3 className="font-bold text-gray-800 text-[14px] leading-snug line-clamp-2 h-10 overflow-hidden" title={p.productName}>
+              {p.productName}
+            </h3>
+            <p className="text-[11px] text-gray-400 font-semibold mt-0.5 truncate">{p.brand || "No brand"}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition"
-          >
-            <X size={16} />
-          </button>
+
+          {/* Pricing Display */}
+          <div className="mt-2.5">
+            <div className="flex items-baseline gap-2">
+              <span className="text-lg font-extrabold text-gray-900">₹{salePrice}</span>
+              {mrp > salePrice && (
+                <span className="text-xs text-gray-400 line-through">₹{mrp}</span>
+              )}
+            </div>
+            {saveAmount > 0 && (
+              <div className="flex items-center gap-1 text-[11px] font-bold text-[#15803d] mt-1">
+                <div className="w-3.5 h-3.5 rounded-full bg-green-50 flex items-center justify-center">
+                  <Percent size={8} className="text-[#15803d]" />
+                </div>
+                <span>Save ₹{saveAmount}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Row: Size Selector & Stock */}
+      <div className="flex items-center justify-between border-t border-gray-100 mt-3.5 pt-3.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-xs text-gray-450 font-semibold whitespace-nowrap">Size</span>
+          {p.products?.length > 0 ? (
+            <div className="relative flex-1 min-w-0">
+              <select
+                value={activeVariantIdx}
+                onChange={(e) => setActiveVariantIdx(Number(e.target.value))}
+                className="appearance-none border border-gray-250 rounded-lg pl-2 pr-7 py-1 text-xs text-gray-600 bg-white hover:bg-gray-50 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 font-semibold max-w-[130px] truncate"
+              >
+                {p.products.map((v, index) => (
+                  <option key={v._id || index} value={index}>
+                    {v.parameter} {v.unit}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+          ) : (
+            <span className="text-xs text-gray-400 font-semibold">—</span>
+          )}
         </div>
 
-        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
-          <div className="p-6 space-y-6">
-            {/* Three Column Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Column (spans 2) */}
-              <div className="lg:col-span-2 space-y-6">
-                
-                {/* Product Information Card */}
-                <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 border-b pb-3 border-gray-100">
-                    <Leaf size={16} className="text-brand-600" />
-                    <h3 className="font-semibold text-gray-800 text-sm">Product Information</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FIELD label="Product Name" required helperText="The common or commercial name of the product">
-                      <input
-                        value={form.productName}
-                        onChange={(e) => setF("productName", e.target.value)}
-                        className={inputCls}
-                        placeholder="Enter product name (e.g. Urea, Neem Oil)"
-                      />
-                    </FIELD>
-                    <FIELD label="Brand" required helperText="Manufacturer or brand owner name">
-                      <input
-                        value={form.brand}
-                        onChange={(e) => setF("brand", e.target.value)}
-                        className={inputCls}
-                        placeholder="Enter brand (e.g. IFFCO, Tata)"
-                      />
-                    </FIELD>
-                    <FIELD label="Category" required helperText="Primary category classification">
-                      <select
-                        value={form.productCategory}
-                        onChange={(e) => setF("productCategory", e.target.value)}
-                        className={inputCls}
-                      >
-                        <option value="">Select category</option>
-                        <option value="fertilizers">Fertilizers</option>
-                        <option value="seeds">Seeds</option>
-                        <option value="insecticides">Insecticides</option>
-                        <option value="organic">Organic</option>
-                        <option value="pgr">Plant Growth Regulator (PGR)</option>
-                        <option value="animal_feed">Animal Feed</option>
-                        <option value="fungicides">Fungicides</option>
-                        <option value="herbicides">Herbicides</option>
-                        <option value="tools">Tools</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </FIELD>
-                    <FIELD label="Item Type" helperText="Physical product or non-physical service">
-                      <select
-                        value={form.itemType}
-                        onChange={(e) => setF("itemType", e.target.value)}
-                        className={inputCls}
-                      >
-                        <option value="PRODUCT">PRODUCT</option>
-                        <option value="SERVICE">SERVICE</option>
-                      </select>
-                    </FIELD>
-                    <div className="col-span-1 md:col-span-2">
-                      <FIELD label="Description" helperText="Brief overview of product features, specifications, or packaging">
-                        <textarea
-                          value={form.description}
-                          onChange={(e) => setF("description", e.target.value)}
-                          className={inputCls + " resize-none"}
-                          rows={3}
-                          placeholder="Enter product description..."
-                        />
-                      </FIELD>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Product Details Card */}
-                <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 border-b pb-3 border-gray-100">
-                    <ClipboardList size={16} className="text-brand-600" />
-                    <h3 className="font-semibold text-gray-800 text-sm">Product Details</h3>
-                  </div>
-                  <div className="space-y-4">
-                    <FIELD label="Technical Details" helperText="Chemical formulation, ingredients, or scientific active components">
-                      <textarea
-                        value={form.productTechnicalDetails}
-                        onChange={(e) => setF("productTechnicalDetails", e.target.value)}
-                        className={inputCls + " resize-none"}
-                        rows={2}
-                        placeholder="Enter technical details..."
-                      />
-                    </FIELD>
-                    <FIELD label="How To Use" helperText="Dosage recommendations, application methods, or safety precautions">
-                      <textarea
-                        value={form.howToUse}
-                        onChange={(e) => setF("howToUse", e.target.value)}
-                        className={inputCls + " resize-none"}
-                        rows={2}
-                        placeholder="Enter how to use..."
-                      />
-                    </FIELD>
-                    <FIELD label="Benefits" helperText="Key advantages, target pests controlled, or crop yield improvements">
-                      <textarea
-                        value={form.productBenefits}
-                        onChange={(e) => setF("productBenefits", e.target.value)}
-                        className={inputCls + " resize-none"}
-                        rows={2}
-                        placeholder="Enter product benefits..."
-                      />
-                    </FIELD>
-                  </div>
-                </div>
-
-                {/* Tax Information Card */}
-                <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 border-b pb-3 border-gray-100">
-                    <Percent size={16} className="text-brand-600" />
-                    <h3 className="font-semibold text-gray-800 text-sm">Tax Information</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FIELD label="HSN Code" helperText="8-digit Harmonized System Nomenclature tax code">
-                      <input
-                        value={form.hsnCode}
-                        onChange={(e) => setF("hsnCode", e.target.value)}
-                        className={inputCls}
-                        placeholder="Enter HSN code"
-                      />
-                    </FIELD>
-                    <FIELD label="Tax Rate (%)" helperText="GST rate percentage (e.g. 5, 12, 18)">
-                      <input
-                        type="number"
-                        value={form.taxRate}
-                        onChange={(e) => setF("taxRate", e.target.value)}
-                        className={inputCls}
-                        placeholder="Enter tax rate"
-                      />
-                    </FIELD>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Right Column (spans 1) */}
-              <div className="space-y-6">
-                {/* Product Media Card */}
-                <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 border-b pb-3 border-gray-100">
-                    <Image size={16} className="text-brand-600" />
-                    <h3 className="font-semibold text-gray-800 text-sm">Product Media</h3>
-                  </div>
-                  
-                  {/* Images Section */}
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold text-gray-500">Product Images (Max 5)</p>
-                    <div
-                      className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${
-                        dragOver ? "border-brand-500 bg-brand-50/20" : "border-gray-200 hover:border-brand-400 hover:bg-gray-50/50"
-                      }`}
-                      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                      onDragLeave={() => setDragOver(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setDragOver(false);
-                        handleImagesSelect(e.dataTransfer.files);
-                      }}
-                      onClick={() => document.getElementById("multi-img-input").click()}
-                    >
-                      <input
-                        id="multi-img-input"
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleImagesSelect(e.target.files)}
-                      />
-                      <Download size={20} className="text-brand-600" />
-                      <p className="text-xs font-semibold text-brand-600 mt-1">Upload Images</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">or drag and drop files here</p>
-                    </div>
-                    
-                    {images.length > 0 && (
-                      <div className="grid grid-cols-5 gap-2 pt-2">
-                        {images.map((img, idx) => (
-                          <div key={idx} className="relative aspect-square border border-gray-200 rounded-lg overflow-hidden group">
-                            <img src={img.url} alt="preview" className="w-full h-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeImage(idx);
-                              }}
-                              className="absolute top-0.5 right-0.5 bg-black/60 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] hover:bg-red-600 transition"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <hr className="border-gray-100" />
-
-                  {/* Videos Section */}
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold text-gray-500">Product Videos (Max 3)</p>
-                    <div
-                      className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${
-                        videoDragOver ? "border-brand-500 bg-brand-50/20" : "border-gray-200 hover:border-brand-400 hover:bg-gray-50/50"
-                      }`}
-                      onDragOver={(e) => { e.preventDefault(); setVideoDragOver(true); }}
-                      onDragLeave={() => setVideoDragOver(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setVideoDragOver(false);
-                        handleVideosSelect(e.dataTransfer.files);
-                      }}
-                      onClick={() => document.getElementById("multi-vid-input").click()}
-                    >
-                      <input
-                        id="multi-vid-input"
-                        type="file"
-                        multiple
-                        accept="video/*"
-                        className="hidden"
-                        onChange={(e) => handleVideosSelect(e.target.files)}
-                      />
-                      <Video size={20} className="text-brand-600" />
-                      <p className="text-xs font-semibold text-brand-600 mt-1">Upload Videos</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">or drag and drop files here</p>
-                    </div>
-                    
-                    {videos.length > 0 && (
-                      <div className="grid grid-cols-3 gap-2 pt-2">
-                        {videos.map((vid, idx) => (
-                          <div key={idx} className="relative aspect-video border border-gray-200 rounded-lg overflow-hidden group">
-                            <video src={vid.url} className="w-full h-full object-cover" muted />
-                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none">
-                              <span className="text-white text-xs">▶</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeVideo(idx);
-                              }}
-                              className="absolute top-0.5 right-0.5 bg-black/60 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] hover:bg-red-600 transition"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Target Crops Card */}
-                <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 border-b pb-3 border-gray-100">
-                    <Sprout size={16} className="text-brand-600" />
-                    <h3 className="font-semibold text-gray-800 text-sm">Target Crops</h3>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <input
-                        value={customCropText}
-                        onChange={(e) => setCustomCropText(e.target.value)}
-                        className={inputCls}
-                        placeholder="Select crops"
-                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomCrop())}
-                      />
-                      <button
-                        type="button"
-                        onClick={addCustomCrop}
-                        className="px-3 py-2 border border-brand-500 text-brand-600 rounded-lg hover:bg-brand-50 text-xs font-semibold whitespace-nowrap transition"
-                      >
-                        + Add Custom Crop
-                      </button>
-                    </div>
-
-                    <div className="flex flex-col gap-2 pt-1 max-h-40 overflow-y-auto">
-                      {cropOptions.map((crop) => (
-                        <label key={crop} className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={selectedCrops.includes(crop)}
-                            onChange={() => toggleCrop(crop)}
-                            className="rounded text-brand-600 focus:ring-brand-500 w-3.5 h-3.5"
-                          />
-                          {crop}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom full-width Variants Section */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b pb-3 border-gray-100">
-                <div className="flex items-center gap-2">
-                  <Package size={16} className="text-brand-600" />
-                  <h3 className="font-semibold text-gray-800 text-sm">Product Variants</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={addVariant}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition"
-                >
-                  <span>+</span> Add Variant
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {variants.map((variant, index) => (
-                  <VariantFormItem
-                    key={index}
-                    variant={variant}
-                    index={index}
-                    isEdit={isEdit}
-                    onUpdate={(field, val) => updateVariant(index, field, val)}
-                    onRemove={() => removeVariant(index)}
-                    showRemove={variants.length > 1}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-white transition"
-            >
-              Cancel
-            </button>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={handleSubmit}
-                className="px-5 py-2 border border-brand-500 text-brand-600 rounded-lg text-sm font-semibold hover:bg-brand-50 disabled:opacity-50 transition flex items-center gap-1.5"
-              >
-                <Save size={14} className="text-brand-600 mr-1.5" /> Save Draft
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700 disabled:opacity-50 transition flex items-center gap-2"
-              >
-                {saving ? (
-                  <>
-                    <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    Saving...
-                  </>
-                ) : isEdit ? (
-                  "Update Product"
-                ) : (
-                  "Add Product"
-                )}
-              </button>
-            </div>
-          </div>
-        </form>
+        <div className="text-right flex-shrink-0">
+          {qty === 0 ? (
+            <span className="text-[10px] font-extrabold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100">
+              Out of Stock
+            </span>
+          ) : qty <= 5 ? (
+            <span className="text-[10px] font-extrabold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">
+              Low Stock: {qty}
+            </span>
+          ) : (
+            <span className="text-[10px] font-extrabold text-[#15803d] bg-green-50 px-2 py-0.5 rounded border border-green-100">
+              Stock: {qty}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
 }
+
 
 function exportCSV(data) {
   const headers = ["Product Name", "Brand", "Description", "Status"];
@@ -1342,6 +368,7 @@ function Inventory() {
   const [viewMode, setViewMode] = useState("grid");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("all");
   const [brandFilter, setBrandFilter] = useState("all");
+  const [selectedProductDetailId, setSelectedProductDetailId] = useState(null);
 
   const { user } = useSelector((s) => s.auth);
   const { selectedTenantId } = useSelector((s) => s.layout);
@@ -1443,11 +470,17 @@ function Inventory() {
     console.log("   Stock items available:", stockSummary.length);
 
     return products.map((p, index) => {
-      // Try multiple ways to find matching stock
-      let stock = null;
-
-      // Method 1: Standard sourceRef matching
-      stock = stockSummary.find((s) => s.item?.sourceRef === p._id);
+      // Find all stock records for this product
+      const productStocks = (stockSummary || []).filter((s) => s.item?.sourceRef === p._id);
+      
+      // Calculate total available quantity across all variants of this product
+      const totalQty = productStocks.reduce((sum, s) => sum + (s.availableQuantity ?? 0), 0);
+      
+      // Find a base stock summary record for price / details if available
+      const baseStock = productStocks[0] || null;
+      
+      // Create a merged stock object with total available quantity
+      let stock = baseStock ? { ...baseStock, availableQuantity: totalQty } : null;
 
       // Method 2: If no match, try direct ID matching (in case structure is different)
       if (!stock) {
@@ -1616,28 +649,55 @@ function Inventory() {
           targetCrops: crops,
           productImages: encodedImages,
           productVideos: encodedVideos,
-          products: variants.map((variant) => ({
-            unit: variant.unit,
-            mrp: Number(variant.mrp),
-            quantity: Number(variant.quantity),
-            purchaseDate: variant.purchaseDate,
-            ...(variant.parameter && { parameter: variant.parameter }),
-            ...(variant.expiryDate && { expiryDate: variant.expiryDate }),
-            itemCode: variant.itemCode || "",
-            purchasePrice: variant.purchasePrice !== "" && variant.purchasePrice !== null ? Number(variant.purchasePrice) : 0,
-            purchasePriceTaxType: variant.purchasePriceTaxType || "Without Tax",
-            salePrice: variant.salePrice !== "" && variant.salePrice !== null ? Number(variant.salePrice) : 0,
-            salePriceTaxType: variant.salePriceTaxType || "Without Tax",
-            discountOnSalePrice: variant.discountOnSalePrice !== "" && variant.discountOnSalePrice !== null ? Number(variant.discountOnSalePrice) : 0,
-            discountType: variant.discountType || "Percentage",
-            wholesalePrice: variant.wholesalePrice !== "" && variant.wholesalePrice !== null ? Number(variant.wholesalePrice) : 0,
-            wholesalePriceTaxType: variant.wholesalePriceTaxType || "Without Tax",
-            minWholesaleQty: variant.minWholesaleQty !== "" && variant.minWholesaleQty !== null ? Number(variant.minWholesaleQty) : 0,
-            openingStockPrice: variant.openingStockPrice !== "" && variant.openingStockPrice !== null ? Number(variant.openingStockPrice) : 0,
-            asOfDate: variant.asOfDate || "",
-            minStockToMaintain: variant.minStockToMaintain !== "" && variant.minStockToMaintain !== null ? Number(variant.minStockToMaintain) : 0,
-            location: variant.location || "",
-          })),
+          products: variants.map((variant) => {
+            const mrpVal = Number(variant.mrp) || 0;
+            const item = {
+              ...(variant._id && { _id: variant._id }),
+              unit: variant.unit,
+              mrp: mrpVal,
+              quantity: Number(variant.quantity) || 0,
+              purchasePrice: variant.purchasePrice !== "" && variant.purchasePrice !== null ? Number(variant.purchasePrice) : 0,
+              purchasePriceTaxType: variant.purchasePriceTaxType || "Without Tax",
+              salePrice: variant.salePrice !== "" && variant.salePrice !== null ? Number(variant.salePrice) : mrpVal,
+              salePriceTaxType: variant.salePriceTaxType || "Without Tax",
+            };
+
+            if (variant.purchaseDate) item.purchaseDate = variant.purchaseDate;
+            if (variant.parameter) item.parameter = variant.parameter;
+            if (variant.expiryDate) item.expiryDate = variant.expiryDate;
+            if (variant.itemCode) item.itemCode = variant.itemCode;
+            if (variant.location) item.location = variant.location;
+            if (variant.asOfDate) item.asOfDate = variant.asOfDate;
+
+            if (variant.discountOnSalePrice !== "" && variant.discountOnSalePrice !== null) {
+              const disc = Number(variant.discountOnSalePrice);
+              if (!isNaN(disc)) {
+                item.discountOnSalePrice = disc;
+                if (variant.discountType) item.discountType = variant.discountType;
+              }
+            }
+            if (variant.wholesalePrice !== "" && variant.wholesalePrice !== null) {
+              const wp = Number(variant.wholesalePrice);
+              if (!isNaN(wp)) {
+                item.wholesalePrice = wp;
+                if (variant.wholesalePriceTaxType) item.wholesalePriceTaxType = variant.wholesalePriceTaxType;
+              }
+            }
+            if (variant.minWholesaleQty !== "" && variant.minWholesaleQty !== null) {
+              const mwq = Number(variant.minWholesaleQty);
+              if (!isNaN(mwq)) item.minWholesaleQty = mwq;
+            }
+            if (variant.openingStockPrice !== "" && variant.openingStockPrice !== null) {
+              const osp = Number(variant.openingStockPrice);
+              if (!isNaN(osp)) item.openingStockPrice = osp;
+            }
+            if (variant.minStockToMaintain !== "" && variant.minStockToMaintain !== null) {
+              const msm = Number(variant.minStockToMaintain);
+              if (!isNaN(msm)) item.minStockToMaintain = msm;
+            }
+
+            return item;
+          }),
         };
 
         if (editRow) {
@@ -1706,6 +766,42 @@ function Inventory() {
         <SkeletonStatCards count={6} />
         <SkeletonTable rows={8} cols={11} />
       </div>
+    );
+  }
+
+  if (selectedProductDetailId) {
+    const detailProduct = products.find((p) => p._id === selectedProductDetailId);
+    return (
+      <>
+        <ProductDetailView
+          productId={selectedProductDetailId}
+          products={products}
+          stockSummary={stockSummary}
+          isReadOnly={isReadOnly}
+          onBack={() => setSelectedProductDetailId(null)}
+          onEdit={() => {
+            if (detailProduct) {
+              setEditRow(detailProduct);
+              setShowModal(true);
+            }
+          }}
+          onRefresh={() => {
+            dispatch(fetchProducts());
+            dispatch(fetchStockSummary());
+          }}
+        />
+        {showModal && (
+          <ProductModal
+            initial={editRow ?? null}
+            onClose={() => {
+              setShowModal(false);
+              setEditRow(null);
+            }}
+            onSave={handleSaveProduct}
+            saving={saving}
+          />
+        )}
+      </>
     );
   }
 
@@ -2016,6 +1112,7 @@ function Inventory() {
               setShowModal={setShowModal}
               setConfirmId={setConfirmId}
               setConfirmType={setConfirmType}
+              setSelectedProductDetailId={setSelectedProductDetailId}
             />
           ))}
 
@@ -2170,7 +1267,7 @@ function Inventory() {
                         </td>
     
                         {/* Product */}
-                        <td className="px-5 py-4 cursor-pointer" onClick={() => setExpandedRowId(expandedRowId === row._id ? null : row._id)}>
+                        <td className="px-5 py-4 cursor-pointer" onClick={() => setSelectedProductDetailId(row._id)}>
                           <div className="flex items-center gap-3">
                             <ProductImage
                               url={row.productImages?.[0]?.url}
@@ -2250,45 +1347,41 @@ function Inventory() {
                           />
                         </td>
     
-                        {/* Status Toggle */}
+                        {/* Status Badge */}
                         <td className="px-5 py-4 text-center">
-                          <button
-                            onClick={() => {
-                              if (isReadOnly) return;
-                              dispatch(toggleProductStatus({ id: row._id, isActive: !row.isActive }))
-                                .unwrap()
-                                .then(() => toast.success(`Marked ${!row.isActive ? "Active" : "Inactive"}`))
-                                .catch(() => toast.error("Failed to update status"));
-                            }}
-                            disabled={isReadOnly}
-                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
-                              row.isActive
-                                ? "bg-green-50 text-green-700 border-green-200 hover:bg-red-50 hover:text-red-655 hover:border-red-205"
-                                : "bg-gray-105 text-gray-500 border-gray-200 hover:bg-green-50 hover:text-green-700"
-                            } ${isReadOnly ? "opacity-50 cursor-not-allowed" : ""}`}
-                          >
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${
+                            row.isActive
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-gray-105 text-gray-550 border-gray-200"
+                          }`}>
                             {row.isActive ? "Active" : "Inactive"}
-                          </button>
+                          </span>
                         </td>
     
                         {/* Actions */}
                         <td className="px-5 py-4">
                           <div className="flex items-center justify-center gap-1">
-                            {!isReadOnly ? (
-                              <>
-                                <button
-                                  onClick={() => { setEditRow(row); setShowModal(true); }}
-                                  className="p-2 rounded-lg hover:bg-blue-50 text-blue-500 transition"
-                                  title="Edit"
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                                <button className="p-2 rounded-lg hover:bg-gray-105 text-gray-400 transition">
-                                  <MoreVertical size={14} />
-                                </button>
-                              </>
-                            ) : (
-                              <span className="text-xs text-gray-400">View only</span>
+                            <button
+                              onClick={() => setSelectedProductDetailId(row._id)}
+                              className="p-2 rounded-lg hover:bg-emerald-50 text-emerald-600 transition"
+                              title="View Details"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </button>
+                            {!isReadOnly && (
+                              <button
+                                onClick={() => {
+                                  setConfirmId(row._id);
+                                  setConfirmType("product");
+                                }}
+                                className="p-2 rounded-lg hover:bg-red-550/10 text-red-500 transition"
+                                title="Delete"
+                              >
+                                <Trash2 size={14} />
+                              </button>
                             )}
                           </div>
                         </td>
@@ -2301,83 +1394,93 @@ function Inventory() {
                                 Product Variant Details ({row.products?.length || 0})
                               </h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {(row.products || []).map((p, idx) => (
-                                  <div key={idx} className="bg-white border border-gray-150 rounded-xl p-4 shadow-sm space-y-3">
-                                    <div className="flex justify-between items-start border-b border-gray-100 pb-2">
-                                      <div>
-                                        <p className="font-bold text-gray-800 text-sm">
-                                          {p.parameter || "Base"} {p.unit}
-                                        </p>
-                                        {p.itemCode && (
-                                          <p className="text-xs text-gray-400 mt-0.5 font-mono">
-                                            Item Code: {p.itemCode}
+                                {(row.products || []).map((p, idx) => {
+                                  const variantStock = (stockSummary || []).find(
+                                    (s) => s.item?.variantId === p._id || s.item?._id === p._id || (
+                                           s.item?.sourceRef === row._id &&
+                                           String(s.item?.parameter).trim().toLowerCase() === String(p.parameter).trim().toLowerCase() &&
+                                           String(s.item?.unit).trim().toLowerCase() === String(p.unit).trim().toLowerCase()
+                                    )
+                                  );
+                                  const liveQty = variantStock ? (variantStock.availableQuantity ?? 0) : (p.quantity ?? 0);
+                                  return (
+                                    <div key={idx} className="bg-white border border-gray-150 rounded-xl p-4 shadow-sm space-y-3">
+                                      <div className="flex justify-between items-start border-b border-gray-100 pb-2">
+                                        <div>
+                                          <p className="font-bold text-gray-800 text-sm">
+                                            {p.parameter || "Base"} {p.unit}
                                           </p>
-                                        )}
+                                          {p.itemCode && (
+                                            <p className="text-xs text-gray-400 mt-0.5 font-mono">
+                                              Item Code: {p.itemCode}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-50 text-brand-700">
+                                          Stock: {liveQty}
+                                        </span>
                                       </div>
-                                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-50 text-brand-700">
-                                        Stock: {p.quantity ?? 0}
-                                      </span>
+                                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                                        <div>
+                                          <span className="text-gray-400 font-medium">MRP:</span>{" "}
+                                          <span className="font-semibold text-gray-700">₹{p.mrp ?? "—"}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 font-medium">Purchase Price:</span>{" "}
+                                          <span className="font-semibold text-gray-700">₹{p.purchasePrice ?? "—"} ({p.purchasePriceTaxType || "Without Tax"})</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 font-medium">Sale Price:</span>{" "}
+                                          <span className="font-semibold text-gray-700">₹{p.salePrice ?? "—"} ({p.salePriceTaxType || "Without Tax"})</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 font-medium">Discount:</span>{" "}
+                                          <span className="font-semibold text-gray-700">
+                                            {p.discountOnSalePrice ?? "0"}{p.discountType === "Percentage" ? "%" : " ₹"}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 font-medium">Wholesale Price:</span>{" "}
+                                          <span className="font-semibold text-gray-700">₹{p.wholesalePrice ?? "—"} ({p.wholesalePriceTaxType || "Without Tax"})</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 font-medium">Min Wholesale Qty:</span>{" "}
+                                          <span className="font-semibold text-gray-700">{p.minWholesaleQty ?? "—"}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 font-medium">Min Stock level:</span>{" "}
+                                          <span className="font-semibold text-gray-700">{p.minStockToMaintain ?? "—"}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 font-medium">Location:</span>{" "}
+                                          <span className="font-semibold text-gray-700">{p.location || "—"}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 font-medium">Opening Cost:</span>{" "}
+                                          <span className="font-semibold text-gray-700">₹{p.openingStockPrice ?? "—"}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 font-medium">Valuation Date:</span>{" "}
+                                          <span className="font-semibold text-gray-700">
+                                            {p.asOfDate ? new Date(p.asOfDate).toLocaleDateString("en-IN") : "—"}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 font-medium">Purchase Date:</span>{" "}
+                                          <span className="font-semibold text-gray-700">
+                                            {p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString("en-IN") : "—"}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 font-medium">Expiry Date:</span>{" "}
+                                          <span className="font-semibold text-gray-700">
+                                            {p.expiryDate ? new Date(p.expiryDate).toLocaleDateString("en-IN") : "—"}
+                                          </span>
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                                      <div>
-                                        <span className="text-gray-400 font-medium">MRP:</span>{" "}
-                                        <span className="font-semibold text-gray-700">₹{p.mrp ?? "—"}</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-400 font-medium">Purchase Price:</span>{" "}
-                                        <span className="font-semibold text-gray-700">₹{p.purchasePrice ?? "—"} ({p.purchasePriceTaxType || "Without Tax"})</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-400 font-medium">Sale Price:</span>{" "}
-                                        <span className="font-semibold text-gray-700">₹{p.salePrice ?? "—"} ({p.salePriceTaxType || "Without Tax"})</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-400 font-medium">Discount:</span>{" "}
-                                        <span className="font-semibold text-gray-700">
-                                          {p.discountOnSalePrice ?? "0"}{p.discountType === "Percentage" ? "%" : " ₹"}
-                                        </span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-400 font-medium">Wholesale Price:</span>{" "}
-                                        <span className="font-semibold text-gray-700">₹{p.wholesalePrice ?? "—"} ({p.wholesalePriceTaxType || "Without Tax"})</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-400 font-medium">Min Wholesale Qty:</span>{" "}
-                                        <span className="font-semibold text-gray-700">{p.minWholesaleQty ?? "—"}</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-400 font-medium">Min Stock level:</span>{" "}
-                                        <span className="font-semibold text-gray-700">{p.minStockToMaintain ?? "—"}</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-400 font-medium">Location:</span>{" "}
-                                        <span className="font-semibold text-gray-700">{p.location || "—"}</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-400 font-medium">Opening Cost:</span>{" "}
-                                        <span className="font-semibold text-gray-700">₹{p.openingStockPrice ?? "—"}</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-400 font-medium">Valuation Date:</span>{" "}
-                                        <span className="font-semibold text-gray-700">
-                                          {p.asOfDate ? new Date(p.asOfDate).toLocaleDateString("en-IN") : "—"}
-                                        </span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-400 font-medium">Purchase Date:</span>{" "}
-                                        <span className="font-semibold text-gray-700">
-                                          {p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString("en-IN") : "—"}
-                                        </span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-400 font-medium">Expiry Date:</span>{" "}
-                                        <span className="font-semibold text-gray-700">
-                                          {p.expiryDate ? new Date(p.expiryDate).toLocaleDateString("en-IN") : "—"}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           </td>

@@ -386,7 +386,7 @@ export default function Party() {
                                         <th className="px-6 py-4">Party Details</th>
                                         <th className="px-6 py-4">GST Info</th>
                                         <th className="px-6 py-4">State & Location</th>
-                                        <th className="px-6 py-4">Opening Balance</th>
+                                        <th className="px-6 py-4">Balance</th>
                                         <th className="px-6 py-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -419,9 +419,9 @@ export default function Party() {
                                                 <td className="px-6 py-4">
                                                     <div>
                                                         <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${party.gstType?.startsWith("Registered")
-                                                                ? "bg-purple-50 text-purple-700 border border-purple-100"
-                                                                : "bg-gray-100 text-gray-600"
-                                                                }`}>
+                                                            ? "bg-purple-50 text-purple-700 border border-purple-100"
+                                                            : "bg-gray-100 text-gray-600"
+                                                            }`}>
                                                             {party.gstType || "Unregistered/Consumer"}
                                                         </span>
                                                         {party.gstin && (
@@ -441,8 +441,8 @@ export default function Party() {
                                                     <div>
                                                         <p className="font-semibold text-gray-950">₹{(party.openingBalance || 0).toLocaleString("en-IN")}</p>
                                                         <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mt-1 ${party.openingBalanceType === "CREDIT"
-                                                                ? "bg-amber-100 text-amber-800"
-                                                                : "bg-emerald-100 text-emerald-800"
+                                                            ? "bg-amber-100 text-amber-800"
+                                                            : "bg-emerald-100 text-emerald-800"
                                                             }`}>
                                                             {party.openingBalanceType || "CREDIT"}
                                                         </span>
@@ -622,10 +622,10 @@ export default function Party() {
                                                 value={form.gstType.startsWith("Registered") ? form.gstin : ""}
                                                 onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
                                                 className={`w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 ${!form.gstType.startsWith("Registered")
-                                                        ? "bg-gray-50 text-gray-400 cursor-not-allowed border-gray-200"
-                                                        : errors.gstin
-                                                            ? "border-red-400 focus:ring-red-400 bg-white"
-                                                            : "border-gray-200 bg-white"
+                                                    ? "bg-gray-50 text-gray-400 cursor-not-allowed border-gray-200"
+                                                    : errors.gstin
+                                                        ? "border-red-400 focus:ring-red-400 bg-white"
+                                                        : "border-gray-200 bg-white"
                                                     }`}
                                                 placeholder={form.gstType.startsWith("Registered") ? "22AAAAA0000A1Z5" : "Not Applicable"}
                                             />
@@ -661,8 +661,8 @@ export default function Party() {
                                                 type="button"
                                                 onClick={() => setForm({ ...form, openingBalanceType: "CREDIT" })}
                                                 className={`flex-1 h-full rounded-md text-xs font-semibold transition-all ${form.openingBalanceType === "CREDIT"
-                                                        ? "bg-brand-600 text-white shadow-sm"
-                                                        : "text-gray-500 hover:text-gray-750 hover:bg-white/50"
+                                                    ? "bg-brand-600 text-white shadow-sm"
+                                                    : "text-gray-500 hover:text-gray-750 hover:bg-white/50"
                                                     }`}
                                             >
                                                 CREDIT (Payable)
@@ -671,8 +671,8 @@ export default function Party() {
                                                 type="button"
                                                 onClick={() => setForm({ ...form, openingBalanceType: "DEBIT" })}
                                                 className={`flex-1 h-full rounded-md text-xs font-semibold transition-all ${form.openingBalanceType === "DEBIT"
-                                                        ? "bg-brand-600 text-white shadow-sm"
-                                                        : "text-gray-500 hover:text-gray-750 hover:bg-white/50"
+                                                    ? "bg-brand-600 text-white shadow-sm"
+                                                    : "text-gray-500 hover:text-gray-750 hover:bg-white/50"
                                                     }`}
                                             >
                                                 DEBIT (Receivable)

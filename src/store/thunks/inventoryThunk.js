@@ -74,7 +74,20 @@ export const updateProduct = createAsyncThunk(
       const res = await api.patch(`/product/updateProduct/${id}`, data);
       return res.data.data ?? res.data;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to update product');
+      console.error('[updateProduct] Full response error:', err.response?.data);
+      const detailMsg = err.response?.data?.message || 'Failed to update product';
+      const validationErrors = err.response?.data?.errors;
+      let errorStr = detailMsg;
+      if (validationErrors && typeof validationErrors === 'object') {
+        const errorList = Object.entries(validationErrors).map(([key, val]) => {
+          const errMsg = typeof val === 'object' ? (val.message || JSON.stringify(val)) : String(val);
+          return `${key}: ${errMsg}`;
+        });
+        if (errorList.length > 0) {
+          errorStr = `${detailMsg} (${errorList.join(', ')})`;
+        }
+      }
+      return rejectWithValue(errorStr);
     }
   }
 );
