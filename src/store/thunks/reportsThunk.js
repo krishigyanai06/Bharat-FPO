@@ -1,83 +1,160 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import api from '../../lib/api';
+import reportService from '../../services/reportService';
+import { downloadBlob } from '../../utils/downloadFile';
 
-/* ================= PURCHASE REPORTS ================= */
-export const fetchReports = createAsyncThunk(
-  'reports/fetchPurchases',
-  async (_, { rejectWithValue }) => {
+export const downloadSalesReport = createAsyncThunk(
+  'reports/downloadSalesPdf',
+  async (filters, { rejectWithValue }) => {
     try {
-      console.log('[fetchReports] Fetching purchase reports...');
-      const res = await api.get('/procurement/getPurchases');
-      console.log('[fetchReports] ✅ Response:', res.data);
-      return res.data.data || [];
+      console.log('[reportsThunk] Downloading sales PDF with filters:', filters);
+      const blob = await reportService.downloadSalesReport(filters);
+      
+      const startDateStr = filters.startDate || 'start';
+      const endDateStr = filters.endDate || 'end';
+      const filename = `Sales_Report_${startDateStr}_to_${endDateStr}.pdf`;
+      
+      // Auto trigger file save
+      downloadBlob(blob, filename);
+      return { success: true };
     } catch (err) {
-      console.error('[fetchReports] ❌ Error:', err.message);
-      console.error('[fetchReports] Error details:', {
-        status: err.response?.status,
-        data: err.response?.data,
-        url: err.config?.url,
-        tenantId: err.config?.params?.tenantId,
-        xTenantId: err.config?.headers?.['x-tenant-id']
-      });
-      return rejectWithValue(
-        err.response?.data?.message || 'Failed to load reports'
-      );
+      console.error('[reportsThunk] downloadSalesReport error:', err);
+      // For blobs, Axios error details are stored inside blob text sometimes, but we catch them cleanly
+      return rejectWithValue(err.response?.data?.message || 'Failed to download Sales Report PDF');
     }
   }
 );
 
-/* ================= FARMERS ================= */
-export const fetchFarmers = createAsyncThunk(
-  'reports/fetchFarmers',
-  async (_, { rejectWithValue }) => {
+export const downloadPurchaseReport = createAsyncThunk(
+  'reports/downloadPurchasePdf',
+  async (filters, { rejectWithValue }) => {
     try {
-      console.log('[fetchFarmers] Fetching farmers...');
-      // Use getAllUsers endpoint (same as Members page)
-      const res = await api.get('/user/getAllUsers');
-      console.log('[fetchFarmers] ✅ Response:', res.data);
-      // Handle different response formats
-      const farmers = res.data?.data?.users || res.data?.data || res.data?.users || [];
-      console.log('[fetchFarmers] Farmers count:', farmers.length);
-      return farmers;
+      console.log('[reportsThunk] Downloading purchase PDF with filters:', filters);
+      const blob = await reportService.downloadPurchaseReport(filters);
+      
+      const startDateStr = filters.startDate || 'start';
+      const endDateStr = filters.endDate || 'end';
+      const filename = `Purchase_Report_${startDateStr}_to_${endDateStr}.pdf`;
+      
+      // Auto trigger file save
+      downloadBlob(blob, filename);
+      return { success: true };
     } catch (err) {
-      console.error('[fetchFarmers] ❌ Error:', err.message);
-      console.error('[fetchFarmers] Error details:', {
-        status: err.response?.status,
-        data: err.response?.data,
-        url: err.config?.url,
-        tenantId: err.config?.params?.tenantId,
-        xTenantId: err.config?.headers?.['x-tenant-id']
-      });
-      // Try fallback endpoint
-      try {
-        console.log('[fetchFarmers] Trying fallback /user/getAllFarmers...');
-        const fallbackRes = await api.get('/user/getAllFarmers');
-        console.log('[fetchFarmers] ✅ Fallback response:', fallbackRes.data);
-        return fallbackRes.data?.data || [];
-      } catch (fallbackErr) {
-        console.error('[fetchFarmers] ❌ Fallback also failed:', fallbackErr.message);
-        return rejectWithValue('Failed to fetch farmers');
-      }
+      console.error('[reportsThunk] downloadPurchaseReport error:', err);
+      return rejectWithValue(err.response?.data?.message || 'Failed to download Purchase Report PDF');
     }
   }
 );
 
-/* ================= PRIVATE FILES ================= */
-export const fetchPrivateFiles = createAsyncThunk(
-  'reports/fetchPrivateFiles',
-  async ({ farmerId, type }, { rejectWithValue }) => {
+export const fetchBalanceSheet = createAsyncThunk(
+  'reports/fetchBalanceSheet',
+  async (date, { rejectWithValue }) => {
     try {
-      const res = await api.get(
-        `/admin/files/private?type=${type}&userId=${farmerId}`
-      );
-
-      return {
-        farmerId,
-        type,
-        files: res.data.files || [],
-      };
+      console.log('[reportsThunk] Fetching balance sheet JSON for date:', date);
+      const data = await reportService.fetchBalanceSheet(date);
+      return data?.data || data || null;
     } catch (err) {
-      return rejectWithValue('Failed to fetch files');
+      console.error('[reportsThunk] fetchBalanceSheet error:', err);
+      return rejectWithValue(err.response?.data?.message || 'Failed to fetch Balance Sheet details');
+    }
+  }
+);
+
+export const downloadBalanceSheetPdf = createAsyncThunk(
+  'reports/downloadBalanceSheetPdf',
+  async (date, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Downloading balance sheet PDF for date:', date);
+      const blob = await reportService.downloadBalanceSheetPdf(date);
+      const filename = `Balance_Sheet_${date}.pdf`;
+      
+      // Auto trigger file save
+      downloadBlob(blob, filename);
+      return { success: true };
+    } catch (err) {
+      console.error('[reportsThunk] downloadBalanceSheetPdf error:', err);
+      return rejectWithValue(err.response?.data?.message || 'Failed to download Balance Sheet PDF');
+    }
+  }
+);
+
+export const downloadPaymentInReport = createAsyncThunk(
+  'reports/downloadPaymentInPdf',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Downloading payment-in PDF with filters:', filters);
+      const blob = await reportService.downloadPaymentInReport(filters);
+      const startDateStr = filters.startDate || 'start';
+      const endDateStr = filters.endDate || 'end';
+      const filename = `PaymentIn_Report_${startDateStr}_to_${endDateStr}.pdf`;
+      downloadBlob(blob, filename);
+      return { success: true };
+    } catch (err) {
+      console.error('[reportsThunk] downloadPaymentInReport error:', err);
+      return rejectWithValue(err.response?.data?.message || 'Failed to download Payment In Report PDF');
+    }
+  }
+);
+
+export const downloadPaymentOutReport = createAsyncThunk(
+  'reports/downloadPaymentOutPdf',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Downloading payment-out PDF with filters:', filters);
+      const blob = await reportService.downloadPaymentOutReport(filters);
+      const startDateStr = filters.startDate || 'start';
+      const endDateStr = filters.endDate || 'end';
+      const filename = `PaymentOut_Report_${startDateStr}_to_${endDateStr}.pdf`;
+      downloadBlob(blob, filename);
+      return { success: true };
+    } catch (err) {
+      console.error('[reportsThunk] downloadPaymentOutReport error:', err);
+      return rejectWithValue(err.response?.data?.message || 'Failed to download Payment Out Report PDF');
+    }
+  }
+);
+
+export const downloadExpenseReport = createAsyncThunk(
+  'reports/downloadExpensePdf',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Downloading expense PDF with filters:', filters);
+      const blob = await reportService.downloadExpenseReport(filters);
+      const startDateStr = filters.startDate || 'start';
+      const endDateStr = filters.endDate || 'end';
+      const filename = `Expense_Report_${startDateStr}_to_${endDateStr}.pdf`;
+      downloadBlob(blob, filename);
+      return { success: true };
+    } catch (err) {
+      console.error('[reportsThunk] downloadExpenseReport error:', err);
+      return rejectWithValue(err.response?.data?.message || 'Failed to download Expense Report PDF');
+    }
+  }
+);
+
+export const fetchPartySalePurchase = createAsyncThunk(
+  'reports/fetchPartySalePurchase',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Fetching party sale-purchase report JSON:', filters);
+      const data = await reportService.fetchPartySalePurchaseReport(filters);
+      return data?.data || data?.records || data || [];
+    } catch (err) {
+      console.error('[reportsThunk] fetchPartySalePurchase error:', err);
+      return rejectWithValue(err.response?.data?.message || 'Failed to fetch Party Sale-Purchase details');
+    }
+  }
+);
+
+export const fetchItemwiseProfitLoss = createAsyncThunk(
+  'reports/fetchItemwiseProfitLoss',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Fetching itemwise profit-loss report JSON:', filters);
+      const data = await reportService.fetchItemwiseProfitLossReport(filters);
+      return data?.data || data?.records || data || [];
+    } catch (err) {
+      console.error('[reportsThunk] fetchItemwiseProfitLoss error:', err);
+      return rejectWithValue(err.response?.data?.message || 'Failed to fetch Itemwise Profit-Loss details');
     }
   }
 );

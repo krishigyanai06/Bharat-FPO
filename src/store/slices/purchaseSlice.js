@@ -75,6 +75,7 @@ const purchaseSlice = createSlice({
         };
       })
       .addCase(fetchPurchases.rejected, (state, action) => {
+        if (action.meta?.aborted) return;
         state.loading = false;
         state.error = action.payload;
       })
@@ -143,6 +144,7 @@ const purchaseSlice = createSlice({
         };
       })
       .addCase(fetchPaymentsOut.rejected, (state, action) => {
+        if (action.meta?.aborted) return;
         state.loading = false;
         state.error = action.payload;
       })
@@ -264,6 +266,7 @@ const purchaseSlice = createSlice({
         };
       })
       .addCase(fetchExpenses.rejected, (state, action) => {
+        if (action.meta?.aborted) return;
         state.loading = false;
         state.error = action.payload;
       })

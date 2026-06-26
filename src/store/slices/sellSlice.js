@@ -49,6 +49,7 @@ const sellSlice = createSlice({
         state.salesTotal = action.payload.total;
       })
       .addCase(fetchSales.rejected, (state, action) => {
+        if (action.meta?.aborted) return;
         state.loading = false;
         state.error = action.payload;
       })
@@ -139,6 +140,7 @@ const sellSlice = createSlice({
         state.paymentsTotal = action.payload.total;
       })
       .addCase(fetchPaymentsIn.rejected, (state, action) => {
+        if (action.meta?.aborted) return;
         state.loading = false;
         state.error = action.payload;
       })
