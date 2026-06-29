@@ -29,6 +29,9 @@ import {
   TrendingUp,
   Scale,
   IndianRupee,
+  Receipt,
+  RefreshCw,
+  CreditCard,
 } from "lucide-react";
 import { fetchMe, fetchTenants } from "../store/thunks/layoutThunk";
 import { setSelectedTenant } from "../store/slices/layoutSlice";
@@ -44,16 +47,20 @@ import "./google-lang-picker/google-translate.css";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+  { icon: Archive, label: "Inventory", path: "/inventory" },
   { icon: Users, label: "Parties", path: "/party" },
+  { icon: CreditCard, label: "Purchases", path: "/purchase" },
+  { icon: Receipt, label: "Sales", path: "/sell" },
+  { icon: BarChart3, label: "Reports", path: "/reports" },
   { icon: Package, label: "Listing Approvals", path: "/listing" },
   { icon: ShoppingCart, label: "Procurement", path: "/procurement" },
-  { icon: Archive, label: "Inventory", path: "/inventory" },
   { icon: ShoppingBag, label: "Order Book", path: "/buy" },
+
   { icon: Megaphone, label: "Broadcast", path: "/broadcast" },
   { icon: Users, label: "Members", path: "/members" },
   { icon: BookOpen, label: "Ledger", path: "/ledger" },
   { icon: ImagePlus, label: "Advertisement", path: "/advertisement" },
-  // { icon: BarChart3, label: "Reports", path: "/reports" },
+
   { icon: Settings, label: "Settings", path: "/settings" },
 
   {
@@ -96,13 +103,7 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const [reportsOpen, setReportsOpen] = useState(location.pathname === "/reports");
 
-  useEffect(() => {
-    if (location.pathname === "/reports") {
-      setReportsOpen(true);
-    }
-  }, [location.pathname]);
 
   const { me, tenants, selectedTenantId } = useSelector((s) => s.layout);
   const { user, token: authToken } = useSelector((s) => s.auth);
@@ -421,90 +422,6 @@ export default function Layout() {
           {visibleMenuItems.map((item) => {
             const Icon = item.icon;
             const active = location.pathname === item.path;
-            const isReports = item.path === "/reports";
-            const queryParams = new URLSearchParams(location.search);
-            const currentTab = location.pathname === "/reports" ? (queryParams.get("tab") || "pl") : "";
-
-            if (isReports) {
-              return (
-                <div key={item.path} className="space-y-1">
-                  <button
-                    onClick={() => {
-                      setReportsOpen((v) => !v);
-                      if (location.pathname !== "/reports") {
-                        navigate("/reports?tab=pl");
-                      }
-                    }}
-                    className="relative w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group"
-                    style={
-                      active
-                        ? {
-                          background:
-                            "linear-gradient(135deg, #1a5c2a 0%, #0f3d1a 100%)",
-                          boxShadow:
-                            "0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)",
-                          border: "1px solid rgba(109,191,126,0.2)",
-                          color: "#ffffff",
-                        }
-                        : {
-                          background: "transparent",
-                          border: "1px solid transparent",
-                          color: "rgba(109,191,126,0.85)",
-                        }
-                    }
-                  >
-                    {active && (
-                      <span
-                        className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full"
-                        style={{ background: "#d4af37" }}
-                      />
-                    )}
-                    <Icon
-                      className="w-5 h-5 flex-shrink-0"
-                      style={{ color: active ? "#6dbf7e" : "#4a9e5c" }}
-                    />
-                    <span className="flex-1 text-left">{item.label}</span>
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 transition-transform duration-200 opacity-60 ${reportsOpen ? "rotate-180" : ""
-                        }`}
-                    />
-                  </button>
-
-                  {/* Sub-tabs */}
-                  {reportsOpen && (
-                    <div className="pl-8 pr-2 py-1 space-y-1 bg-black/10 rounded-xl">
-                      {[
-                        { key: "pl", label: "Profit & Loss", icon: TrendingUp },
-                        { key: "bs", label: "Balance Sheet", icon: Scale },
-                        { key: "cf", label: "Cash Flow", icon: IndianRupee },
-                      ].map((sub) => {
-                        const subActive = active && currentTab === sub.key;
-                        const SubIcon = sub.icon;
-                        return (
-                          <button
-                            key={sub.key}
-                            onClick={() => {
-                              navigate(`/reports?tab=${sub.key}&scroll=1`);
-                              setSidebarOpen(false);
-                            }}
-                            className={`w-full flex items-center gap-2.5 py-2 px-3.5 rounded-lg text-xs font-semibold transition-all duration-150 ${subActive
-                              ? "bg-green-700/50 text-white shadow-sm border border-green-600/30"
-                              : "text-green-100/60 hover:text-white hover:bg-green-800/20"
-                              }`}
-                          >
-                            <SubIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span className="flex-1">{sub.label}</span>
-                            {subActive && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            }
 
             return (
               <button

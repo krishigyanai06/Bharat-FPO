@@ -1,82 +1,173 @@
 import { createSlice } from '@reduxjs/toolkit';
 import {
-  fetchReports,
-  fetchFarmers,
-  fetchPrivateFiles,
+  downloadSalesReport,
+  downloadPurchaseReport,
+  fetchBalanceSheet,
+  downloadBalanceSheetPdf,
+  downloadPaymentInReport,
+  downloadPaymentOutReport,
+  downloadExpenseReport,
+  fetchPartySalePurchase,
+  fetchItemwiseProfitLoss,
 } from '../thunks/reportsThunk';
 
 const initialState = {
-  /* PURCHASE REPORTS */
-  purchases: [],
+  salesReportLoading: false,
+  purchaseReportLoading: false,
+  balanceSheetLoading: false,
 
-  /* FARMERS */
-  farmers: [],
+  salesDownloadLoading: false,
+  purchaseDownloadLoading: false,
+  balanceSheetDownloadLoading: false,
+  paymentInDownloadLoading: false,
+  paymentOutDownloadLoading: false,
+  expenseDownloadLoading: false,
 
-  /* PRIVATE FILES
-     structure:
-     {
-       farmerId: {
-         soilHealthCard: [],
-         labReport: [],
-         govtSchemeDocs: []
-       }
-     }
-  */
-  files: {},
-
-  loading: false,
+  balanceSheet: null,
   error: null,
+
+  partySalePurchase: [],
+  partySalePurchaseLoading: false,
+  itemwiseProfitLoss: [],
+  itemwiseProfitLossLoading: false,
 };
 
 const reportsSlice = createSlice({
   name: 'reports',
   initialState,
-  reducers: {},
+  reducers: {
+    clearReportsError: (state) => {
+      state.error = null;
+    },
+    resetBalanceSheetData: (state) => {
+      state.balanceSheet = null;
+    }
+  },
   extraReducers: (builder) => {
     builder
-
-      /* ================= PURCHASE REPORTS ================= */
-      .addCase(fetchReports.pending, (state) => {
-        state.loading = true;
+      /* ================= DOWNLOAD SALES PDF ================= */
+      .addCase(downloadSalesReport.pending, (state) => {
+        state.salesDownloadLoading = true;
         state.error = null;
       })
-      .addCase(fetchReports.fulfilled, (state, action) => {
-        state.loading = false;
-        state.purchases = action.payload;
-        console.log('[reportsSlice] ✅ Purchases loaded:', action.payload?.length || 0);
+      .addCase(downloadSalesReport.fulfilled, (state) => {
+        state.salesDownloadLoading = false;
       })
-      .addCase(fetchReports.rejected, (state, action) => {
-        state.loading = false;
+      .addCase(downloadSalesReport.rejected, (state, action) => {
+        state.salesDownloadLoading = false;
         state.error = action.payload;
       })
 
-      /* ================= FARMERS ================= */
-      .addCase(fetchFarmers.pending, (state) => {
-        state.loading = true;
+      /* ================= DOWNLOAD PURCHASE PDF ================= */
+      .addCase(downloadPurchaseReport.pending, (state) => {
+        state.purchaseDownloadLoading = true;
+        state.error = null;
       })
-      .addCase(fetchFarmers.fulfilled, (state, action) => {
-        state.loading = false;
-        state.farmers = action.payload;
-        console.log('[reportsSlice] ✅ Farmers loaded:', action.payload?.length || 0);
+      .addCase(downloadPurchaseReport.fulfilled, (state) => {
+        state.purchaseDownloadLoading = false;
       })
-      .addCase(fetchFarmers.rejected, (state, action) => {
-        state.loading = false;
+      .addCase(downloadPurchaseReport.rejected, (state, action) => {
+        state.purchaseDownloadLoading = false;
         state.error = action.payload;
       })
 
-      /* ================= PRIVATE FILES ================= */
-      .addCase(fetchPrivateFiles.pending, (state) => {
-        // do NOT touch global loading — handled locally in the component
+      /* ================= FETCH BALANCE SHEET JSON ================= */
+      .addCase(fetchBalanceSheet.pending, (state) => {
+        state.balanceSheetLoading = true;
+        state.error = null;
       })
-      .addCase(fetchPrivateFiles.fulfilled, (state, action) => {
-        const { farmerId, type, files } = action.payload;
-        if (!state.files[farmerId]) state.files[farmerId] = {};
-        state.files[farmerId][type] = files;
+      .addCase(fetchBalanceSheet.fulfilled, (state, action) => {
+        state.balanceSheetLoading = false;
+        state.balanceSheet = action.payload;
       })
-      .addCase(fetchPrivateFiles.rejected, (state, action) => {
+      .addCase(fetchBalanceSheet.rejected, (state, action) => {
+        state.balanceSheetLoading = false;
+        state.error = action.payload;
+      })
+
+      /* ================= DOWNLOAD BALANCE SHEET PDF ================= */
+      .addCase(downloadBalanceSheetPdf.pending, (state) => {
+        state.balanceSheetDownloadLoading = true;
+        state.error = null;
+      })
+      .addCase(downloadBalanceSheetPdf.fulfilled, (state) => {
+        state.balanceSheetDownloadLoading = false;
+      })
+      .addCase(downloadBalanceSheetPdf.rejected, (state, action) => {
+        state.balanceSheetDownloadLoading = false;
+        state.error = action.payload;
+      })
+
+      /* ================= DOWNLOAD PAYMENT IN PDF ================= */
+      .addCase(downloadPaymentInReport.pending, (state) => {
+        state.paymentInDownloadLoading = true;
+        state.error = null;
+      })
+      .addCase(downloadPaymentInReport.fulfilled, (state) => {
+        state.paymentInDownloadLoading = false;
+      })
+      .addCase(downloadPaymentInReport.rejected, (state, action) => {
+        state.paymentInDownloadLoading = false;
+        state.error = action.payload;
+      })
+
+      /* ================= DOWNLOAD PAYMENT OUT PDF ================= */
+      .addCase(downloadPaymentOutReport.pending, (state) => {
+        state.paymentOutDownloadLoading = true;
+        state.error = null;
+      })
+      .addCase(downloadPaymentOutReport.fulfilled, (state) => {
+        state.paymentOutDownloadLoading = false;
+      })
+      .addCase(downloadPaymentOutReport.rejected, (state, action) => {
+        state.paymentOutDownloadLoading = false;
+        state.error = action.payload;
+      })
+
+      /* ================= DOWNLOAD EXPENSE PDF ================= */
+      .addCase(downloadExpenseReport.pending, (state) => {
+        state.expenseDownloadLoading = true;
+        state.error = null;
+      })
+      .addCase(downloadExpenseReport.fulfilled, (state) => {
+        state.expenseDownloadLoading = false;
+      })
+      .addCase(downloadExpenseReport.rejected, (state, action) => {
+        state.expenseDownloadLoading = false;
+        state.error = action.payload;
+      })
+
+      /* ================= PARTY SALE PURCHASE ================= */
+      .addCase(fetchPartySalePurchase.pending, (state) => {
+        state.partySalePurchaseLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchPartySalePurchase.fulfilled, (state, action) => {
+        state.partySalePurchaseLoading = false;
+        state.partySalePurchase = action.payload;
+      })
+      .addCase(fetchPartySalePurchase.rejected, (state, action) => {
+        if (action.meta?.aborted) return;
+        state.partySalePurchaseLoading = false;
+        state.error = action.payload;
+      })
+
+      /* ================= ITEMWISE PROFIT LOSS ================= */
+      .addCase(fetchItemwiseProfitLoss.pending, (state) => {
+        state.itemwiseProfitLossLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchItemwiseProfitLoss.fulfilled, (state, action) => {
+        state.itemwiseProfitLossLoading = false;
+        state.itemwiseProfitLoss = action.payload;
+      })
+      .addCase(fetchItemwiseProfitLoss.rejected, (state, action) => {
+        if (action.meta?.aborted) return;
+        state.itemwiseProfitLossLoading = false;
         state.error = action.payload;
       });
   },
 });
 
+export const { clearReportsError, resetBalanceSheetData } = reportsSlice.actions;
 export default reportsSlice.reducer;

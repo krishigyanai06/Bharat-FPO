@@ -23,6 +23,7 @@ import {
     RefreshCw
 } from "lucide-react";
 import toast from "react-hot-toast";
+import SearchableStateSelect from "../components/SearchableStateSelect";
 
 // State Options for Dropdowns
 const STATES = [
@@ -34,10 +35,11 @@ const STATES = [
 ];
 
 const GST_TYPES = [
+    "Unregistered/Consumer",
     "Registered-Regular",
     "Registered-Composition",
-    "Unregistered",
-    "Consumer"
+    "Overseas",
+    "SEZ"
 ];
 
 export default function Party() {
@@ -59,12 +61,12 @@ export default function Party() {
         name: "",
         phoneNumber: "",
         gstin: "",
-        gstType: "Unregistered",
+        gstType: "Unregistered/Consumer",
         state: "",
         email: "",
         billingAddress: "",
         shippingAddress: "",
-        openingBalance: 0,
+        openingBalance: "",
         openingBalanceType: "CREDIT",
     });
     const [errors, setErrors] = useState({});
@@ -122,7 +124,7 @@ export default function Party() {
             name: "",
             phoneNumber: "",
             gstin: "",
-            gstType: "Unregistered",
+            gstType: "Unregistered/Consumer",
             state: "Uttar Pradesh",
             email: "",
             billingAddress: "",
@@ -140,7 +142,7 @@ export default function Party() {
             name: party.name || "",
             phoneNumber: party.phoneNumber || "",
             gstin: party.gstin || "",
-            gstType: party.gstType || "Unregistered",
+            gstType: party.gstType || "Unregistered/Consumer",
             state: party.state || "Uttar Pradesh",
             email: party.email || "",
             billingAddress: party.billingAddress || "",
@@ -240,11 +242,11 @@ export default function Party() {
                             <circle cx="85" cy="48" r="4" fill="#EF4444" />
                             <circle cx="97" cy="48" r="4" fill="#FBBF24" />
                             <circle cx="109" cy="48" r="4" fill="#34D399" />
-                            
+
                             {/* Mock fields */}
                             <rect x="85" y="75" width="70" height="16" rx="4" fill="#FBBF24" />
                             <rect x="165" y="75" width="60" height="16" rx="4" fill="#E2E8F0" />
-                            
+
                             {/* Rows */}
                             <circle cx="97" cy="115" r="9" fill="#FBBF24" opacity="0.3" />
                             <circle cx="97" cy="115" r="5" fill="#FBBF24" />
@@ -256,14 +258,14 @@ export default function Party() {
 
                             {/* Yellow border badge around character */}
                             <circle cx="240" cy="120" r="48" fill="#FFFFFF" stroke="#FBBF24" strokeWidth="4" />
-                            
+
                             {/* Clip path to crop character to circle */}
                             <defs>
                                 <clipPath id="avatar-clip">
                                     <circle cx="240" cy="120" r="46" />
                                 </clipPath>
                             </defs>
-                            
+
                             {/* Character */}
                             <g clipPath="url(#avatar-clip)">
                                 {/* Yellow shirt */}
@@ -271,22 +273,22 @@ export default function Party() {
                                 <rect x="236" y="138" width="8" height="18" fill="#F59E0B" />
                                 {/* Collar details */}
                                 <path d="M232,138 L240,146 L248,138" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
-                                
+
                                 {/* Neck */}
                                 <rect x="236" y="126" width="8" height="12" fill="#FED7AA" />
-                                
+
                                 {/* Head */}
                                 <circle cx="240" cy="116" r="14" fill="#FED7AA" />
-                                
+
                                 {/* Hair */}
                                 <path d="M224,112 C224,102 256,102 256,112 C256,107 224,107 224,112 Z" fill="#1E293B" />
                                 <path d="M223,114 C223,105 257,105 257,114 Z" fill="#1E293B" />
-                                
+
                                 {/* Eyes & smile */}
                                 <circle cx="235" cy="115" r="1.5" fill="#1E293B" />
                                 <circle cx="245" cy="115" r="1.5" fill="#1E293B" />
                                 <path d="M236,122 Q240,126 244,122" stroke="#1E293B" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-                                
+
                                 {/* Arm waving */}
                                 <path d="M216,145 C216,130 226,116 230,120 C234,124 224,138 224,145 Z" fill="#FED7AA" />
                             </g>
@@ -384,7 +386,7 @@ export default function Party() {
                                         <th className="px-6 py-4">Party Details</th>
                                         <th className="px-6 py-4">GST Info</th>
                                         <th className="px-6 py-4">State & Location</th>
-                                        <th className="px-6 py-4">Opening Balance</th>
+                                        <th className="px-6 py-4">Balance</th>
                                         <th className="px-6 py-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -416,12 +418,11 @@ export default function Party() {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div>
-                                                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                                                            party.gstType?.startsWith("Registered")
-                                                                ? "bg-purple-50 text-purple-700 border border-purple-100"
-                                                                : "bg-gray-100 text-gray-600"
-                                                        }`}>
-                                                            {party.gstType || "Unregistered"}
+                                                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${party.gstType?.startsWith("Registered")
+                                                            ? "bg-purple-50 text-purple-700 border border-purple-100"
+                                                            : "bg-gray-100 text-gray-600"
+                                                            }`}>
+                                                            {party.gstType || "Unregistered/Consumer"}
                                                         </span>
                                                         {party.gstin && (
                                                             <p className="text-xs font-mono text-gray-500 mt-1.5 uppercase tracking-wider">{party.gstin}</p>
@@ -439,11 +440,10 @@ export default function Party() {
                                                 <td className="px-6 py-4">
                                                     <div>
                                                         <p className="font-semibold text-gray-950">₹{(party.openingBalance || 0).toLocaleString("en-IN")}</p>
-                                                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mt-1 ${
-                                                            party.openingBalanceType === "CREDIT"
-                                                                ? "bg-amber-100 text-amber-800"
-                                                                : "bg-emerald-100 text-emerald-800"
-                                                        }`}>
+                                                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mt-1 ${party.openingBalanceType === "CREDIT"
+                                                            ? "bg-amber-100 text-amber-800"
+                                                            : "bg-emerald-100 text-emerald-800"
+                                                            }`}>
                                                             {party.openingBalanceType || "CREDIT"}
                                                         </span>
                                                     </div>
@@ -499,7 +499,7 @@ export default function Party() {
 
                         {/* Modal Body / Form */}
                         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1 bg-gray-50/30 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                            
+
                             {/* 1. Basic Information Section */}
                             <div className="bg-white border border-gray-150 rounded-xl p-5 shadow-xs space-y-4">
                                 <div className="flex items-center gap-2 mb-2 border-l-4 border-brand-600 pl-2">
@@ -519,9 +519,8 @@ export default function Party() {
                                                 type="text"
                                                 value={form.name}
                                                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                                className={`w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white ${
-                                                    errors.name ? "border-red-400 focus:ring-red-400" : "border-gray-200"
-                                                }`}
+                                                className={`w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white ${errors.name ? "border-red-400 focus:ring-red-400" : "border-gray-200"
+                                                    }`}
                                                 placeholder="Mahadev Traders"
                                             />
                                         </div>
@@ -531,24 +530,11 @@ export default function Party() {
                                     {/* State */}
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-500 mb-1">State</label>
-                                        <div className="relative">
-                                            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                                                <MapPin className="w-4 h-4" />
-                                            </span>
-                                            <select
-                                                value={form.state}
-                                                onChange={(e) => setForm({ ...form, state: e.target.value })}
-                                                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white appearance-none cursor-pointer"
-                                            >
-                                                <option value="">Select State</option>
-                                                {STATES.map((s) => (
-                                                    <option key={s} value={s}>{s}</option>
-                                                ))}
-                                            </select>
-                                            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                                            </div>
-                                        </div>
+                                        <SearchableStateSelect
+                                            value={form.state}
+                                            onChange={(val) => setForm({ ...form, state: val })}
+                                            height="h-[38px]"
+                                        />
                                     </div>
 
                                     {/* Mobile Number */}
@@ -563,9 +549,8 @@ export default function Party() {
                                                 maxLength={10}
                                                 value={form.phoneNumber}
                                                 onChange={(e) => setForm({ ...form, phoneNumber: e.target.value.replace(/\D/g, "") })}
-                                                className={`w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white ${
-                                                    errors.phoneNumber ? "border-red-400 focus:ring-red-400" : "border-gray-200"
-                                                }`}
+                                                className={`w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white ${errors.phoneNumber ? "border-red-400 focus:ring-red-400" : "border-gray-200"
+                                                    }`}
                                                 placeholder="9876543210"
                                             />
                                         </div>
@@ -583,9 +568,8 @@ export default function Party() {
                                                 type="email"
                                                 value={form.email}
                                                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                                                className={`w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white ${
-                                                    errors.email ? "border-red-400 focus:ring-red-400" : "border-gray-200"
-                                                }`}
+                                                className={`w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white ${errors.email ? "border-red-400 focus:ring-red-400" : "border-gray-200"
+                                                    }`}
                                                 placeholder="mahadevtraders@example.com"
                                             />
                                         </div>
@@ -637,13 +621,12 @@ export default function Party() {
                                                 disabled={!form.gstType.startsWith("Registered")}
                                                 value={form.gstType.startsWith("Registered") ? form.gstin : ""}
                                                 onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
-                                                className={`w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 ${
-                                                    !form.gstType.startsWith("Registered") 
-                                                        ? "bg-gray-50 text-gray-400 cursor-not-allowed border-gray-200" 
-                                                        : errors.gstin 
-                                                            ? "border-red-400 focus:ring-red-400 bg-white" 
-                                                            : "border-gray-200 bg-white"
-                                                }`}
+                                                className={`w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 ${!form.gstType.startsWith("Registered")
+                                                    ? "bg-gray-50 text-gray-400 cursor-not-allowed border-gray-200"
+                                                    : errors.gstin
+                                                        ? "border-red-400 focus:ring-red-400 bg-white"
+                                                        : "border-gray-200 bg-white"
+                                                    }`}
                                                 placeholder={form.gstType.startsWith("Registered") ? "22AAAAA0000A1Z5" : "Not Applicable"}
                                             />
                                         </div>
@@ -677,22 +660,20 @@ export default function Party() {
                                             <button
                                                 type="button"
                                                 onClick={() => setForm({ ...form, openingBalanceType: "CREDIT" })}
-                                                className={`flex-1 h-full rounded-md text-xs font-semibold transition-all ${
-                                                    form.openingBalanceType === "CREDIT"
-                                                        ? "bg-brand-600 text-white shadow-sm"
-                                                        : "text-gray-500 hover:text-gray-750 hover:bg-white/50"
-                                                }`}
+                                                className={`flex-1 h-full rounded-md text-xs font-semibold transition-all ${form.openingBalanceType === "CREDIT"
+                                                    ? "bg-brand-600 text-white shadow-sm"
+                                                    : "text-gray-500 hover:text-gray-750 hover:bg-white/50"
+                                                    }`}
                                             >
                                                 CREDIT (Payable)
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setForm({ ...form, openingBalanceType: "DEBIT" })}
-                                                className={`flex-1 h-full rounded-md text-xs font-semibold transition-all ${
-                                                    form.openingBalanceType === "DEBIT"
-                                                        ? "bg-brand-600 text-white shadow-sm"
-                                                        : "text-gray-500 hover:text-gray-750 hover:bg-white/50"
-                                                }`}
+                                                className={`flex-1 h-full rounded-md text-xs font-semibold transition-all ${form.openingBalanceType === "DEBIT"
+                                                    ? "bg-brand-600 text-white shadow-sm"
+                                                    : "text-gray-500 hover:text-gray-750 hover:bg-white/50"
+                                                    }`}
                                             >
                                                 DEBIT (Receivable)
                                             </button>

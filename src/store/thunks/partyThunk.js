@@ -25,8 +25,12 @@ export const addParty = createAsyncThunk(
             const res = await api.post('/party/addParty', payload);
             return res.data?.data || res.data?.party || res.data;
         } catch (err) {
+            console.error("[addParty Thunk Error] Full Response Data:", err.response?.data);
             return rejectWithValue(
-                err.response?.data?.message || 'Failed to create party'
+                err.response?.data?.message || 
+                err.response?.data?.error || 
+                err.response?.data?.message?.[0] || // in case of arrays
+                'Failed to create party'
             );
         }
     }

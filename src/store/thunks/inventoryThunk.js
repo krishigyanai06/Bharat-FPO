@@ -66,25 +66,38 @@ export const addProduct = createAsyncThunk(
   }
 );
 
-// PUT /product/updateProduct/:id
+// PATCH /product/updateProduct/:id
 export const updateProduct = createAsyncThunk(
   'inventory/updateProduct',
   async ({ id, data }, { rejectWithValue }) => {
     try {
-      const res = await api.put(`/product/updateProduct/${id}`, data);
+      const res = await api.patch(`/product/updateProduct/${id}`, data);
       return res.data.data ?? res.data;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to update product');
+      console.error('[updateProduct] Full response error:', err.response?.data);
+      const detailMsg = err.response?.data?.message || 'Failed to update product';
+      const validationErrors = err.response?.data?.errors;
+      let errorStr = detailMsg;
+      if (validationErrors && typeof validationErrors === 'object') {
+        const errorList = Object.entries(validationErrors).map(([key, val]) => {
+          const errMsg = typeof val === 'object' ? (val.message || JSON.stringify(val)) : String(val);
+          return `${key}: ${errMsg}`;
+        });
+        if (errorList.length > 0) {
+          errorStr = `${detailMsg} (${errorList.join(', ')})`;
+        }
+      }
+      return rejectWithValue(errorStr);
     }
   }
 );
 
-// PUT /product/updateProduct/:id — toggle active status
+// PATCH /product/toggleProductStatus/:id — toggle active status
 export const toggleProductStatus = createAsyncThunk(
   'inventory/toggleProductStatus',
   async ({ id, isActive }, { rejectWithValue }) => {
     try {
-      await api.put(`/product/updateProduct/${id}`, { isActive });
+      await api.patch(`/product/toggleProductStatus/${id}`, { isActive });
       return { id, isActive };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to update status');

@@ -32,6 +32,7 @@ const TYPES = [
   { value: "PROCUREMENT_PAYMENT", label: "Procurement Payment" },
   { value: "SALE", label: "Sale" },
   { value: "PAYMENT", label: "Payment" },
+  { value: "PAYMENT_IN_AUTO", label: "Auto Payment" },
   { value: "REFUND", label: "Refund" },
   { value: "ADJUSTMENT", label: "Adjustment" },
 ];
@@ -41,6 +42,7 @@ const TYPE_COLORS = {
   PROCUREMENT_PAYMENT: "bg-purple-100 text-purple-700",
   SALE: "bg-brand-100 text-brand-700",
   PAYMENT: "bg-teal-100 text-teal-700",
+  PAYMENT_IN_AUTO: "bg-teal-100 text-teal-700",
   REFUND: "bg-orange-100 text-orange-700",
   ADJUSTMENT: "bg-yellow-100 text-yellow-700",
 };
@@ -316,7 +318,8 @@ export default function Ledger() {
     if (
       e.type === "DEBIT" &&
       (e.referenceType === "PROCUREMENT_PAYMENT" ||
-        e.referenceType === "PAYMENT")
+        e.referenceType === "PAYMENT" ||
+        e.referenceType === "PAYMENT_IN_AUTO")
     )
       return s - Number(e.amount || 0);
     return s;
@@ -325,7 +328,10 @@ export default function Ledger() {
   const pendingFromFarmer = filtered.reduce((s, e) => {
     if (e.type === "DEBIT" && e.referenceType === "SALE")
       return s + Number(e.amount || 0);
-    if (e.type === "CREDIT" && e.referenceType === "PAYMENT")
+    if (
+      e.type === "CREDIT" &&
+      (e.referenceType === "PAYMENT" || e.referenceType === "PAYMENT_IN_AUTO")
+    )
       return s - Number(e.amount || 0);
     return s;
   }, 0);
@@ -335,7 +341,8 @@ export default function Ledger() {
       s +
       (e.type === "DEBIT" &&
       (e.referenceType === "PROCUREMENT_PAYMENT" ||
-        e.referenceType === "PAYMENT")
+        e.referenceType === "PAYMENT" ||
+        e.referenceType === "PAYMENT_IN_AUTO")
         ? Number(e.amount || 0)
         : 0),
     0,
@@ -344,7 +351,8 @@ export default function Ledger() {
   const totalReceivedIn = filtered.reduce(
     (s, e) =>
       s +
-      (e.type === "CREDIT" && e.referenceType === "PAYMENT"
+      (e.type === "CREDIT" &&
+      (e.referenceType === "PAYMENT" || e.referenceType === "PAYMENT_IN_AUTO")
         ? Number(e.amount || 0)
         : 0),
     0,
@@ -411,11 +419,17 @@ export default function Ledger() {
           (e) =>
             e.type === "DEBIT" &&
             (e.referenceType === "PROCUREMENT_PAYMENT" ||
-              e.referenceType === "PAYMENT"),
+              e.referenceType === "PAYMENT" ||
+              e.referenceType === "PAYMENT_IN_AUTO"),
         )
         .reduce((s, e) => s + Number(e.amount || 0), 0);
       const collected = r.txns
-        .filter((e) => e.type === "CREDIT" && e.referenceType === "PAYMENT")
+        .filter(
+          (e) =>
+            e.type === "CREDIT" &&
+            (e.referenceType === "PAYMENT" ||
+              e.referenceType === "PAYMENT_IN_AUTO"),
+        )
         .reduce((s, e) => s + Number(e.amount || 0), 0);
       return {
         ...r,
@@ -1324,7 +1338,7 @@ export default function Ledger() {
                                           amt: "#16a34a",
                                           sign: "+",
                                         };
-                                      if (type === "DEBIT" && ref === "PAYMENT")
+                                      if (type === "DEBIT" && (ref === "PAYMENT" || ref === "PAYMENT_IN_AUTO"))
                                         return {
                                           iconBg: "#e8f5e9",
                                           iconColor: "#16a34a",
@@ -1333,7 +1347,7 @@ export default function Ledger() {
                                         };
                                       if (
                                         type === "CREDIT" &&
-                                        ref === "PAYMENT"
+                                        (ref === "PAYMENT" || ref === "PAYMENT_IN_AUTO")
                                       )
                                         return {
                                           iconBg: "#fef2f2",
