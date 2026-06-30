@@ -35,6 +35,32 @@ const sellSlice = createSlice({
       state.error = null;
       state.success = false;
     },
+    updateSaleEInvoice: (state, action) => {
+      const { id, irn, ackNo, ackDt, signedInvoice, signedQrCode } = action.payload;
+      const idx = state.sales.findIndex((s) => s._id === id);
+      if (idx !== -1) {
+        state.sales[idx] = {
+          ...state.sales[idx],
+          eInvoiceIrn: irn,
+          eInvoiceAckNo: ackNo,
+          eInvoiceAckDt: ackDt,
+          irn: irn,
+          ackNo: ackNo,
+          ackDt: ackDt,
+          eInvoiceStatus: "SUCCESS",
+          signedInvoice: signedInvoice,
+          signedQrCode: signedQrCode,
+          eInvoiceQrCode: signedQrCode,
+          eInvoiceInfo: {
+            irn,
+            ackNo,
+            ackDt,
+            signed_invoice: signedInvoice,
+            signed_qr_code: signedQrCode,
+          }
+        };
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -268,5 +294,5 @@ const sellSlice = createSlice({
   },
 });
 
-export const { clearSellStatus } = sellSlice.actions;
+export const { clearSellStatus, updateSaleEInvoice } = sellSlice.actions;
 export default sellSlice.reducer;

@@ -19,6 +19,7 @@ import orderReducer from './slices/orderSlice';
 import featuresReducer from './slices/featuresSlice';
 import partyReducer from './slices/partySlice';
 import sellReducer from './slices/sellSlice';
+import eInvoiceReducer from './slices/eInvoiceSlice';
 
 export const store = configureStore({
   reducer: {
@@ -42,5 +43,6 @@ export const store = configureStore({
     features: featuresReducer,
     party: partyReducer,
     sell: sellReducer,
+    eInvoice: eInvoiceReducer,
   },
 });

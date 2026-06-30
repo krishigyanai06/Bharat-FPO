@@ -41,7 +41,7 @@ export const updateParty = createAsyncThunk(
     'party/updateParty',
     async ({ id, data }, { rejectWithValue }) => {
         try {
-            const res = await api.put(`/party/updateParty/${id}`, data);
+            const res = await api.patch(`/party/updateParty/${id}`, data);
             return res.data?.data || res.data?.party || res.data;
         } catch (err) {
             return rejectWithValue(

@@ -21,7 +21,11 @@ import { fetchParties } from "../store/thunks/partyThunk";
 import { fetchProducts, fetchStockSummary } from "../store/thunks/inventoryThunk";
 import { clearSellStatus } from "../store/slices/sellSlice";
 import { usePermissions } from "../hooks/usePermissions";
-import api from "../lib/api";
+import api, { isEInvoiceSessionValid, addAuditLog } from "../lib/api";
+import { generateEInvoice, generateEInvoicePdf } from "../store/thunks/eInvoiceThunk";
+import { clearEInvoiceStatus } from "../store/slices/eInvoiceSlice";
+import EInvoiceWidget from "../components/EInvoiceWidget";
+import QuickEInvoiceModal from "../components/QuickEInvoiceModal";
 import {
   Receipt,
   Plus,
@@ -49,7 +53,7 @@ import {
 } from "lucide-react";
 
 const TABS = [
-  { key: "sales", label: "Sales Invoices", icon: FileText },
+  { key: "sales", label: "Sales Bills", icon: FileText },
   { key: "payments", label: "Payments In", icon: IndianRupee },
   { key: "returns", label: "Sales Returns", icon: RefreshCw },
 ];
@@ -154,6 +158,8 @@ export default function CounterSales() {
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [editReturnRecord, setEditReturnRecord] = useState(null);
   const [viewDetailModalOpen, setViewDetailModalOpen] = useState(false);
+  const [quickEInvoiceItem, setQuickEInvoiceItem] = useState(null);
+  const [quickEInvoiceMode, setQuickEInvoiceMode] = useState("generate"); // "generate" | "details"
   
   // Local list filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -263,13 +269,13 @@ export default function CounterSales() {
 
   // Delete transaction handlers
   const handleDeleteSale = async (id) => {
-    if (window.confirm("Are you sure you want to delete this invoice? This will revert inventory stock and ledger updates!")) {
+    if (window.confirm("Are you sure you want to delete this sales bill? This will revert inventory stock and ledger updates!")) {
       try {
         await dispatch(deleteSale(id)).unwrap();
-        toast.success("Invoice deleted successfully");
+        toast.success("Sales Bill deleted successfully");
         loadListData();
       } catch (err) {
-        toast.error(err || "Failed to delete invoice");
+        toast.error(err || "Failed to delete sales bill");
       }
     }
   };
@@ -323,7 +329,7 @@ export default function CounterSales() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-950">Counter Sales (Direct Sell)</h1>
-          <p className="text-sm text-gray-500">Manage walk-in cash checkouts, credit sales, customer invoices, and returns</p>
+          <p className="text-sm text-gray-500">Manage walk-in cash checkouts, credit sales, customer sales bills, and returns</p>
         </div>
         
         <div className="flex gap-2 flex-wrap">
@@ -335,7 +341,7 @@ export default function CounterSales() {
                   className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold transition shadow-sm active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
-                  New Invoice
+                  New Sales Bill
                 </button>
               )}
               {activeTab === "payments" && (
@@ -457,40 +463,56 @@ export default function CounterSales() {
             {activeTab === "sales" && (
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100 text-xs text-gray-600 uppercase font-semibold">
-                  <tr>
-                    <th className="px-6 py-4">Invoice #</th>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Buyer/Party</th>
-                    <th className="px-6 py-4">Payment</th>
-                    <th className="px-6 py-4">Type</th>
-                    <th className="px-6 py-4 text-right">Total Amount</th>
-                    <th className="px-6 py-4 text-right">Received Amount</th>
-                    <th className="px-6 py-4 text-right">Unpaid Amount</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                  <tr className="text-[10px] tracking-wider text-gray-500">
+                    <th className="px-3 py-3 font-bold">SALES BILL #</th>
+                    <th className="px-3 py-3 text-center font-bold">DATE</th>
+                    <th className="px-3 py-3 font-bold">BUYER/PARTY</th>
+                    <th className="px-3 py-3 font-bold">PAYMENT</th>
+                    <th className="px-3 py-3 font-bold">TYPE</th>
+                    <th className="px-3 py-3 text-right font-bold">TOTAL AMOUNT</th>
+                    <th className="px-3 py-3 text-right font-bold">RECEIVED AMOUNT</th>
+                    <th className="px-3 py-3 text-right font-bold">UNPAID AMOUNT</th>
+                    <th className="px-3 py-3 text-center font-bold">E-INVOICE</th>
+                    <th className="px-3 py-3 text-right font-bold">ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {sales.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-6 py-16 text-center text-gray-400">
+                      <td colSpan={10} className="px-6 py-16 text-center text-gray-400">
                         <Receipt className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                        <p className="font-medium">No sales invoices found</p>
+                        <p className="font-medium">No sales bills found</p>
                       </td>
                     </tr>
                   ) : (
                     sales.map((sale) => (
                       <tr key={sale._id} className="hover:bg-gray-50 transition">
-                        <td className="px-6 py-4 font-bold text-gray-900">{sale.invoiceNo || sale._id.substring(0, 8).toUpperCase()}</td>
-                        <td className="px-6 py-4 text-gray-500">{formatDate(sale.createdAt)}</td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 py-2.5 font-bold text-gray-900 text-xs">{sale.invoiceNo || sale._id.substring(0, 8).toUpperCase()}</td>
+                        <td className="px-3 py-2.5 text-gray-500">
+                          {(() => {
+                            const dateVal = new Date(sale.createdAt);
+                            if (isNaN(dateVal.getTime())) return "—";
+                            const day = dateVal.getDate();
+                            const month = dateVal.toLocaleDateString("en-IN", { month: "short" });
+                            const year = dateVal.getFullYear();
+                            return (
+                              <div className="flex flex-col items-center justify-center text-center font-medium leading-tight text-[11px] font-sans text-gray-500">
+                                <span className="text-gray-700 font-bold">{day}</span>
+                                <span className="text-[10px] text-gray-400 font-semibold">{month}</span>
+                                <span className="text-[9px] text-gray-400">{year}</span>
+                              </div>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-3 py-2.5">
                           <div>
-                            <p className="font-bold text-gray-800">{sale.party?.name || sale.buyerName || "Walk-in Customer"}</p>
+                            <p className="font-bold text-gray-800 text-xs">{sale.party?.name || sale.buyerName || "Walk-in Customer"}</p>
                             {(sale.buyerPhone || sale.party?.phoneNumber) && (
-                              <p className="text-xs text-gray-400 mt-0.5">{sale.buyerPhone || sale.party?.phoneNumber}</p>
+                              <span className="text-[10px] text-gray-400 mt-0.5 block font-semibold">{sale.buyerPhone || sale.party?.phoneNumber}</span>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 py-2.5">
                           <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                             sale.billingType === "Credit"
                               ? "bg-amber-50 text-amber-700 border border-amber-100"
@@ -499,20 +521,78 @@ export default function CounterSales() {
                             {sale.billingType === "Cash" ? "Money Received" : "Udhar (Credit)"}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                            sale.saleType === "SALE"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-blue-100 text-blue-800"
-                          }`}>
+                        <td className="px-3 py-2.5">
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-gray-100 text-gray-655 text-[10px] font-extrabold uppercase tracking-wider border border-gray-200">
                             {sale.saleType}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-right font-extrabold text-gray-950">₹{(sale.totalAmount || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-6 py-4 text-right text-green-700 font-semibold">₹{(sale.receivedAmount || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-6 py-4 text-right text-red-650 font-semibold">₹{(sale.unpaidAmount || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
+                        <td className="px-3 py-2.5 text-right font-extrabold text-gray-950 text-xs">₹{(sale.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-2.5 text-right text-green-700 font-semibold text-xs">₹{(sale.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                        <td className={`px-3 py-2.5 text-right font-semibold text-xs ${sale.unpaidAmount > 0 ? "text-red-650" : "text-gray-900"}`}>
+                          ₹{(sale.unpaidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          {(() => {
+                            const partyId = typeof sale.party === "string" ? sale.party : sale.party?._id;
+                            const resolved = parties.find(p => p._id === partyId);
+                            const isB2B = sale.saleType === "SALE" && resolved && (resolved.gstin || resolved.gstNumber || resolved.gstType?.startsWith("Registered"));
+                            
+                            console.log("SALE:", sale);
+                            console.log("E-INVOICE:", sale.eInvoice);
+                            
+                            if (!isB2B) {
+                              return (
+                                <span className="text-gray-400 font-medium text-[11px] select-none">
+                                  —
+                                </span>
+                              );
+                            }
+
+                            const irnVal = sale.eInvoiceIrn || sale.irn || sale.eInvoiceInfo?.irn;
+                            if (irnVal) {
+                              return (
+                                <button
+                                  onClick={() => {
+                                    setQuickEInvoiceItem(sale);
+                                    setQuickEInvoiceMode("details");
+                                  }}
+                                  className="border border-emerald-250 bg-emerald-50/20 hover:bg-emerald-50 text-emerald-800 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
+                                >
+                                  <CheckCircle size={12} className="text-emerald-600" /> Generated
+                                </button>
+                              );
+                            }
+
+                            const isFailed = sale.eInvoiceStatus === "FAILED" || sale.eInvoiceStatus === "Failed" || sale.eInvoiceError || (sale.eInvoiceInfo && (sale.eInvoiceInfo.status === "FAILED" || sale.eInvoiceInfo.error));
+                            if (isFailed) {
+                              return (
+                                <button
+                                  onClick={() => {
+                                    setQuickEInvoiceItem(sale);
+                                    setQuickEInvoiceMode("generate");
+                                  }}
+                                  className="border border-rose-200 bg-rose-50/30 hover:bg-rose-50 text-rose-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer animate-pulse text-xs"
+                                >
+                                  <AlertTriangle size={12} className="text-rose-500" /> Failed
+                                </button>
+                              );
+                            }
+
+                            return (
+                              <button
+                                onClick={() => {
+                                  setQuickEInvoiceItem(sale);
+                                  setQuickEInvoiceMode("generate");
+                                }}
+                                className="border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer font-sans text-xs"
+                              >
+                                <FileText size={12} className="text-gray-400" /> Generate
+                              </button>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="flex justify-end gap-1">
                             <button
                               onClick={() => handleViewDetails(sale, "sale")}
                               className="p-2 text-gray-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition"
@@ -523,7 +603,7 @@ export default function CounterSales() {
                             <button
                               onClick={() => handleDownloadReceipt(sale._id, sale.invoiceNo || "Receipt")}
                               className="p-2 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
-                              title="Download Invoice PDF"
+                              title="Download Sales Bill PDF"
                             >
                               <Download className="w-4 h-4" />
                             </button>
@@ -543,7 +623,7 @@ export default function CounterSales() {
                               <button
                                 onClick={() => navigate(`/sell/invoice/edit/${sale._id}`)}
                                 className="p-2 text-gray-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition"
-                                title="Edit Invoice/Estimate"
+                                title="Edit Sales Bill/Estimate"
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
@@ -561,7 +641,7 @@ export default function CounterSales() {
                               <button
                                 onClick={() => handleDeleteSale(sale._id)}
                                 className="p-2 text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
-                                title="Delete Invoice"
+                                title="Delete Sales Bill"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -582,7 +662,7 @@ export default function CounterSales() {
                     <th className="px-6 py-4">Receipt #</th>
                     <th className="px-6 py-4">Date</th>
                     <th className="px-6 py-4">Party/Customer</th>
-                    <th className="px-6 py-4">Linked Invoice</th>
+                    <th className="px-6 py-4">Linked Sales Bill</th>
                     <th className="px-6 py-4">Payment Breakdown</th>
                     <th className="px-6 py-4 text-right">Received Amount</th>
                     <th className="px-6 py-4 text-right">Actions</th>
@@ -677,7 +757,7 @@ export default function CounterSales() {
                     <th className="px-6 py-4">Credit Note #</th>
                     <th className="px-6 py-4">Date</th>
                     <th className="px-6 py-4">Party/Customer</th>
-                    <th className="px-6 py-4">Linked Invoice</th>
+                    <th className="px-6 py-4">Linked Sales Bill</th>
                     <th className="px-6 py-4 text-right">Credit Value</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
@@ -696,7 +776,7 @@ export default function CounterSales() {
                         <td className="px-6 py-4 font-bold text-gray-900">{r.returnNo || r._id.substring(0, 8).toUpperCase()}</td>
                         <td className="px-6 py-4 text-gray-500">{formatDate(r.createdAt)}</td>
                         <td className="px-6 py-4 font-semibold text-gray-800">{r.party?.name || r.sale?.buyerName || "Walk-in"}</td>
-                        <td className="px-6 py-4 text-gray-500 font-mono">{r.sale?.invoiceNo || "Invoice ID"}</td>
+                        <td className="px-6 py-4 text-gray-500 font-mono">{r.sale?.invoiceNo || "Sales Bill ID"}</td>
                         <td className="px-6 py-4 text-right font-extrabold text-red-650">₹{(r.totalAmount || 0).toLocaleString("en-IN")}</td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
@@ -805,6 +885,33 @@ export default function CounterSales() {
           }}
         />
       )}
+
+      {/* ════════════════════════════════════════════════════════════
+         3.5 QUICK E-INVOICE GENERATION / DETAILS MODAL
+      ════════════════════════════════════════════════════════════ */}
+      {quickEInvoiceItem && (
+        <QuickEInvoiceModal
+          mode={quickEInvoiceMode}
+          item={quickEInvoiceItem}
+          resolvedParty={(() => {
+            const partyId = typeof quickEInvoiceItem.party === "string" ? quickEInvoiceItem.party : quickEInvoiceItem.party?._id;
+            return parties.find(p => p._id === partyId) || (typeof quickEInvoiceItem.party === "object" ? quickEInvoiceItem.party : null);
+          })()}
+          onClose={() => {
+            setQuickEInvoiceItem(null);
+          }}
+          onSuccess={() => {
+            setQuickEInvoiceItem(null);
+            loadListData();
+          }}
+          onViewSaleDetails={() => {
+            const targetItem = quickEInvoiceItem;
+            setQuickEInvoiceItem(null);
+            handleViewDetails(targetItem, "sale");
+          }}
+        />
+      )}
+
       {/* ════════════════════════════════════════════════════════════
          4. DETAILS VIEWING MODAL
       ════════════════════════════════════════════════════════════ */}
@@ -813,6 +920,7 @@ export default function CounterSales() {
           item={detailItem}
           type={detailType}
           onClose={() => {
+            dispatch(clearEInvoiceStatus());
             setViewDetailModalOpen(false);
             setDetailItem(null);
           }}
@@ -1035,7 +1143,7 @@ function RecordPaymentModal({ editRecord = null, linkedSell = null, parties, onC
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-gray-900 mb-2">2. Link Sales Invoice (Optional)</label>
+            <label className="block text-xs font-bold text-gray-900 mb-2">2. Link Sales Bill (Optional)</label>
             <div className="relative">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
                 <FileText className="w-4 h-4" />
@@ -1055,17 +1163,17 @@ function RecordPaymentModal({ editRecord = null, linkedSell = null, parties, onC
                 className="w-full border border-gray-200 rounded-xl pl-10 pr-10 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed font-semibold text-gray-700 h-[42px] appearance-none transition-all"
               >
                 {loadingInvoices ? (
-                  <option value="">-- Loading customer invoices... --</option>
+                  <option value="">-- Loading customer sales bills... --</option>
                 ) : !partyId ? (
                   <option value="">-- Choose Customer First --</option>
                 ) : unpaidInvoices.length === 0 ? (
-                  <option value="">-- No outstanding invoices found --</option>
+                  <option value="">-- No outstanding sales bills found --</option>
                 ) : (
                   <>
-                    <option value="">-- Select Bill invoice --</option>
+                    <option value="">-- Select Sales Bill --</option>
                     {unpaidInvoices.map((s) => (
                       <option key={s._id} value={s._id}>
-                        Invoice {s.invoiceNo || s._id.substring(0, 8).toUpperCase()} (Date: {new Date(s.createdAt).toLocaleDateString("en-IN")} - Outstanding: ₹{s.unpaidAmount})
+                        Bill {s.invoiceNo || s._id.substring(0, 8).toUpperCase()} (Date: {new Date(s.createdAt).toLocaleDateString("en-IN")} - Outstanding: ₹{s.unpaidAmount})
                       </option>
                     ))}
                   </>
@@ -1086,13 +1194,13 @@ function RecordPaymentModal({ editRecord = null, linkedSell = null, parties, onC
                 </div>
                 <div className="flex-1 space-y-1.5">
                   <h4 className="font-bold text-emerald-800 text-[13px] leading-tight">Customer account is fully settled.</h4>
-                  <p className="text-gray-550 font-semibold">No unpaid invoices found.</p>
+                  <p className="text-gray-550 font-semibold">No unpaid sales bills found.</p>
                   
                   <div className="border-t border-emerald-200/40 my-3"></div>
                   
                   <div className="flex items-start gap-2 text-slate-600 font-medium text-[11px] leading-relaxed">
                     <Info className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                    <span>Any amount received now will be recorded as an Advance Payment and adjusted against future invoices.</span>
+                    <span>Any amount received now will be recorded as an Advance Payment and adjusted against future sales bills.</span>
                   </div>
                 </div>
               </div>
@@ -1453,16 +1561,16 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
         {/* Modal Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 bg-gray-50/20">
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Select Original Sale Invoice *</label>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Select Original Sales Bill *</label>
             <select
               value={selectedSaleId}
               onChange={(e) => setSelectedSaleId(e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white cursor-pointer"
             >
-              <option value="">-- Select Invoice --</option>
+              <option value="">-- Select Sales Bill --</option>
               {dropdownSales.map((s) => (
                 <option key={s._id} value={s._id}>
-                  Invoice {s.invoiceNo || s._id.substring(0,8).toUpperCase()} - {s.party?.name || s.buyerName} (₹{s.totalAmount})
+                  Sales Bill {s.invoiceNo || s._id.substring(0,8).toUpperCase()} - {s.party?.name || s.buyerName} (₹{s.totalAmount})
                 </option>
               ))}
             </select>
@@ -1547,7 +1655,10 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
 // COMPONENT: Transaction Details Modal
 // ─────────────────────────────────────────────────────────────
 function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownloadPaymentReceipt }) {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { products, stockSummary } = useSelector((state) => state.inventory);
+
 
   return (
     <div className="fixed inset-0 bg-black/45 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
@@ -1601,14 +1712,14 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
           )}
           {type === "return" && (
             <div>
-              <p className="text-gray-400 font-semibold uppercase tracking-wider">Linked Invoice #</p>
-              <p className="font-bold text-gray-800 mt-0.5 font-mono">{item.sale?.invoiceNo || "Invoice ID"}</p>
+              <p className="text-gray-400 font-semibold uppercase tracking-wider">Linked Sales Bill #</p>
+              <p className="font-bold text-gray-800 mt-0.5 font-mono">{item.sale?.invoiceNo || "Sales Bill ID"}</p>
             </div>
           )}
           {type === "payment" && (
             <>
               <div>
-                <p className="text-gray-400 font-semibold uppercase tracking-wider">Linked Invoice</p>
+                <p className="text-gray-400 font-semibold uppercase tracking-wider">Linked Sales Bill</p>
                 <p className="font-bold text-gray-800 mt-0.5 font-mono">
                   {item.linkedSell?.invoiceNo || item.sell?.invoiceNo || "None (General)"}
                 </p>
@@ -1671,35 +1782,8 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
             </div>
           </div>
         )}
-
-        {/* Payments breakdown arrays */}
-        {type === "payment" && item.payments?.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Payment Breakdown</h4>
-            <div className="border border-gray-150 rounded-xl overflow-hidden shadow-xs bg-white p-3 divide-y divide-gray-100">
-              {item.payments.map((py, idx) => (
-                <div key={idx} className="flex justify-between py-2 text-xs">
-                  <div>
-                    <span className="font-bold text-gray-800 uppercase">{py.paymentType}</span>
-                    {py.referenceNo && <span className="text-[10px] text-gray-400 ml-2 font-mono">(Ref: {py.referenceNo})</span>}
-                  </div>
-                  <span className="font-extrabold text-green-700">₹{py.amount.toLocaleString("en-IN")}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Description / remarks */}
-        {(item.remarks || item.description) && (
-          <div className="text-xs">
-            <span className="font-semibold text-gray-400 block uppercase tracking-wider mb-1">Remarks/Notes</span>
-            <p className="bg-gray-50 border border-gray-100 rounded-lg p-3 font-medium text-gray-700 italic">
-              {item.remarks || item.description}
-            </p>
-          </div>
-        )}
-
+        {/* E-Invoice Actions Section */}
+        <EInvoiceWidget item={item} type={type} mode="modal" />
         {/* Invoice Grand Totals block */}
         <div className="flex justify-between items-center border-t border-gray-100 pt-3 flex-wrap gap-2">
           {type === "sale" && (
