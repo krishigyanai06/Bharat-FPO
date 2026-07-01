@@ -1819,7 +1819,9 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
     const temp = {};
     if (!form.name.trim()) temp.name = "Party Name is required";
 
-    if (form.phoneNumber && !/^\d{10}$/.test(form.phoneNumber)) {
+    if (!form.phoneNumber) {
+      temp.phoneNumber = "Phone number is required";
+    } else if (!/^\d{10}$/.test(form.phoneNumber)) {
       temp.phoneNumber = "Phone number must be exactly 10 digits";
     }
 
@@ -1938,7 +1940,198 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
         </div>
 
         {/* Modal Body / Form */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1 bg-gray-50/30 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1 bg-gray-55/30 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+
+          {/* DYNAMIC FLOW */}
+          {form.gstType.startsWith("Registered") ? (
+            <>
+              {/* SECTION 1: GST Registration Verification */}
+              <div className="bg-white border border-gray-150 rounded-xl p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-l-4 border-emerald-600 pl-2">
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-sm">🛡 GST Registration</h3>
+                    <p className="text-[11px] text-gray-500">Verify and fetch business details from Government GST Portal</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  {/* GST Type */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">GST Type</label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                        <FileSpreadsheet className="w-4 h-4" />
+                      </span>
+                      <select
+                        value={form.gstType}
+                        onChange={(e) => setForm({ ...form, gstType: e.target.value })}
+                        className="w-full pl-10 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white appearance-none cursor-pointer h-[38px] font-bold text-gray-800"
+                      >
+                        {GST_TYPES.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* GSTIN input & Verify Button */}
+                  <div className="col-span-1 md:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">
+                      GSTIN <span className="text-red-505">*</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                          <FileText className="w-4 h-4" />
+                        </span>
+                        <input
+                          type="text"
+                          maxLength={15}
+                          value={form.gstin}
+                          onChange={(e) => {
+                            setForm({ ...form, gstin: e.target.value.toUpperCase() });
+                            if (verifiedGstinDetails) setVerifiedGstinDetails(null);
+                            if (gstinError) setGstinError(null);
+                            if (hasAttemptedGstin) setHasAttemptedGstin(false);
+                          }}
+                          className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${
+                            errors.gstin ? "border-red-400 focus:ring-red-400" : "border-gray-200"
+                          }`}
+                          placeholder="22AAAAA0000A1Z5"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        disabled={gstinLoading || form.gstin.length !== 15}
+                        onClick={handleVerifyGstin}
+                        className={`px-3.5 py-2 disabled:opacity-50 text-xs font-bold rounded-lg border transition shrink-0 flex items-center gap-1.5 h-[38px] ${
+                          verifiedGstinDetails
+                            ? "bg-emerald-50 border-emerald-250 text-emerald-700 hover:bg-emerald-100"
+                            : "bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100"
+                        }`}
+                      >
+                        {gstinLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {gstinLoading ? "Fetching..." : verifiedGstinDetails ? "Re-Verify" : "Verify GSTIN"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {errors.gstin && (
+                  <p className="text-[11px] text-red-500 mt-1">{errors.gstin}</p>
+                )}
+
+                {/* SKELETON LOADING CARD */}
+                {gstinLoading && (
+                  <div className="bg-gray-55/40 border border-gray-150 rounded-xl p-5 space-y-4 animate-pulse shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                      <div className="h-3.5 bg-gray-200 rounded-md w-40"></div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-4 bg-gray-200 rounded-md w-3/4"></div>
+                      <div className="h-3 bg-gray-150 rounded-md w-1/2"></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* SUCCESS VERIFICATION CARD */}
+                {verifiedGstinDetails && !gstinLoading && (
+                  <div className="bg-emerald-50/20 border border-emerald-200 rounded-xl p-5 space-y-4 text-xs animate-in fade-in duration-200 shadow-xs">
+                    <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-850 font-bold text-[9px]">✓</span>
+                        <span className="font-bold text-emerald-900 text-xs">🛡 GST Registration Verified</span>
+                      </div>
+                      <span className="text-[10px] text-emerald-600 font-medium">Verified just now</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="font-extrabold text-sm text-gray-900 leading-tight">{verifiedGstinDetails.tradeName}</h4>
+                      {verifiedGstinDetails.legalName && verifiedGstinDetails.legalName !== verifiedGstinDetails.tradeName && (
+                        <p className="text-gray-500 font-medium text-[11px]">({verifiedGstinDetails.legalName})</p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="px-2 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-805 text-[9px] font-bold uppercase tracking-wider">
+                        {verifiedGstinDetails.gstStatus}
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-855 text-[9px] font-bold uppercase tracking-wider">
+                        {verifiedGstinDetails.taxpayerType}
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-805 text-[9px] font-bold uppercase tracking-wider">
+                        {verifiedGstinDetails.einvoiceStatus?.toLowerCase()?.includes("elig") || 
+                         verifiedGstinDetails.einvoiceStatus?.toLowerCase()?.includes("enab") || 
+                         verifiedGstinDetails.einvoiceStatus?.toLowerCase() === "yes" || 
+                         verifiedGstinDetails.einvoiceStatus?.toLowerCase() === "y"
+                          ? "E-Invoice Enabled" 
+                          : "E-Invoice Disabled"}
+                      </span>
+                    </div>
+
+                    <div className="bg-white/60 p-3 rounded-lg border border-emerald-100/50 space-y-2">
+                      <div>
+                        <span className="text-gray-400 font-semibold block text-[10px] uppercase tracking-wider">GSTIN</span>
+                        <span className="font-bold text-gray-800 text-[11px]">{verifiedGstinDetails.gstin}</span>
+                      </div>
+                      
+                      <div className="pt-2 border-t border-gray-150 flex items-start gap-2">
+                        <span className="text-emerald-700 text-xs shrink-0 mt-0.5">📍</span>
+                        <div>
+                          <span className="text-gray-400 font-bold block text-[10px] uppercase tracking-wider">Registered Address</span>
+                          <p className="text-gray-750 leading-relaxed text-[11px] mt-0.5">{verifiedGstinDetails.billingAddress}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-emerald-100/50 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowMoreDetails(!showMoreDetails)}
+                        className="text-emerald-700 hover:text-emerald-800 text-[11px] font-bold flex items-center gap-1 focus:outline-none mt-1 bg-transparent border-0 cursor-pointer text-left"
+                      >
+                        {showMoreDetails ? "▲ Hide Details" : "▼ Show More Details"}
+                      </button>
+                      
+                      {showMoreDetails && (
+                        <div className="grid grid-cols-2 gap-3 pt-2 text-[11px] leading-relaxed border-t border-emerald-100/30 animate-in fade-in slide-in-from-top-1 duration-200">
+                          <div>
+                            <span className="text-gray-450 font-semibold uppercase tracking-wider block text-[9px]">Registration Date</span>
+                            <p className="font-bold text-gray-850">{verifiedGstinDetails.registrationDate || "—"}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-455 font-semibold uppercase tracking-wider block text-[9px]">Constitution</span>
+                            <p className="font-bold text-gray-850">{verifiedGstinDetails.constitution || "—"}</p>
+                          </div>
+                          {verifiedGstinDetails.legalName && verifiedGstinDetails.legalName !== verifiedGstinDetails.tradeName && (
+                            <div className="col-span-2">
+                              <span className="text-gray-450 font-semibold uppercase tracking-wider block text-[9px]">Legal Name</span>
+                              <p className="font-bold text-gray-850">{verifiedGstinDetails.legalName}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ERROR CARD */}
+                {gstinError && !gstinLoading && (
+                  <div className="bg-rose-50/30 border border-rose-150 rounded-xl p-4 text-xs text-rose-955 animate-in fade-in duration-200 shadow-xs flex items-start gap-3">
+                    <span className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-100 text-rose-700 font-bold shrink-0">✕</span>
+                    <div className="space-y-1 flex-1">
+                      <h5 className="font-bold text-rose-900 text-sm">GST Verification Failed</h5>
+                      <p className="text-[11px] text-rose-800 leading-relaxed">{gstinError}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : null}
 
           {/* 1. Basic Information Section */}
           <div className="bg-white border border-gray-150 rounded-xl p-5 shadow-xs space-y-4">
@@ -1946,6 +2139,30 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
               <h3 className="font-bold text-gray-800 text-sm">Basic Information</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Unregistered GST Type Selection dropdown inside Business Info if Unregistered */}
+              {!form.gstType.startsWith("Registered") && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">GST Type</label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                      <FileSpreadsheet className="w-4 h-4" />
+                    </span>
+                    <select
+                      value={form.gstType}
+                      onChange={(e) => setForm({ ...form, gstType: e.target.value })}
+                      className="w-full pl-10 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white appearance-none cursor-pointer h-[38px] font-bold text-gray-800"
+                    >
+                      {GST_TYPES.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Party / Business Name */}
               <div>
                 <label className="flex items-center text-xs font-semibold text-gray-500 mb-1">
@@ -1996,7 +2213,7 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
 
               {/* Mobile Number */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Mobile Number</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Mobile Number <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
                     <Phone className="w-4 h-4" />
@@ -2156,7 +2373,7 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                       value="CREDIT"
                       checked={form.openingBalanceType === "CREDIT"}
                       onChange={() => setForm({ ...form, openingBalanceType: "CREDIT" })}
-                      className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                      className="mt-1 text-emerald-605 focus:ring-emerald-500"
                     />
                     <div>
                       <span className="block text-xs font-bold text-gray-900">Credit (Payable)</span>
@@ -2176,7 +2393,7 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                       value="DEBIT"
                       checked={form.openingBalanceType === "DEBIT"}
                       onChange={() => setForm({ ...form, openingBalanceType: "DEBIT" })}
-                      className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                      className="mt-1 text-emerald-605 focus:ring-emerald-500"
                     />
                     <div>
                       <span className="block text-xs font-bold text-gray-900">Debit (Receivable)</span>

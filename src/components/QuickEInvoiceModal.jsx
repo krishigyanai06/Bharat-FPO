@@ -15,7 +15,8 @@ import {
 } from "../store/slices/eInvoiceSlice";
 import { addAuditLog, isEInvoiceSessionValid } from "../lib/api";
 import { updateSaleEInvoice } from "../store/slices/sellSlice";
-import { X, Copy, Download, Eye, AlertTriangle, Loader2, CheckCircle, XCircle, RefreshCw } from "lucide-react";
+import { X, Copy, Download, Eye, AlertTriangle, Loader2, CheckCircle, XCircle, RefreshCw, Landmark, Check, Zap } from "lucide-react";
+import { getUserFriendlyEInvoiceError } from "../utils/eInvoiceErrors";
 
 /**
  * Validates that an E-Invoice API response contains all required fields.
@@ -60,6 +61,22 @@ const formatDateDDMMYYYY = (dateStr) => {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
   return `${day}/${month}/${year}`;
+};
+
+/**
+ * Helper to format date to YYYY-MM-DD HH:mm:ss
+ */
+const formatAckDate = (dateStr) => {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
 };
 
 /**
@@ -444,15 +461,16 @@ export default function QuickEInvoiceModal({
   const itemsCount = item.items?.length || 0;
   const itemsText = itemsCount === 1 ? "1 Item" : `${itemsCount} Items`;
   const formattedAmount = `₹${(item.totalAmount || 0).toLocaleString("en-IN")}`;
+  const modalWidth = "max-w-2xl";
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden relative shadow-2xl border border-gray-150 flex flex-col animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+      <div className={`bg-white rounded-2xl w-full ${modalWidth} overflow-hidden relative shadow-2xl border border-gray-150 flex flex-col animate-in fade-in zoom-in-95 duration-150`}>
         
         {/* Loading Overlay */}
         {loading && (
           <div className="absolute inset-0 bg-white/90 z-50 flex flex-col items-center justify-center p-6 text-center space-y-4">
-            <Loader2 className="w-10 h-10 text-emerald-600 animate-spin" />
+            <Loader2 className="w-10 h-10 text-[#00875A] animate-spin" />
             <div className="space-y-1">
               <h3 className="font-bold text-gray-900 text-base">Generating E-Invoice...</h3>
               <p className="text-xs text-gray-500">Connecting to Government IRP Portal (NIC)...</p>
@@ -461,18 +479,24 @@ export default function QuickEInvoiceModal({
         )}
 
         {/* Header */}
-        <div className="flex justify-between items-center px-5 py-4 border-b border-gray-100 bg-white">
-          <h2 className="text-sm font-extrabold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
+        <div className="flex justify-between items-center px-6 py-5 border-b border-gray-100 bg-white">
+          <h2 className="text-[11px] font-black text-gray-805 uppercase tracking-wider flex items-center gap-2">
             {localMode === "generate" ? (
-              <>⚡ Generate Government E-Invoice</>
+              <span className="flex items-center gap-2 text-gray-900 font-extrabold">
+                <Zap className="w-5 h-5 text-emerald-500 fill-emerald-500" />
+                GENERATE GOVERNMENT E-INVOICE
+              </span>
             ) : (
-              <>🏛 Quick E-Invoice Details</>
+              <span className="flex items-center gap-2 text-[#00875A] font-extrabold">
+                <Landmark className="w-5 h-5 text-[#00875A]" />
+                QUICK E-INVOICE DETAILS
+              </span>
             )}
           </h2>
           {!loading && (
             <button
               onClick={isGeneratedSuccess ? onSuccess : onClose}
-              className="p-1.5 text-gray-400 hover:text-gray-650 hover:bg-gray-100 rounded-lg transition"
+              className="p-1.5 text-gray-400 hover:text-gray-655 hover:bg-gray-100 rounded-lg transition duration-150"
             >
               <X className="w-4 h-4" />
             </button>
@@ -480,99 +504,189 @@ export default function QuickEInvoiceModal({
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 space-y-4 overflow-y-auto max-h-[70vh]">
+        <div className="p-6 space-y-5 overflow-y-auto max-h-[75vh] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {localMode === "generate" ? (
             // GENERATION MODE
             <>
               {/* Generation Error Card */}
-              {generationError && (
-                <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 space-y-3 shadow-sm">
-                  <div className="flex items-start gap-3">
-                    <XCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                    <div className="space-y-1.5 flex-1">
-                      <h4 className="font-extrabold text-rose-900 text-xs">❌ E-Invoice Generation Failed</h4>
-                      <p className="text-[11px] text-rose-800 leading-relaxed font-medium">
-                        Unable to register this invoice with the Government IRP.
-                      </p>
-                      <p className="text-[10px] text-rose-700 font-mono bg-rose-100/50 p-2 rounded-lg break-all">
+              {generationError && (() => {
+                const friendlyError = getUserFriendlyEInvoiceError(generationError);
+                return (
+                  <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 space-y-3 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <XCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                      <div className="space-y-1.5 flex-1">
+                        <h4 className="font-extrabold text-rose-900 text-xs">{friendlyError.title}</h4>
+                        <p className="text-[11px] text-rose-800 leading-relaxed font-semibold">
+                          {friendlyError.description}
+                        </p>
+                        <p className="text-[11px] text-rose-700 leading-relaxed font-medium bg-white/60 p-2 rounded-lg border border-rose-100">
+                          <strong>Action:</strong> {friendlyError.actionableAdvice}
+                        </p>
+                      </div>
+                    </div>
+
+                    <details className="text-[10px] text-rose-600 font-medium cursor-pointer select-none border-t border-rose-200/30 pt-1.5">
+                      <summary className="hover:text-rose-800 transition duration-150">View technical error details</summary>
+                      <p className="text-[10px] text-rose-700 font-mono bg-rose-100/50 p-2 rounded-lg break-all mt-1 cursor-text select-text">
                         {generationError}
                       </p>
+                    </details>
+
+                    <div className="flex gap-2 pt-1 border-t border-rose-200/40">
+                      <button
+                        onClick={() => {
+                          setGenerationError(null);
+                          handleGenerate();
+                        }}
+                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1 border-0 cursor-pointer shadow-xs"
+                      >
+                        <RefreshCw className="w-3 h-3" /> Retry
+                      </button>
+                      <button
+                        onClick={onClose}
+                        className="px-3 py-1.5 border border-rose-250 text-rose-900 rounded-lg text-[10px] font-bold transition bg-white cursor-pointer"
+                      >
+                        Close
+                      </button>
                     </div>
                   </div>
+                );
+              })()}
 
-                  <div className="border-t border-rose-200/50 pt-2.5 text-[11px] text-rose-800 space-y-1.5">
-                    <p className="font-bold">Please verify:</p>
-                    <ul className="list-disc pl-5 space-y-0.5 text-rose-700 font-medium">
-                      <li>GSTIN authentication is active</li>
-                      <li>Internet connectivity is stable</li>
-                      <li>Backend service is available</li>
-                      <li>Invoice is eligible for E-Invoice registration</li>
-                    </ul>
-                  </div>
-
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      onClick={() => {
-                        setGenerationError(null);
-                        handleGenerate();
-                      }}
-                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1 border-0 cursor-pointer shadow-xs"
-                    >
-                      <RefreshCw className="w-3 h-3" /> Retry
-                    </button>
-                    <button
-                      onClick={onClose}
-                      className="px-3 py-1.5 border border-rose-250 text-rose-900 rounded-lg text-[10px] font-bold transition bg-white cursor-pointer"
-                    >
-                      Close
-                    </button>
+              {/* Status Box */}
+              <div className="bg-[#F4FBF7] border border-[#E3F4EC] rounded-2xl p-6 flex flex-col items-center justify-center text-center relative">
+                {/* Custom Sparkles and file check illustration */}
+                <div className="relative flex items-center justify-center mb-3 mt-1 select-none">
+                  {/* Green Glow Oval */}
+                  <div className="absolute bottom-0 w-24 h-4 bg-emerald-500/10 rounded-full blur-xs"></div>
+                  {/* Sparkle SVGs around */}
+                  <svg className="absolute -top-3 -left-6 w-3 h-3 text-[#A4E2C5]" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" />
+                  </svg>
+                  <svg className="absolute -top-4 -right-4 w-4 h-4 text-[#A4E2C5]" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" />
+                  </svg>
+                  <svg className="absolute -bottom-3 -left-5 w-4 h-4 text-[#A4E2C5]" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" />
+                  </svg>
+                  <svg className="absolute -bottom-2 -right-5 w-3 h-3 text-[#A4E2C5]" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" />
+                  </svg>
+                  
+                  <div className="w-14 h-[68px] bg-white border border-[#D0ECD9] rounded-lg shadow-xs flex items-center justify-center relative">
+                    <Landmark className="w-6 h-6 text-[#00875A]" />
+                    {/* Green Check badge at bottom right */}
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#00875A] border border-white flex items-center justify-center text-white">
+                      <Check size={8} strokeWidth={4} />
+                    </div>
                   </div>
                 </div>
-              )}
+
+                <h3 className="text-gray-900 text-base font-bold tracking-wide mt-2">
+                  Generating your Government E-Invoice
+                </h3>
+                <p className="text-gray-500 text-xs font-semibold mt-1">
+                  Please wait while we connect to the Government IRP...
+                </p>
+
+                {/* 4-Step Stepper */}
+                <div className="w-full max-w-md mt-6 mb-2">
+                  <div className="relative flex items-center justify-between">
+                    {/* Dashed Connecting Line */}
+                    <div className="absolute left-8 right-8 top-4 h-0.5 border-t border-dashed border-gray-200"></div>
+                    {/* Highlighted active connecting line part (first segment) */}
+                    <div className="absolute left-8 w-[25%] top-4 h-0.5 border-t border-dashed border-[#A4E2C5]"></div>
+                    
+                    {/* Step 1 */}
+                    <div className="flex flex-col items-center relative z-10 w-1/4">
+                      <div className="w-8 h-8 rounded-full bg-[#00875A] border-2 border-white flex items-center justify-center text-white shadow-xs">
+                        <Check size={14} strokeWidth={3} />
+                      </div>
+                      <span className="text-[10px] text-gray-550 font-semibold mt-2 text-center">Preparing Invoice</span>
+                    </div>
+
+                    {/* Step 2 (Active) */}
+                    <div className="flex flex-col items-center relative z-10 w-1/4">
+                      <div className="relative flex items-center justify-center">
+                        {/* Glow outer ring */}
+                        <div className="absolute -inset-1 rounded-full bg-[#E8F8F0] animate-pulse"></div>
+                        <div className="w-8 h-8 rounded-full bg-white border-2 border-[#00875A] flex items-center justify-center text-[#00875A] shadow-md relative z-10">
+                          <Landmark size={14} />
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-[#00875A] font-bold mt-2 text-center">Connecting to IRP</span>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className="flex flex-col items-center relative z-10 w-1/4">
+                      <div className="w-8 h-8 rounded-full bg-gray-50 border-2 border-gray-200 flex items-center justify-center text-gray-400 shadow-xs">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <span className="text-[10px] text-gray-550 font-semibold mt-2 text-center">Generating IRN & QR</span>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className="flex flex-col items-center relative z-10 w-1/4">
+                      <div className="w-8 h-8 rounded-full bg-gray-50 border-2 border-gray-200 flex items-center justify-center text-gray-400 shadow-xs">
+                        <Check size={14} strokeWidth={2.5} />
+                      </div>
+                      <span className="text-[10px] text-gray-550 font-semibold mt-2 text-center">Finalizing</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               {/* Invoice Summary Card */}
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-xs space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider">Invoice No</span>
-                    <span className="font-bold text-gray-800 font-mono text-sm">
+              <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white mt-4">
+                {/* Row 1: Invoice No & Value */}
+                <div className="grid grid-cols-2 border-b border-gray-150">
+                  <div className="p-4 border-r border-gray-150">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Invoice No</span>
+                    <span className="font-bold text-gray-900 text-xs sm:text-sm font-mono block mt-1.5">
                       {item.invoiceNo || item._id?.substring(0, 8).toUpperCase()}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider">Invoice Value</span>
-                    <span className="font-extrabold text-emerald-700 text-sm">{formattedAmount}</span>
+                  <div className="p-4">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Invoice Value</span>
+                    <span className="font-extrabold text-[#00875A] text-xs sm:text-sm block mt-1.5">{formattedAmount}</span>
                   </div>
                 </div>
 
-                <div className="border-t border-gray-200/50 pt-2.5">
-                  <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider">Customer</span>
-                  <span className="font-bold text-gray-800 block text-xs">{resolvedParty?.name || item.buyerName}</span>
+                {/* Row 2: Customer */}
+                <div className="p-4 border-b border-gray-150">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Customer</span>
+                  <span className="font-bold text-gray-800 block text-xs mt-1.5 uppercase">{resolvedParty?.name || item.buyerName}</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider">GSTIN</span>
-                    <span className="font-bold text-gray-700 font-mono">
+                {/* Row 3: GSTIN & Items */}
+                <div className="grid grid-cols-2">
+                  <div className="p-4 border-r border-gray-150">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">GSTIN</span>
+                    <span className="font-bold text-gray-900 font-mono block mt-1.5">
                       {resolvedParty?.gstin || resolvedParty?.gstNumber || "—"}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider">Items</span>
-                    <span className="font-bold text-gray-700">{itemsText}</span>
+                  <div className="p-4">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Items</span>
+                    <span className="font-bold text-gray-900 block mt-1.5">{itemsText}</span>
                   </div>
                 </div>
               </div>
 
               {/* Warning Alert */}
               {!generationError && (
-                <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start text-xs text-amber-900 leading-relaxed shadow-3xs">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="font-extrabold text-amber-905">⚠️ This action is permanent.</p>
-                    <p className="font-medium text-amber-800/90">
+                <div className="border border-[#E3F4EC] bg-[#F4FBF7] rounded-xl p-3.5 flex items-start sm:items-center gap-3 mt-4">
+                  <svg className="w-5 h-5 text-[#00875A] shrink-0 mt-0.5 sm:mt-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  <div className="text-[11px] leading-relaxed select-none">
+                    <span className="font-bold text-[#006C47] block">This action is permanent.</span>
+                    <span className="text-gray-550 block text-[10px] mt-0.5">
                       The invoice will be registered with the Government IRP Portal (NIC) and an official IRN and QR code will be generated.
-                    </p>
+                    </span>
                   </div>
                 </div>
               )}
@@ -580,68 +694,170 @@ export default function QuickEInvoiceModal({
           ) : (
             // DETAILS MODE
             <>
-              {/* E-Invoice Metadata */}
-              <div className="space-y-3 text-xs">
-                <div className="bg-emerald-50/20 border border-emerald-250 rounded-xl p-3 flex items-center gap-2 text-emerald-800 shadow-3xs">
-                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="font-bold text-[11px]">E-Invoice Registered & Signed by Government IRP</span>
+              {/* Green successful registration box */}
+              <div className="bg-[#F4FBF7] border border-[#E3F4EC] rounded-2xl p-6 flex flex-col items-center justify-center text-center relative">
+                {/* Custom Sparkles and file check illustration */}
+                <div className="relative flex items-center justify-center mb-3 mt-1 select-none">
+                  <svg className="absolute -top-3 -left-6 w-3 h-3 text-[#A4E2C5]" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" />
+                  </svg>
+                  <svg className="absolute -top-4 -right-4 w-4 h-4 text-[#A4E2C5]" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" />
+                  </svg>
+                  <svg className="absolute -bottom-3 -left-5 w-4 h-4 text-[#A4E2C5]" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" />
+                  </svg>
+                  <svg className="absolute -bottom-2 -right-5 w-3 h-3 text-[#A4E2C5]" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" />
+                  </svg>
+                  
+                  <div className="w-14 h-[68px] bg-white border border-[#D0ECD9] rounded-lg shadow-xs flex items-center justify-center relative">
+                    <div className="w-6 h-6 rounded-full bg-[#E8F8F0] flex items-center justify-center">
+                      <div className="w-4 h-4 rounded-full bg-[#00875A] flex items-center justify-center text-white">
+                        <Check size={10} strokeWidth={4} />
+                      </div>
+                    </div>
+                    {/* Decorative document lines */}
+                    <div className="absolute top-3 left-3 w-5 h-0.5 bg-gray-150"></div>
+                    <div className="absolute top-5 left-3 w-3 h-0.5 bg-gray-150"></div>
+                    <div className="absolute bottom-3 left-3 w-4 h-0.5 bg-gray-150"></div>
+                  </div>
                 </div>
 
-                {/* IRN Block */}
-                <div className="space-y-1">
-                  <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider">IRN (Invoice Reference Number)</span>
-                  <div className="flex gap-2 items-center bg-gray-50 border border-gray-150 p-2.5 rounded-lg">
-                    <code className="font-mono text-gray-800 text-[10px] break-all flex-1 font-semibold leading-normal select-all">
+                <h3 className="text-[#006C47] text-base font-bold tracking-wide mt-2">
+                  E-Invoice Registered & Signed by Government IRP
+                </h3>
+                <p className="text-gray-550 text-xs font-semibold mt-1">
+                  Your e-invoice has been successfully generated.
+                </p>
+
+                {/* 4-Step Stepper */}
+                <div className="w-full max-w-md mt-6 mb-2">
+                  <div className="relative flex items-center justify-between">
+                    {/* Dashed Connecting Line */}
+                    <div className="absolute left-8 right-8 top-4 h-0.5 border-t border-dashed border-[#A4E2C5]"></div>
+                    
+                    {/* Step 1 */}
+                    <div className="flex flex-col items-center relative z-10 w-1/4">
+                      <div className="w-8 h-8 rounded-full bg-[#E8F8F0] border-2 border-white flex items-center justify-center text-[#00875A] shadow-xs">
+                        <Check size={14} strokeWidth={3} />
+                      </div>
+                      <span className="text-[10px] text-gray-550 font-semibold mt-2 text-center">Validating Data</span>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className="flex flex-col items-center relative z-10 w-1/4">
+                      <div className="w-8 h-8 rounded-full bg-[#E8F8F0] border-2 border-white flex items-center justify-center text-[#00875A] shadow-xs">
+                        <Check size={14} strokeWidth={3} />
+                      </div>
+                      <span className="text-[10px] text-gray-550 font-semibold mt-2 text-center">Sending to IRP</span>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className="flex flex-col items-center relative z-10 w-1/4">
+                      <div className="w-8 h-8 rounded-full bg-[#E8F8F0] border-2 border-white flex items-center justify-center text-[#00875A] shadow-xs">
+                        <Check size={14} strokeWidth={3} />
+                      </div>
+                      <span className="text-[10px] text-gray-550 font-semibold mt-2 text-center">Generating E-Invoice</span>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className="flex flex-col items-center relative z-10 w-1/4">
+                      <div className="relative">
+                        <span className="absolute -top-1 -right-1 text-emerald-500 text-[8px] animate-pulse">✦</span>
+                        <div className="w-8 h-8 rounded-full bg-[#00875A] border-2 border-white flex items-center justify-center text-white shadow-md">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-[#00875A] font-bold mt-2 text-center">Completed</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Details structured grid card */}
+              <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white mt-4">
+                {/* Row 1: IRN */}
+                <div className="p-4 border-b border-gray-150">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                    IRN (Invoice Reference Number)
+                  </span>
+                  <div className="flex items-start gap-4 mt-1.5 justify-between">
+                    <code className="font-mono text-gray-900 text-xs break-all flex-1 font-bold leading-relaxed select-all">
                       {item.eInvoiceIrn || item.irn || item.eInvoiceInfo?.irn || irn || "—"}
                     </code>
                     <button
                       onClick={() => copyToClipboard(item.eInvoiceIrn || item.irn || item.eInvoiceInfo?.irn || irn)}
-                      className="p-1 hover:bg-gray-200 rounded text-gray-500 hover:text-gray-700 transition shrink-0"
+                      className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 transition shrink-0 duration-150"
                       title="Copy IRN"
                     >
-                      <Copy className="w-3.5 h-3.5" />
+                      <Copy className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
 
-                {/* ACK & Date Block */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider">Acknowledgment No</span>
-                    <div className="flex gap-1.5 items-center mt-0.5">
-                      <span className="font-bold text-gray-800 font-mono">
+                {/* Row 2: ACK No & Date */}
+                <div className="grid grid-cols-2 border-b border-gray-150">
+                  <div className="p-4 border-r border-gray-150">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                      Acknowledgment No
+                    </span>
+                    <div className="flex items-center gap-2 mt-1.5 justify-between">
+                      <span className="font-bold text-gray-900 text-xs sm:text-sm font-sans">
                         {item.eInvoiceAckNo || item.ackNo || item.eInvoiceInfo?.ackNo || ackNo || "—"}
                       </span>
                       <button
                         onClick={() => copyToClipboard(item.eInvoiceAckNo || item.ackNo || item.eInvoiceInfo?.ackNo || ackNo)}
-                        className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-650 transition"
-                        title="Copy ACK No"
+                        className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 transition duration-150"
+                        title="Copy Acknowledgment No"
                       >
-                        <Copy className="w-3 h-3" />
+                        <Copy className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
 
-                  <div>
-                    <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider">Generated Date</span>
-                    <p className="font-bold text-gray-800 mt-1">
-                      {item.eInvoiceAckDt || item.ackDt || item.eInvoiceInfo?.ackDt || ackDt || new Date(item.createdAt).toLocaleDateString("en-IN")}
+                  <div className="p-4">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                      Generated Date
+                    </span>
+                    <p className="font-bold text-gray-900 text-xs sm:text-sm mt-1.5 leading-normal">
+                      {formatAckDate(item.eInvoiceAckDt || item.ackDt || item.eInvoiceInfo?.ackDt || ackDt || item.createdAt)}
                     </p>
                   </div>
                 </div>
 
-                {/* Additional details */}
-                <div className="border-t border-gray-100 pt-3">
-                  <div className="grid grid-cols-2 gap-3 text-[11px]">
-                    <div>
-                      <span className="text-gray-400 block font-medium">Customer:</span>
-                      <span className="font-bold text-gray-800">{resolvedParty?.name || item.buyerName}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-400 block font-medium">Invoice Value:</span>
-                      <span className="font-bold text-gray-800">{formattedAmount}</span>
-                    </div>
+                {/* Row 3: Customer & Value */}
+                <div className="grid grid-cols-2">
+                  <div className="p-4 border-r border-gray-150">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                      Customer
+                    </span>
+                    <p className="font-bold text-gray-900 text-xs sm:text-sm mt-1.5 leading-normal uppercase">
+                      {resolvedParty?.name || item.buyerName || "Walk-in Customer"}
+                    </p>
                   </div>
+
+                  <div className="p-4">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                      Invoice Value
+                    </span>
+                    <p className="font-black text-gray-955 text-base sm:text-lg mt-1 select-all">
+                      {formattedAmount}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Compliance verification banner */}
+              <div className="border border-[#E3F4EC] bg-[#F4FBF7] rounded-xl p-3.5 flex items-start sm:items-center gap-3 mt-4">
+                <svg className="w-5 h-5 text-[#00875A] shrink-0 mt-0.5 sm:mt-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                <div className="text-[11px] leading-relaxed select-none">
+                  <span className="font-bold text-[#006C47]">Secure · Verified · Compliant</span>
+                  <span className="text-gray-550 block text-[10px] mt-0.5">Generated via Government of India IRP</span>
                 </div>
               </div>
             </>
@@ -649,22 +865,28 @@ export default function QuickEInvoiceModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex justify-end gap-3 px-5 py-3 border-t border-gray-100 bg-gray-50">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
           {isGeneratedSuccess ? (
             <>
               <button
                 onClick={onSuccess}
-                className="px-4 py-2 border border-gray-250 rounded-xl text-xs font-bold text-gray-650 bg-white hover:bg-gray-100 transition"
+                className="px-6 py-2.5 border border-gray-300 rounded-xl text-xs font-bold text-gray-700 bg-white hover:bg-gray-55 active:scale-95 transition-all duration-150 cursor-pointer"
               >
                 Close & Done
               </button>
               <button
                 onClick={handleDownloadPdf}
                 disabled={pdfLoading || !hasValidPdfData}
-                title={!hasValidPdfData ? "Generate E-Invoice first to download the official PDF." : ""}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5"
+                className="px-6 py-2.5 bg-[#00875A] hover:bg-[#00704A] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-sm transition-all duration-150 flex items-center gap-1.5 active:scale-95 cursor-pointer"
               >
-                <Download className="w-3.5 h-3.5" /> Download PDF
+                {pdfLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                )}
+                Download PDF
               </button>
             </>
           ) : localMode === "generate" ? (
@@ -672,23 +894,24 @@ export default function QuickEInvoiceModal({
               <button
                 onClick={onClose}
                 disabled={loading}
-                className="px-4 py-2 border border-gray-250 rounded-xl text-xs font-bold text-gray-650 bg-white hover:bg-gray-100 disabled:opacity-50 transition"
+                className="px-5 py-2.5 border border-gray-300 rounded-xl text-xs font-bold text-gray-705 bg-white hover:bg-gray-50 disabled:opacity-50 transition duration-150 active:scale-95 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleGenerate}
                 disabled={loading}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5"
+                className="px-6 py-2.5 bg-[#00875A] hover:bg-[#00704A] disabled:bg-[#a0dec4] text-white rounded-xl text-xs font-bold shadow-sm transition-all duration-150 flex items-center gap-1.5 active:scale-95 cursor-pointer"
               >
-                ⚡ Generate E-Invoice
+                <Zap className="w-3.5 h-3.5 text-white fill-white" />
+                Generate E-Invoice
               </button>
             </>
           ) : (
             <>
               <button
                 onClick={onViewSaleDetails}
-                className="px-3.5 py-2 border border-gray-250 rounded-xl text-xs font-bold text-gray-650 bg-white hover:bg-gray-100 transition flex items-center gap-1.5"
+                className="px-4 py-2.5 border border-gray-300 rounded-xl text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 transition duration-150 flex items-center gap-1.5 active:scale-95 cursor-pointer"
               >
                 <Eye className="w-3.5 h-3.5" /> View Sale Details
               </button>
@@ -696,9 +919,16 @@ export default function QuickEInvoiceModal({
                 onClick={handleDownloadPdf}
                 disabled={pdfLoading || !hasValidPdfData}
                 title={!hasValidPdfData ? "Generate E-Invoice first to download the official PDF." : ""}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5"
+                className="px-6 py-2.5 bg-[#00875A] hover:bg-[#00704A] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-sm transition-all duration-150 flex items-center gap-1.5 active:scale-95 cursor-pointer"
               >
-                <Download className="w-3.5 h-3.5" /> Download PDF
+                {pdfLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                )}
+                Download PDF
               </button>
             </>
           )}

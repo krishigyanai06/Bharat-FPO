@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { authenticateSession } from "../store/thunks/eInvoiceThunk";
 import { clearEInvoiceStatus } from "../store/slices/eInvoiceSlice";
 import { isEInvoiceSessionValid } from "../lib/api";
+import { getUserFriendlyEInvoiceError } from "../utils/eInvoiceErrors";
 
 function Settings() {
   const dispatch = useDispatch();
@@ -19,6 +20,7 @@ function Settings() {
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [lastConnectedTime, setLastConnectedTime] = useState(null);
+  const [connectLoading, setConnectLoading] = useState(false);
 
   // Set lastConnectedTime when token is active
   useEffect(() => {
@@ -38,6 +40,7 @@ function Settings() {
     gender: "",
     shopName: "",
     gstNumber: "",
+    estimatedTurnover: "",
     eInvoiceUsername: "",
     eInvoicePassword: "",
     eInvoiceGstin: "",
@@ -62,6 +65,7 @@ function Settings() {
         gender: data.gender || "",
         shopName: data.shopName || "",
         gstNumber: data.gstNumber || "",
+        estimatedTurnover: data.estimatedTurnover || "",
         eInvoiceUsername: data.eInvoiceUsername || "",
         eInvoicePassword: data.eInvoicePassword || "",
         eInvoiceGstin: data.eInvoiceGstin || data.gstin || data.gstNumber || "",
@@ -90,12 +94,14 @@ function Settings() {
     if (!form.eInvoiceUsername || !form.eInvoicePassword) {
       toast.error("Please enter your Government Portal Username and Password.");
       return;
-    }    const payload = {
+    }
+    const payload = {
       eInvoiceUsername: form.eInvoiceUsername,
       eInvoicePassword: form.eInvoicePassword,
       gstNumber: form.eInvoiceGstin, // Backend stores taxpayer GSTIN in gstNumber
     };
     
+    setConnectLoading(true);
     try {
       await dispatch(updateProfile(payload)).unwrap();
       
@@ -107,6 +113,8 @@ function Settings() {
       toast.success("Successfully connected to the Government E-Invoice Portal!");
     } catch (err) {
       console.error("Connection failed:", err);
+    } finally {
+      setConnectLoading(false);
     }
   };
 
@@ -198,6 +206,7 @@ function Settings() {
               ["state", "State"],
               ["shopName", "Shop / FPO Name"],
               ["gstNumber", "GST Number"],
+              ["estimatedTurnover", "Estimated Turnover"],
             ].map(([key, label]) => (
               <div key={key}>
                 <label className="block text-xs text-gray-500 mb-1">
@@ -285,21 +294,37 @@ function Settings() {
             </div>
 
             {/* Failure alert message */}
-            {sessionError && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 text-red-850 text-xs animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="text-red-500 font-bold text-sm shrink-0">❌</div>
-                <div className="flex-1">
-                  <p className="font-bold">Unable to connect.</p>
-                  <p className="text-red-650 mt-1">Reason: {sessionError}</p>
-                  <button
-                    onClick={() => dispatch(clearEInvoiceStatus())}
-                    className="mt-2 text-xs font-bold text-red-700 hover:text-red-800 underline block"
-                  >
-                    Try Again
-                  </button>
+            {sessionError && (() => {
+              const friendlyError = getUserFriendlyEInvoiceError(sessionError);
+              return (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 text-red-850 text-xs animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="text-red-500 font-bold text-sm shrink-0">❌</div>
+                  <div className="flex-1 space-y-2">
+                    <p className="font-bold text-red-900">{friendlyError.title}</p>
+                    <p className="text-red-800 leading-relaxed font-semibold">
+                      {friendlyError.description}
+                    </p>
+                    <p className="text-red-750 leading-relaxed font-medium bg-white/75 p-2.5 rounded-lg border border-red-100">
+                      <strong>Action:</strong> {friendlyError.actionableAdvice}
+                    </p>
+
+                    <details className="text-[10px] text-red-600 font-medium cursor-pointer select-none pt-1 border-t border-red-200/50">
+                      <summary className="hover:text-red-800 transition duration-150">View technical error details</summary>
+                      <p className="text-[10px] text-red-700 font-mono bg-red-100/50 p-2 rounded-lg break-all mt-1 cursor-text select-text">
+                        {sessionError}
+                      </p>
+                    </details>
+
+                    <button
+                      onClick={() => dispatch(clearEInvoiceStatus())}
+                      className="mt-2 px-3 py-1.5 bg-red-600 hover:bg-red-750 text-white rounded-lg text-[10px] font-bold transition inline-block cursor-pointer border-0 shadow-xs"
+                    >
+                      Try Again
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Input Form */}
             <form onSubmit={handleConnect} className="space-y-4">
@@ -309,7 +334,7 @@ function Settings() {
                     Business GSTIN
                   </label>
                   <input
-                    disabled={sessionLoading}
+                    disabled={connectLoading || sessionLoading}
                     maxLength={15}
                     value={form.eInvoiceGstin}
                     onChange={(e) => setForm({ ...form, eInvoiceGstin: e.target.value.toUpperCase() })}
@@ -322,7 +347,7 @@ function Settings() {
                     Government Portal Username
                   </label>
                   <input
-                    disabled={sessionLoading}
+                    disabled={connectLoading || sessionLoading}
                     value={form.eInvoiceUsername}
                     onChange={(e) => setForm({ ...form, eInvoiceUsername: e.target.value })}
                     placeholder="Portal Username"
@@ -335,7 +360,7 @@ function Settings() {
                   </label>
                   <div className="relative">
                     <input
-                      disabled={sessionLoading}
+                      disabled={connectLoading || sessionLoading}
                       type={showPassword ? "text" : "password"}
                       value={form.eInvoicePassword}
                       onChange={(e) => setForm({ ...form, eInvoicePassword: e.target.value })}
@@ -374,10 +399,10 @@ function Settings() {
                   )}
                   <button
                     type="submit"
-                    disabled={sessionLoading}
+                    disabled={connectLoading || sessionLoading}
                     className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition shadow-sm shrink-0 select-none animate-none"
                   >
-                    {sessionLoading ? (
+                    {connectLoading || sessionLoading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Connecting to Government Portal...

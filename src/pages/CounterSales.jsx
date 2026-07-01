@@ -50,6 +50,12 @@ import {
   X,
   Pencil,
   Loader2,
+  Tag,
+  ArrowLeftRight,
+  Wallet,
+  Printer,
+  Layers,
+  Clock,
 } from "lucide-react";
 
 const TABS = [
@@ -1630,7 +1636,7 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="px-4 py-2 border rounded-lg text-sm text-gray-600 bg-white hover:bg-gray-100 disabled:opacity-50"
+            className="px-4 py-2 border rounded-lg text-sm text-gray-655 bg-white hover:bg-gray-100 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -1659,121 +1665,278 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
   const navigate = useNavigate();
   const { products, stockSummary } = useSelector((state) => state.inventory);
 
+  const formatDisplayDate = (dateStr) => {
+    if (!dateStr) return "—";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const calculateItemDiscountAmount = (it) => {
+    if (it.discountAmount !== undefined && it.discountAmount !== null) {
+      return Number(it.discountAmount);
+    }
+    const base = (it.quantity || 0) * (it.pricePerUnit || 0);
+    return Number((base * ((it.discountPercent || 0) / 100)).toFixed(2));
+  };
+
+  const calculateItemTaxAmount = (it) => {
+    if (it.taxAmount !== undefined && it.taxAmount !== null) {
+      return Number(it.taxAmount);
+    }
+    const base = (it.quantity || 0) * (it.pricePerUnit || 0);
+    const discAmt = calculateItemDiscountAmount(it);
+    const taxable = base - discAmt;
+    if (it.taxType === "With Tax") {
+      const exclTax = taxable / (1 + (it.taxPercent || 0) / 100);
+      return Number((taxable - exclTax).toFixed(2));
+    }
+    return Number((taxable * ((it.taxPercent || 0) / 100)).toFixed(2));
+  };
+
+  const calculateSubtotal = () => {
+    if (type === "payment") return item.amount || item.receivedAmount || 0;
+    return item.items?.reduce((sum, it) => sum + ((it.quantity || 0) * (it.pricePerUnit || 0)), 0) || 0;
+  };
+
+  // Determine label values based on transaction type
+  const isSale = type === "sale";
+  const isReturn = type === "return";
+  const isPayment = type === "payment";
+
+  const titleText = isSale 
+    ? `${item.saleType || "SALE"} DETAILS` 
+    : isReturn 
+      ? "CREDIT NOTE DETAILS" 
+      : "PAYMENT RECEIPT DETAILS";
+
+  const billingTypeLabel = isSale 
+    ? (item.billingType === "Cash" ? "Cash" : "Credit") 
+    : isReturn 
+      ? "Credit Note" 
+      : "Receipt Entry";
+
+  const transactionNo = isSale 
+    ? (item.invoiceNo || item._id?.substring(0, 8).toUpperCase()) 
+    : isReturn 
+      ? (item.returnNo || item._id?.substring(0, 8).toUpperCase()) 
+      : (item.receiptNo || item._id?.substring(0, 8).toUpperCase());
+
+  const dateLabel = isSale ? "Bill Date" : isReturn ? "Return Date" : "Payment Date";
+  const displayDate = formatDisplayDate(item.createdAt);
+
+  const dueDateLabel = isSale ? "Due Date" : isReturn ? "Linked Bill #" : "Linked Bill";
+  const dueDateVal = isSale 
+    ? (item.dueDate || (item.createdAt ? new Date(new Date(item.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000) : null))
+    : isReturn 
+      ? (item.sale?.invoiceNo || "—") 
+      : (item.linkedSell?.invoiceNo || item.sell?.invoiceNo || "—");
+  const displayDueDate = isSale ? formatDisplayDate(dueDateVal) : dueDateVal;
+
+  const totalAmountFormatted = `₹${(item.totalAmount || item.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 
   return (
-    <div className="fixed inset-0 bg-black/45 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl w-full max-w-2xl p-6 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl border border-gray-100">
-        <div className="flex justify-between items-center border-b border-gray-100 pb-3">
-          <h2 className="text-lg font-bold text-gray-900 uppercase tracking-wide">
-            {type === "sale"
-              ? `${item.saleType} DETAILS`
-              : type === "payment"
-              ? "PAYMENT RECEIPT DETAILS"
-              : "CREDIT NOTE DETAILS"}
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+      <div className="bg-white rounded-3xl w-full max-w-5xl p-8 space-y-6 max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-150 flex flex-col [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        
+        {/* Header Title */}
+        <div className="flex justify-between items-center border-b border-gray-100 pb-4">
+          <h2 className="text-base font-extrabold text-gray-900 uppercase tracking-wide flex items-center gap-2">
+            <span className="w-10 h-10 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A]">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </span>
+            {titleText}
           </h2>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-650 text-xl font-bold">✕</button>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-650 transition duration-150 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
-        {/* Core details block */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs bg-gray-50/50 p-4 rounded-xl border border-gray-100">
-          <div>
-            <p className="text-gray-400 font-semibold uppercase tracking-wider">Reference Code / ID</p>
-            <p className="font-bold text-gray-800 mt-0.5">
-              {item.invoiceNo || item.billNumber || item.receiptNo || item.returnNo || (item._id ? item._id.substring(0, 8).toUpperCase() : "—")}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400 font-semibold uppercase tracking-wider">Recorded On</p>
-            <p className="font-bold text-gray-800 mt-0.5">
-              {new Date(item.createdAt).toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400 font-semibold uppercase tracking-wider">Party/Customer</p>
-            <p className="font-bold text-gray-800 mt-0.5">{item.party?.name || item.buyerName || "Walk-in Customer"}</p>
-          </div>
-          {type === "sale" && (
-            <>
-              <div>
-                <p className="text-gray-400 font-semibold uppercase tracking-wider">Payment</p>
-                <p className="font-bold text-gray-800 mt-0.5">{item.billingType === "Cash" ? "Money Received" : "Udhar (Credit)"}</p>
+        {/* 1. Core Summary Cards Box */}
+        <div className="flex flex-col lg:flex-row justify-between items-stretch gap-4">
+          {/* Summary Row */}
+          <div className="flex-1 bg-white border border-gray-150 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-5 gap-4 items-center">
+            {/* Sale / Transaction Type */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
+                <Tag className="w-4 h-4" />
               </div>
-              <div>
-                <p className="text-gray-400 font-semibold uppercase tracking-wider">Type</p>
-                <p className="font-bold text-gray-800 mt-0.5">{item.saleType}</p>
+              <div className="text-left leading-normal">
+                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">Type</span>
+                <span className="text-xs font-bold text-[#006C47] uppercase">{isSale ? item.saleType : type}</span>
               </div>
-            </>
-          )}
-          {type === "return" && (
-            <div>
-              <p className="text-gray-400 font-semibold uppercase tracking-wider">Linked Sales Bill #</p>
-              <p className="font-bold text-gray-800 mt-0.5 font-mono">{item.sale?.invoiceNo || "Sales Bill ID"}</p>
             </div>
-          )}
-          {type === "payment" && (
-            <>
-              <div>
-                <p className="text-gray-400 font-semibold uppercase tracking-wider">Linked Sales Bill</p>
-                <p className="font-bold text-gray-800 mt-0.5 font-mono">
-                  {item.linkedSell?.invoiceNo || item.sell?.invoiceNo || "None (General)"}
-                </p>
+
+            {/* Billing Type */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
+                <ArrowLeftRight className="w-4 h-4" />
               </div>
-              <div>
-                <p className="text-gray-400 font-semibold uppercase tracking-wider">Receipt Type</p>
-                <p className="font-bold text-gray-800 mt-0.5">
-                  {item.isAutoGenerated ? "Auto-Generated" : "Manual Entry"}
-                </p>
+              <div className="text-left leading-normal">
+                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">Billing Type</span>
+                <span className="text-xs font-bold text-gray-800">{billingTypeLabel}</span>
               </div>
-            </>
-          )}
+            </div>
+
+            {/* Bill Number */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div className="text-left leading-normal">
+                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">Number</span>
+                <span className="text-xs font-bold text-gray-800 font-mono">
+                  {transactionNo}
+                </span>
+              </div>
+            </div>
+
+            {/* Date */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
+                <Calendar className="w-4 h-4" />
+              </div>
+              <div className="text-left leading-normal">
+                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">{dateLabel}</span>
+                <span className="text-xs font-bold text-gray-800">{displayDate}</span>
+              </div>
+            </div>
+
+            {/* Due Date or Linked Reference */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
+                <Calendar className="w-4 h-4" />
+              </div>
+              <div className="text-left leading-normal">
+                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">{dueDateLabel}</span>
+                <span className="text-xs font-bold text-gray-800 truncate max-w-[110px]">{displayDueDate}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Total Amount Box */}
+          <div className="w-full lg:w-48 bg-[#F4FBF7] border border-[#E3F4EC] rounded-2xl p-4 flex flex-col justify-center items-start lg:items-center text-left lg:text-center leading-normal">
+            <span className="text-[10px] text-[#006C47] font-bold block uppercase tracking-wider">Total Amount</span>
+            <span className="text-base sm:text-lg font-black text-[#006C47] mt-1 select-all">{totalAmountFormatted}</span>
+          </div>
         </div>
 
-        {/* Item Arrays for sales / returns */}
-        {(type === "sale" || type === "return") && item.items?.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Particular Items</h4>
-            <div className="border border-gray-150 rounded-xl overflow-hidden shadow-xs">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-100">
+        {/* 2. Grid Compartment: Buyer Details vs Sale Info */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Buyer Details */}
+          <div className="border border-gray-150 rounded-2xl p-5 bg-white space-y-4 shadow-3xs">
+            <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2 border-b pb-2 border-gray-100 uppercase tracking-wide">
+              <User className="w-4 h-4 text-emerald-600" />
+              Buyer Details
+            </h3>
+            <div className="grid grid-cols-[120px_1fr] gap-y-3.5 text-xs">
+              <div className="text-gray-500 font-semibold">Buyer Name</div>
+              <div className="font-bold text-gray-900">{item.party?.name || item.buyerName || "Walk-in Customer"}</div>
+              <div className="text-gray-500 font-semibold">Phone</div>
+              <div className="font-bold text-gray-900">{item.buyerPhone || item.party?.phoneNumber || "—"}</div>
+              <div className="text-gray-500 font-semibold">Address</div>
+              <div className="font-bold text-gray-900">{item.party?.address || item.party?.village || "—"}</div>
+              <div className="text-gray-500 font-semibold">Buyer Type</div>
+              <div className="font-bold text-gray-900">{item.party?.partyType || item.buyerType || "—"}</div>
+              <div className="text-gray-500 font-semibold">State of Supply</div>
+              <div className="font-bold text-gray-900">{item.party?.state || item.stateOfSupply || "—"}</div>
+            </div>
+          </div>
+
+          {/* Sale Info */}
+          <div className="border border-gray-150 rounded-2xl p-5 bg-white space-y-4 shadow-3xs">
+            <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2 border-b pb-2 border-gray-100 uppercase tracking-wide">
+              <Clock className="w-4 h-4 text-emerald-600" />
+              {isSale ? "Sale Info" : isReturn ? "Return Info" : "Payment Info"}
+            </h3>
+            <div className="grid grid-cols-[120px_1fr] gap-y-3.5 text-xs">
+              <div className="text-gray-500 font-semibold">{isPayment ? "Payment Mode" : "Payment Type"}</div>
+              <div className="font-bold text-gray-900">{item.paymentMode || (item.billingType === "Cash" ? "Cash" : "Credit")}</div>
+              <div className="text-gray-500 font-semibold">Reference No.</div>
+              <div className="font-bold text-gray-900 font-mono">{item.referenceNo || item.payments?.[0]?.referenceNo || "—"}</div>
+              <div className="text-gray-500 font-semibold">Description</div>
+              <div className="font-bold text-gray-900">{item.description || "—"}</div>
+              <div className="text-gray-500 font-semibold">Remarks</div>
+              <div className="font-bold text-gray-900">{item.remarks || "—"}</div>
+              <div className="text-gray-500 font-semibold">Terms & Conditions</div>
+              <div className="font-bold text-gray-900">{item.termsAndConditions || "Goods once sold will not be taken back."}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Items list table */}
+        {(isSale || isReturn) && item.items?.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2 uppercase tracking-wide">
+              <Layers className="w-4 h-4 text-emerald-600" />
+              Items
+            </h3>
+            <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-3xs bg-white">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="bg-[#F8F9FA] text-gray-550 border-b border-gray-150 font-bold uppercase tracking-wider text-[10px]">
                   <tr>
-                    <th className="px-4 py-2">Item Description</th>
-                    <th className="px-4 py-2 text-center">Qty</th>
-                    <th className="px-4 py-2 text-center">Unit</th>
-                    <th className="px-4 py-2 text-right">Price / Unit</th>
-                    <th className="px-4 py-2 text-right">Rate</th>
-                    <th className="px-4 py-2 text-right">Discount</th>
-                    <th className="px-4 py-2 text-right">Discount Amt.</th>
-                    <th className="px-4 py-2 text-center">Tax</th>
-                    <th className="px-4 py-2 text-right">Tax Amt.</th>
-                    <th className="px-4 py-2 text-right">Net Amount</th>
+                    <th className="px-4 py-3 text-center w-12">#</th>
+                    <th className="px-4 py-3">Item</th>
+                    <th className="px-4 py-3 text-center">Qty</th>
+                    <th className="px-4 py-3 text-center">Unit</th>
+                    <th className="px-4 py-3 text-right">Price / Unit</th>
+                    <th className="px-4 py-3 text-right">Rate</th>
+                    <th className="px-4 py-3 text-center">Discount</th>
+                    <th className="px-4 py-3 text-center">Tax</th>
+                    <th className="px-4 py-3 text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {item.items.map((it, idx) => {
                     const resolvedLabel = resolveItemLabel(it, products, stockSummary);
+                    const discountAmt = calculateItemDiscountAmount(it);
+                    const taxAmt = calculateItemTaxAmount(it);
+
                     return (
-                      <tr key={idx} className="hover:bg-gray-55/30 transition-colors">
-                        <td className="px-4 py-3 font-medium text-gray-800">
-                          {resolvedLabel}
+                      <tr key={idx} className="hover:bg-gray-50/50 transition duration-150">
+                        <td className="px-4 py-4 text-center font-bold text-gray-400">{idx + 1}</td>
+                        <td className="px-4 py-4">
+                          <div>
+                            <p className="font-bold text-gray-900 text-xs sm:text-[13px]">{resolvedLabel}</p>
+                            <span className="text-[10px] text-gray-400 font-mono mt-0.5 block">
+                              {it.item?._id || it.item || "INVENTORY_ITEM_ID"}
+                            </span>
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-center font-semibold text-gray-700">{it.quantity}</td>
-                        <td className="px-4 py-3 text-center text-gray-500 font-medium">{it.unit || "—"}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-gray-700">₹{(it.pricePerUnit || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-gray-700">₹{(it.rate || it.pricePerUnit || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right text-gray-550">{it.discountPercent > 0 ? `${it.discountPercent}%` : "—"}</td>
-                        <td className="px-4 py-3 text-right text-red-655">-₹{(it.discountAmount || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-center text-gray-550">
-                          <div>{it.taxPercent || 0}%</div>
-                          <div className="text-[9px] text-gray-400 font-semibold">{it.taxType || "Without Tax"}</div>
+                        <td className="px-4 py-4 text-center font-bold text-gray-800 text-xs sm:text-[13px]">
+                          {it.quantity}
                         </td>
-                        <td className="px-4 py-3 text-right text-gray-700 font-bold">₹{(it.taxAmount || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-black text-emerald-600">₹{(it.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-4 text-center font-semibold text-gray-500">{it.unit || "—"}</td>
+                        <td className="px-4 py-4 text-right font-semibold text-gray-700">₹{(it.pricePerUnit || 0).toFixed(2)}</td>
+                        <td className="px-4 py-4 text-right font-semibold text-gray-700">₹{(it.rate || it.pricePerUnit || 0).toFixed(2)}</td>
+                        <td className="px-4 py-4 text-center">
+                          <div className="leading-tight">
+                            <span className="font-semibold text-gray-700 block">{it.discountPercent > 0 ? `${it.discountPercent}%` : "—"}</span>
+                            {discountAmt > 0 && (
+                              <span className="text-[10px] text-emerald-600 font-bold block mt-0.5">(-₹{discountAmt.toFixed(2)})</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <div className="leading-tight text-center">
+                            <span className="font-semibold text-gray-700 block">{it.taxPercent || 0}%</span>
+                            {taxAmt > 0 && (
+                              <span className="text-[9px] text-emerald-600 font-bold block mt-0.5">(₹{taxAmt.toFixed(2)})</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-right font-black text-gray-900 text-xs sm:text-[13px]">
+                          ₹{(it.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
                       </tr>
                     );
                   })}
@@ -1782,31 +1945,106 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
             </div>
           </div>
         )}
-        {/* E-Invoice Actions Section */}
-        <EInvoiceWidget item={item} type={type} mode="modal" />
-        {/* Invoice Grand Totals block */}
-        <div className="flex justify-between items-center border-t border-gray-100 pt-3 flex-wrap gap-2">
-          {type === "sale" && (
-            <button
-              onClick={() => handleDownloadReceipt(item._id, item.invoiceNo || "Invoice")}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-brand-500 text-brand-650 hover:bg-brand-50 font-bold rounded-lg text-xs transition"
-            >
-              <Download size={13} /> Print/Download PDF
-            </button>
-          )}
-          {type === "payment" && (
-            <button
-              onClick={() => handleDownloadPaymentReceipt(item._id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-brand-500 text-brand-650 hover:bg-brand-50 font-bold rounded-lg text-xs transition"
-            >
-              <Download size={13} /> Print/Download PDF
-            </button>
-          )}
 
-          <div className="text-right ml-auto">
-            <span className="text-[10px] font-bold text-gray-400 block uppercase tracking-wider">Total Valuation</span>
-            <span className={`text-xl font-extrabold ${type === "return" ? "text-red-650" : "text-brand-700"}`}>
-              ₹{(item.totalAmount || item.receivedAmount || 0).toLocaleString("en-IN")}
+        {/* 4. Payment Summary Box */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2 uppercase tracking-wide">
+            <Wallet className="w-4 h-4 text-emerald-600" />
+            Payment Summary
+          </h3>
+          <div className="border border-gray-150 rounded-2xl p-6 bg-white grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-6 items-stretch shadow-3xs">
+            {/* Left column: values list */}
+            <div className="space-y-3.5 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">Sub Total</span>
+                <span className="font-bold text-gray-800">₹{calculateSubtotal().toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">{isReturn ? "Refunded Discount" : "Discount Amount"}</span>
+                <span className="font-bold text-[#00875A]">-₹{(item.discountAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">{isReturn ? "Refunded Tax" : "Tax Amount"}</span>
+                <span className="font-bold text-gray-800">₹{(item.taxAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">Round Off</span>
+                <span className={`font-bold ${item.roundOff < 0 ? "text-emerald-600" : "text-gray-800"}`}>
+                  {item.roundOff < 0 ? "-" : ""}₹{Math.abs(item.roundOff || 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="border-t border-gray-100 pt-3 flex justify-between items-center select-all">
+                <span className="text-sm font-extrabold text-gray-900">Total Amount</span>
+                <span className="text-base font-black text-gray-950">{totalAmountFormatted}</span>
+              </div>
+            </div>
+
+            {/* Vertical Divider */}
+            <div className="hidden md:block w-px bg-gray-100 self-stretch"></div>
+
+            {/* Right column: balances and credit alert card */}
+            <div className="flex flex-col justify-between gap-4 text-xs">
+              <div className="space-y-3.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 font-medium">{isReturn ? "Returned Cash" : isPayment ? "Received Cash" : "Received Amount"}</span>
+                  <span className="font-bold text-gray-800">₹{(item.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 font-medium">{isReturn ? "Pending Balance" : isPayment ? "Remaining Dues" : "Unpaid Amount"}</span>
+                  <span className={`font-bold ${(item.unpaidAmount || 0) > 0 ? "text-rose-600 font-bold" : "text-gray-800"}`}>
+                    ₹{(item.unpaidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Status alert card */}
+              <div className="border border-[#E3F4EC] bg-[#F4FBF7] rounded-2xl p-4 flex items-start gap-3 mt-1.5 shadow-2xs">
+                <span className="w-10 h-10 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
+                  <Wallet className="w-4 h-4" />
+                </span>
+                <div className="text-left leading-normal">
+                  <span className="font-bold text-[#006C47] block text-xs">
+                    {isReturn 
+                      ? "Credit Issued" 
+                      : (item.billingType === "Credit" || item.unpaidAmount > 0) 
+                        ? "Credit Sale" 
+                        : "Fully Settled"}
+                  </span>
+                  <span className="text-gray-500 text-[10px] block mt-0.5">
+                    {isReturn 
+                      ? "Refund added to credit account" 
+                      : (item.billingType === "Credit" || item.unpaidAmount > 0) 
+                        ? "Amount pending from buyer" 
+                        : "Fully settled at checkout"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* E-Invoice Widget integration */}
+        {isSale && <EInvoiceWidget item={item} type={type} mode="modal" />}
+
+        {/* Footer Actions block */}
+        <div className="flex justify-between items-center border-t border-gray-100 pt-4 flex-wrap gap-4 select-none">
+          <button
+            onClick={() => {
+              if (isPayment) {
+                handleDownloadPaymentReceipt(item._id);
+              } else {
+                handleDownloadReceipt(item._id, item.invoiceNo || "Invoice");
+              }
+            }}
+            className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-xl text-xs transition duration-150 active:scale-95 cursor-pointer shadow-3xs bg-white"
+          >
+            <Printer size={14} /> Print / Download PDF
+          </button>
+
+          <div className="text-right flex items-baseline gap-2 leading-none">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</span>
+            <span className="text-xl font-black text-emerald-700">
+              {totalAmountFormatted}
             </span>
           </div>
         </div>

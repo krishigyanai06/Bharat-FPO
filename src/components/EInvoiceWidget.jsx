@@ -14,6 +14,7 @@ import {
   clearEInvoiceStatus,
 } from "../store/slices/eInvoiceSlice";
 import { addAuditLog, isEInvoiceSessionValid } from "../lib/api";
+import { getUserFriendlyEInvoiceError } from "../utils/eInvoiceErrors";
 
 /**
  * Validates that an E-Invoice API response contains all required fields.
@@ -397,22 +398,6 @@ export default function EInvoiceWidget({ item, type = "sale", mode = "modal" }) 
   );
 
   if (!isB2B) {
-    if (mode === "modal") {
-      return (
-        <div className="text-xs text-red-500 p-3 border border-red-200 bg-red-50/50 rounded-xl space-y-1">
-          <p className="font-bold">⚠️ E-Invoice Debug Info (B2B check failed):</p>
-          <ul className="list-disc pl-4 space-y-0.5 font-mono text-[10px]">
-            <li>isB2B: false</li>
-            <li>item.party ID: {String(typeof item?.party === "object" ? item?.party?._id : item?.party)}</li>
-            <li>resolvedParty found: {String(!!resolvedParty)}</li>
-            <li>parties count: {parties?.length || 0}</li>
-            <li>GSTIN: {String(resolvedParty?.gstin || resolvedParty?.gstNumber || "None")}</li>
-            <li>GST Type: {String(resolvedParty?.gstType || "None")}</li>
-            <li>type: {type}</li>
-          </ul>
-        </div>
-      );
-    }
     return null;
   }
 
@@ -444,42 +429,49 @@ export default function EInvoiceWidget({ item, type = "sale", mode = "modal" }) 
   return (
     <div className="space-y-4">
       {/* State: FAILED */}
-      {status === "FAILED" && (
-        <div className="bg-rose-50/45 border border-rose-200 rounded-xl p-4 text-xs text-rose-955 shadow-sm flex items-start gap-3">
-          <span className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-105 text-rose-700 font-bold shrink-0 text-[10px]">✕</span>
-          <div className="space-y-1.5 flex-1">
-            <h5 className="font-extrabold text-rose-900 text-xs">E-Invoice Registration Failed</h5>
-            <p className="text-[11px] text-rose-800 leading-relaxed font-medium">
-              {error || "IRP gateway connection failed. Check customer parameters."}
-            </p>
-            <div className="border-t border-rose-200/50 pt-2 mt-2 text-[10px] text-rose-700 space-y-1">
-              <p className="font-bold">Please verify:</p>
-              <ul className="list-disc pl-4 space-y-0.5 font-medium">
-                <li>GSTIN authentication is active</li>
-                <li>Internet connectivity is stable</li>
-                <li>Backend service is available</li>
-                <li>Invoice is eligible for E-Invoice registration</li>
-              </ul>
+      {status === "FAILED" && (() => {
+        const friendlyError = getUserFriendlyEInvoiceError(error);
+        return (
+          <div className="bg-rose-50/45 border border-rose-200 rounded-xl p-4 text-xs text-rose-955 shadow-sm flex items-start gap-3">
+            <span className="flex items-center justify-center w-5.5 h-5.5 rounded-full bg-rose-105 text-rose-700 font-bold shrink-0 text-xs">✕</span>
+            <div className="space-y-2 flex-1">
+              <h5 className="font-extrabold text-rose-900 text-xs">{friendlyError.title}</h5>
+              <p className="text-[11px] text-rose-800 leading-relaxed font-semibold">
+                {friendlyError.description}
+              </p>
+              <p className="text-[11px] text-rose-700 leading-relaxed font-medium bg-white/70 p-2.5 rounded-lg border border-rose-100">
+                <strong>Action:</strong> {friendlyError.actionableAdvice}
+              </p>
+
+              {error && (
+                <details className="text-[10px] text-rose-600 font-medium cursor-pointer select-none border-t border-rose-200/30 pt-1.5">
+                  <summary className="hover:text-rose-800 transition duration-150">View technical error details</summary>
+                  <p className="text-[10px] text-rose-700 font-mono bg-rose-100/30 p-2 rounded-lg break-all mt-1 cursor-text select-text">
+                    {error}
+                  </p>
+                </details>
+              )}
+
+              {mode !== "modal" && (
+                <div className="flex gap-2 pt-1 border-t border-rose-200/40">
+                  <button
+                    onClick={handleGenerate}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1 border-0 cursor-pointer shadow-xs"
+                  >
+                    🔄 Retry Registration
+                  </button>
+                  <button
+                    onClick={() => dispatch(resetEInvoiceState())}
+                    className="px-3 py-1.5 border border-rose-250 text-rose-900 rounded-lg text-[10px] font-bold transition bg-white cursor-pointer"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
             </div>
-            {mode !== "modal" && (
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={handleGenerate}
-                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1 border-0 cursor-pointer shadow-xs"
-                >
-                  🔄 Retry Registration
-                </button>
-                <button
-                  onClick={() => dispatch(resetEInvoiceState())}
-                  className="px-3 py-1.5 border border-rose-250 text-rose-900 rounded-lg text-[10px] font-bold transition bg-white cursor-pointer"
-                >
-                  Dismiss
-                </button>
-              </div>
-            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* State: QUEUED */}
       {status === "QUEUED" && (
