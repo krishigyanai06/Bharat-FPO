@@ -158,3 +158,43 @@ export const fetchItemwiseProfitLoss = createAsyncThunk(
     }
   }
 );
+
+export const downloadGstr1Report = createAsyncThunk(
+  'reports/downloadGstr1Report',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Downloading GSTR-1 report with filters:', filters);
+      const blob = await reportService.downloadGstr1Report(filters);
+      
+      const ext = filters.format === 'csv' ? 'csv' : 'json';
+      let filename = 'GSTR1';
+      
+      if (filters.month && filters.year) {
+        const monthNames = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const monthIdx = parseInt(filters.month, 10) - 1;
+        const monthName = monthNames[monthIdx] || filters.month;
+        filename = `GSTR1_${monthName}_${filters.year}.${ext}`;
+      } else if (filters.startDate && filters.endDate) {
+        filename = `GSTR1_${filters.startDate}_to_${filters.endDate}.${ext}`;
+      } else {
+        const monthNames = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const now = new Date();
+        const monthName = monthNames[now.getMonth()];
+        const year = now.getFullYear();
+        filename = `GSTR1_${monthName}_${year}.${ext}`;
+      }
+      
+      downloadBlob(blob, filename);
+      return { success: true };
+    } catch (err) {
+      console.error('[reportsThunk] downloadGstr1Report error:', err);
+      return rejectWithValue(err.response?.data?.message || 'Failed to download GSTR-1 Report');
+    }
+  }
+);

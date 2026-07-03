@@ -52,6 +52,7 @@ const menuItems = [
   { icon: CreditCard, label: "Purchases", path: "/purchase" },
   { icon: Receipt, label: "Sales", path: "/sell" },
   { icon: BarChart3, label: "Reports", path: "/reports" },
+  { icon: FileText, label: "GST Reports", path: "/gst-reports" },
   { icon: Package, label: "Listing Approvals", path: "/listing" },
   { icon: ShoppingCart, label: "Procurement", path: "/procurement" },
   { icon: ShoppingBag, label: "Order Book", path: "/buy" },
@@ -279,8 +280,9 @@ export default function Layout() {
   };
 
   /* CURRENT PAGE LABEL */
-  const currentPage =
-    menuItems.find((m) => m.path === location.pathname)?.label || "Dashboard";
+  const currentPage = location.pathname.startsWith("/gst-reports")
+    ? (location.pathname.includes("/gstr-1") ? "GSTR-1 Report" : "GST Reports")
+    : menuItems.find((m) => m.path === location.pathname)?.label || "Dashboard";
 
   /* GLOBAL SEARCH — lazy-load search data on first keystroke */
   const handleSearchChange = (e) => {
@@ -421,7 +423,9 @@ export default function Layout() {
         <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-0.5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {visibleMenuItems.map((item) => {
             const Icon = item.icon;
-            const active = location.pathname === item.path;
+            const active = item.path === "/gst-reports"
+              ? location.pathname.startsWith("/gst-reports")
+              : location.pathname === item.path;
 
             return (
               <button

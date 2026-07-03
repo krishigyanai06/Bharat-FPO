@@ -18,6 +18,8 @@ const Buy = lazy(() => import('./pages/Buy'));
 const Members = lazy(() => import('./pages/Members'));
 const Documents = lazy(() => import('./pages/Documents'));
 const Reports = lazy(() => import('./pages/Reports'));
+const GstReportsDashboard = lazy(() => import('./pages/gst-reports/GstReportsWorkspace'));
+const Gstr1Report = lazy(() => import('./pages/gst-reports/Gstr1Report'));
 const Settings = lazy(() => import('./pages/Settings'));
 const CounterSales = lazy(() => import('./pages/CounterSales'));
 const CounterInvoiceForm = lazy(() => import('./pages/CounterInvoiceForm'));
@@ -73,6 +75,10 @@ function App() {
             <Route path="ledger" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/ledger']}><Suspense fallback={<PageLoader />}><ErrorBoundary><Ledger /></ErrorBoundary></Suspense></ProtectedRoute>} />
             <Route path="advertisement" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/advertisement']}><Suspense fallback={<PageLoader />}><Advertisement /></Suspense></ProtectedRoute>} />
             <Route path="reports" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/reports']}><Suspense fallback={<PageLoader />}><Reports /></Suspense></ProtectedRoute>} />
+            <Route path="gst-reports">
+              <Route index element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/gst-reports']}><Suspense fallback={<PageLoader />}><GstReportsDashboard /></Suspense></ProtectedRoute>} />
+              <Route path="gstr-1" element={<Navigate to="/gst-reports?tab=gstr1" replace />} />
+            </Route>
             <Route path="settings" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/settings']}><Suspense fallback={<PageLoader />}><Settings /></Suspense></ProtectedRoute>} />
             <Route path="sell" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterSales /></Suspense></ProtectedRoute>} />
             <Route path="sell/invoice/new" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterInvoiceForm /></Suspense></ProtectedRoute>} />

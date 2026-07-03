@@ -114,6 +114,19 @@ const reportService = {
     });
     return res.data;
   },
+
+  /**
+   * Downloads GSTR-1 Report in JSON or CSV format matching query options.
+   * @param {object} filters - month, year, startDate, endDate, format
+   * @returns {Promise<Blob>}
+   */
+  downloadGstr1Report: async (filters) => {
+    const res = await api.get('/reports/gstr-1', {
+      params: filters,
+      responseType: 'blob',
+    });
+    return res.data;
+  },
 };
 
 export default reportService;

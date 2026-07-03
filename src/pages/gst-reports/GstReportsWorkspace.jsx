@@ -2,65 +2,40 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Home, 
-  TrendingUp, 
-  ShoppingBag, 
-  ArrowDownCircle, 
-  ArrowUpCircle, 
-  Folder, 
-  Scale, 
-  UserCheck,
+  Home,
+  ShieldCheck,
+  FileText, 
+  Layers, 
+  Percent,
+  Calculator,
   Plus, 
   X,
   Search
 } from 'lucide-react';
-import ReportsDashboard from './reports/ReportsDashboard';
-import SalesReport from './reports/SalesReport';
-import PurchaseReport from './reports/PurchaseReport';
-import PaymentInReport from './reports/PaymentInReport';
-import PaymentOutReport from './reports/PaymentOutReport';
-import ExpenseReport from './reports/ExpenseReport';
-import BalanceSheetReport from './reports/BalanceSheetReport';
-import PartySalePurchaseReport from './reports/PartySalePurchaseReport';
-import ItemwiseProfitLossReport from './reports/ItemwiseProfitLossReport';
+import GstDashboardContent from './GstDashboardContent';
+import Gstr1Report from './Gstr1Report';
 
 const ALL_TABS = {
-  dashboard: { key: 'dashboard', label: 'Dashboard', icon: Home },
-  sales: { key: 'sales', label: 'Sales Report', icon: TrendingUp },
-  purchase: { key: 'purchase', label: 'Purchase Report', icon: ShoppingBag },
-  paymentin: { key: 'paymentin', label: 'Payment In', icon: ArrowDownCircle },
-  paymentout: { key: 'paymentout', label: 'Payment Out', icon: ArrowUpCircle },
-  expense: { key: 'expense', label: 'Expense Report', icon: Folder },
-  balancesheet: { key: 'balancesheet', label: 'Balance Sheet', icon: Scale },
-  partysalepurchase: { key: 'partysalepurchase', label: 'Party Sale-Purchase', icon: UserCheck },
-  itemwiseprofitloss: { key: 'itemwiseprofitloss', label: 'Itemwise Profit-Loss', icon: TrendingUp }
+  dashboard: { key: 'dashboard', label: 'Dashboard', icon: ShieldCheck },
+  gstr1: { key: 'gstr1', label: 'GSTR-1 Return', icon: FileText },
+  gstr2b: { key: 'gstr2b', label: 'GSTR-2B ITC Statement', icon: Layers, disabled: true },
+  gstr3b: { key: 'gstr3b', label: 'GSTR-3B Summary Return', icon: Percent, disabled: true },
+  gstr9: { key: 'gstr9', label: 'GSTR-9 Annual Return', icon: Calculator, disabled: true }
 };
 
 const REPORT_COMPONENTS = {
-  dashboard: ReportsDashboard,
-  sales: SalesReport,
-  purchase: PurchaseReport,
-  paymentin: PaymentInReport,
-  paymentout: PaymentOutReport,
-  expense: ExpenseReport,
-  partysalepurchase: PartySalePurchaseReport,
-  itemwiseprofitloss: ItemwiseProfitLossReport,
-  balancesheet: BalanceSheetReport
+  dashboard: GstDashboardContent,
+  gstr1: Gstr1Report
 };
 
-const Reports = () => {
+const GstReportsWorkspace = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'dashboard';
 
-  // Initially opened tabs (matching standard workspace layout)
+  // Initially opened tabs
   const [openTabs, setOpenTabs] = useState([
     'dashboard',
-    'sales',
-    'purchase',
-    'paymentin',
-    'paymentout',
-    'expense',
-    'balancesheet'
+    'gstr1'
   ]);
 
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -72,7 +47,7 @@ const Reports = () => {
 
   // Sync search param tab to openTabs if navigated programmatically (e.g. from Dashboard cards)
   useEffect(() => {
-    if (activeTab && ALL_TABS[activeTab] && !openTabs.includes(activeTab)) {
+    if (activeTab && ALL_TABS[activeTab] && !ALL_TABS[activeTab].disabled && !openTabs.includes(activeTab)) {
       setOpenTabs((prev) => [...prev, activeTab]);
     }
   }, [activeTab, openTabs]);
@@ -101,6 +76,7 @@ const Reports = () => {
   };
 
   const handleOpenTab = (tabKey) => {
+    if (ALL_TABS[tabKey]?.disabled) return;
     if (!openTabs.includes(tabKey)) {
       setOpenTabs([...openTabs, tabKey]);
     }
@@ -172,9 +148,12 @@ const Reports = () => {
       } else if (e.key === 'Enter') {
         e.preventDefault();
         if (matchingTabs[selectedSearchIndex]) {
-          handleOpenTab(matchingTabs[selectedSearchIndex].key);
-          setShowSearchModal(false);
-          setSearchQuery('');
+          const target = matchingTabs[selectedSearchIndex];
+          if (!target.disabled) {
+            handleOpenTab(target.key);
+            setShowSearchModal(false);
+            setSearchQuery('');
+          }
         }
       } else if (e.key === 'Escape') {
         e.preventDefault();
@@ -188,14 +167,14 @@ const Reports = () => {
   }, [showSearchModal, searchQuery, selectedSearchIndex, matchingTabs]);
 
   return (
-    <div className="bg-[#F8FAFC] border border-gray-200 min-h-[85vh] rounded-2xl shadow-sm overflow-hidden select-none flex flex-col relative">
+    <div className="bg-[#F8FAFC] border border-gray-200 min-h-[85vh] rounded-2xl shadow-sm overflow-hidden select-none flex flex-col relative w-full">
       <style>{`
         .no-scrollbar::-webkit-scrollbar {
           display: none;
         }
       `}</style>
 
-      {/* ── Top Navigation Tabs (matches request) ── */}
+      {/* ── Top Navigation Tabs (Chrome-Style Workspace) ── */}
       <div className="bg-white border-b border-gray-200 pt-2.5 px-4 flex items-center justify-between gap-2 z-10">
         <div 
           ref={tabsScrollRef}
@@ -270,14 +249,20 @@ const Reports = () => {
                       return (
                         <button
                           key={t.key}
+                          disabled={t.disabled}
                           onClick={() => {
                             handleOpenTab(t.key);
                             setShowAddMenu(false);
                           }}
-                          className="w-full text-left px-3.5 py-2 text-xs flex items-center gap-2 text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                          className={`w-full text-left px-3.5 py-2 text-xs flex items-center gap-2 transition-colors ${
+                            t.disabled 
+                              ? 'text-gray-400 cursor-not-allowed opacity-50' 
+                              : 'text-gray-700 hover:bg-gray-50 cursor-pointer'
+                          }`}
                         >
                           {DropdownIcon && <DropdownIcon className="w-3.5 h-3.5 text-gray-400" />}
                           <span>{t.label}</span>
+                          {t.disabled && <span className="ml-auto text-[8px] bg-gray-100 text-gray-400 px-1.5 rounded">Soon</span>}
                         </button>
                       );
                     })}
@@ -346,7 +331,7 @@ const Reports = () => {
               <input
                 autoFocus
                 type="text"
-                placeholder="Search reports... (use ↑ ↓ keys to navigate, Enter to open)"
+                placeholder="Search GST reports... (use ↑ ↓ keys to navigate, Enter to open)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-transparent text-sm text-gray-800 placeholder-gray-400 focus:outline-none"
@@ -367,27 +352,34 @@ const Reports = () => {
                   <div
                     key={t.key}
                     onClick={() => {
-                      handleOpenTab(t.key);
-                      setShowSearchModal(false);
-                      setSearchQuery('');
+                      if (!t.disabled) {
+                        handleOpenTab(t.key);
+                        setShowSearchModal(false);
+                        setSearchQuery('');
+                      }
                     }}
                     onMouseEnter={() => setSelectedSearchIndex(idx)}
-                    className={`px-4 py-2.5 flex items-center justify-between cursor-pointer transition-colors ${
+                    className={`px-4 py-2.5 flex items-center justify-between transition-colors ${
                       isSelected ? 'bg-gray-50' : ''
-                    }`}
+                    } ${t.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={`p-1.5 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                        isSelected ? 'bg-green-50 text-[#16A34A]' : 'bg-gray-50 text-gray-400'
+                        isSelected && !t.disabled ? 'bg-green-50 text-[#16A34A]' : 'bg-gray-50 text-gray-400'
                       }`}>
                         {ItemIcon && <ItemIcon className="w-4 h-4" />}
                       </div>
-                      <div className="truncate">
+                      <div className="truncate flex items-center gap-2">
                         <span className={`text-xs font-semibold block ${
-                          isSelected ? 'text-[#16A34A]' : 'text-gray-700'
+                          isSelected && !t.disabled ? 'text-[#16A34A]' : 'text-gray-700'
                         }`}>
                           {t.label}
                         </span>
+                        {t.disabled && (
+                          <span className="text-[8px] font-bold text-gray-400 bg-gray-100 rounded px-1 py-0.5">
+                            Coming Soon
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -419,4 +411,4 @@ const Reports = () => {
   );
 };
 
-export default Reports;
+export default GstReportsWorkspace;

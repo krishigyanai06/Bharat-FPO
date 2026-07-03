@@ -9,6 +9,7 @@ import {
   downloadExpenseReport,
   fetchPartySalePurchase,
   fetchItemwiseProfitLoss,
+  downloadGstr1Report,
 } from '../thunks/reportsThunk';
 
 const initialState = {
@@ -22,6 +23,7 @@ const initialState = {
   paymentInDownloadLoading: false,
   paymentOutDownloadLoading: false,
   expenseDownloadLoading: false,
+  gstr1DownloadLoading: false,
 
   balanceSheet: null,
   error: null,
@@ -164,6 +166,19 @@ const reportsSlice = createSlice({
       .addCase(fetchItemwiseProfitLoss.rejected, (state, action) => {
         if (action.meta?.aborted) return;
         state.itemwiseProfitLossLoading = false;
+        state.error = action.payload;
+      })
+
+      /* ================= DOWNLOAD GSTR-1 REPORT ================= */
+      .addCase(downloadGstr1Report.pending, (state) => {
+        state.gstr1DownloadLoading = true;
+        state.error = null;
+      })
+      .addCase(downloadGstr1Report.fulfilled, (state) => {
+        state.gstr1DownloadLoading = false;
+      })
+      .addCase(downloadGstr1Report.rejected, (state, action) => {
+        state.gstr1DownloadLoading = false;
         state.error = action.payload;
       });
   },
