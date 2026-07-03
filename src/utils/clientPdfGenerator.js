@@ -41,7 +41,14 @@ export const generateClientSalesReportPDF = async (data, filters) => {
     const startStr = filters.startDate || 'Beginning';
     const endStr = filters.endDate || 'Present';
     doc.text(`Date Range: ${startStr} to ${endStr}`, 14, 42);
-    doc.text(`Sale Type: ${filters.saleType || 'All Types'}   |   Billing Type: ${filters.billingType || 'All Billing'}`, 14, 47);
+    let filtersSubtitle2 = `Sale Type: ${filters.saleType || 'All Types'}   |   Billing Type: ${filters.billingType || 'All Billing'}`;
+    if (filters.search) {
+      filtersSubtitle2 += `   |   Search: "${filters.search}"`;
+    }
+    if (filters.itemName) {
+      filtersSubtitle2 += `   |   Item: ${filters.itemName}`;
+    }
+    doc.text(filtersSubtitle2, 14, 47);
 
     // Compute totals
     let totalSales = 0;

@@ -24,8 +24,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import api, { isEInvoiceSessionValid, addAuditLog } from "../lib/api";
 import { generateEInvoice, generateEInvoicePdf } from "../store/thunks/eInvoiceThunk";
 import { clearEInvoiceStatus } from "../store/slices/eInvoiceSlice";
-import EInvoiceWidget from "../components/EInvoiceWidget";
-import QuickEInvoiceModal from "../components/QuickEInvoiceModal";
+import GovernmentComplianceModal from "../components/GovernmentComplianceModal";
 import {
   Receipt,
   Plus,
@@ -56,6 +55,7 @@ import {
   Printer,
   Layers,
   Clock,
+  Shield,
 } from "lucide-react";
 
 const TABS = [
@@ -167,6 +167,12 @@ export default function CounterSales() {
   const [quickEInvoiceItem, setQuickEInvoiceItem] = useState(null);
   const [quickEInvoiceMode, setQuickEInvoiceMode] = useState("generate"); // "generate" | "details"
   
+  // Compliance drawer state
+  const [complianceDrawerOpen, setComplianceDrawerOpen] = useState(false);
+  const [complianceItem, setComplianceItem] = useState(null);
+  const [complianceModalOpen, setComplianceModalOpen] = useState(false);
+  const [selectedComplianceSale, setSelectedComplianceSale] = useState(null);
+  
   // Local list filters
   const [searchQuery, setSearchQuery] = useState("");
   const [saleTypeFilter, setSaleTypeFilter] = useState("all");
@@ -232,10 +238,11 @@ export default function CounterSales() {
   };
 
   // PDF Receipt download/preview handler
-  const handleDownloadReceipt = async (id, invoiceNo = "Invoice") => {
+  const handleDownloadReceipt = async (id, invoiceNo = "Invoice", supplyType) => {
     try {
       toast.loading("Generating receipt PDF...", { id: "pdf-download" });
-      const res = await api.get(`/sell/receipt/${id}`, { responseType: "blob" });
+      const queryParam = supplyType ? `?supplyType=${encodeURIComponent(supplyType)}` : "";
+      const res = await api.get(`/sell/receipt/${id}${queryParam}`, { responseType: "blob" });
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       window.open(url, "_blank");
@@ -479,13 +486,14 @@ export default function CounterSales() {
                     <th className="px-3 py-3 text-right font-bold">RECEIVED AMOUNT</th>
                     <th className="px-3 py-3 text-right font-bold">UNPAID AMOUNT</th>
                     <th className="px-3 py-3 text-center font-bold">E-INVOICE</th>
+                    <th className="px-3 py-3 text-center font-bold">E-WAY BILL</th>
                     <th className="px-3 py-3 text-right font-bold">ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {sales.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-6 py-16 text-center text-gray-400">
+                      <td colSpan={11} className="px-6 py-16 text-center text-gray-400">
                         <Receipt className="w-12 h-12 mx-auto text-gray-300 mb-2" />
                         <p className="font-medium">No sales bills found</p>
                       </td>
@@ -543,13 +551,10 @@ export default function CounterSales() {
                             const resolved = parties.find(p => p._id === partyId);
                             const isB2B = sale.saleType === "SALE" && resolved && (resolved.gstin || resolved.gstNumber || resolved.gstType?.startsWith("Registered"));
                             
-                            console.log("SALE:", sale);
-                            console.log("E-INVOICE:", sale.eInvoice);
-                            
                             if (!isB2B) {
                               return (
-                                <span className="text-gray-400 font-medium text-[11px] select-none">
-                                  —
+                                <span className="text-gray-450 font-semibold text-xs select-none">
+                                  N/A
                                 </span>
                               );
                             }
@@ -559,12 +564,12 @@ export default function CounterSales() {
                               return (
                                 <button
                                   onClick={() => {
-                                    setQuickEInvoiceItem(sale);
-                                    setQuickEInvoiceMode("details");
+                                    setSelectedComplianceSale(sale);
+                                    setComplianceModalOpen(true);
                                   }}
-                                  className="border border-emerald-250 bg-emerald-50/20 hover:bg-emerald-50 text-emerald-800 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
+                                  className="border border-emerald-500 bg-emerald-50/10 hover:bg-emerald-50 text-emerald-800 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
                                 >
-                                  <CheckCircle size={12} className="text-emerald-600" /> Generated
+                                  ✓ Generated
                                 </button>
                               );
                             }
@@ -574,12 +579,12 @@ export default function CounterSales() {
                               return (
                                 <button
                                   onClick={() => {
-                                    setQuickEInvoiceItem(sale);
-                                    setQuickEInvoiceMode("generate");
+                                    setSelectedComplianceSale(sale);
+                                    setComplianceModalOpen(true);
                                   }}
-                                  className="border border-rose-200 bg-rose-50/30 hover:bg-rose-50 text-rose-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer animate-pulse text-xs"
+                                  className="border border-rose-500 bg-rose-50/10 hover:bg-rose-50 text-rose-750 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
                                 >
-                                  <AlertTriangle size={12} className="text-rose-500" /> Failed
+                                  ❌ Failed
                                 </button>
                               );
                             }
@@ -587,12 +592,72 @@ export default function CounterSales() {
                             return (
                               <button
                                 onClick={() => {
-                                  setQuickEInvoiceItem(sale);
-                                  setQuickEInvoiceMode("generate");
+                                  setSelectedComplianceSale(sale);
+                                  setComplianceModalOpen(true);
                                 }}
-                                className="border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer font-sans text-xs"
+                                className="border border-gray-205 bg-white hover:bg-gray-50 text-gray-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer font-sans text-xs"
                               >
-                                <FileText size={12} className="text-gray-400" /> Generate
+                                ⚡ Generate
+                              </button>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          {(() => {
+                            if (sale.saleType === "ESTIMATE") {
+                              return (
+                                <span className="text-gray-400 font-medium text-[11px] select-none">
+                                  —
+                                </span>
+                              );
+                            }
+
+                            const ewbNo = sale.ewayBillNo || sale.eWayBillNo || sale.eInvoiceInfo?.ewayBillNo || sale.eInvoiceInfo?.eWayBillNo;
+                            const ewbStatus = sale.ewayBillStatus || sale.eInvoiceInfo?.ewayBillStatus || "ACTIVE";
+                            const hasEwb = !!ewbNo;
+
+                            if (hasEwb) {
+                              return (
+                                <button
+                                  onClick={() => {
+                                    setSelectedComplianceSale(sale);
+                                    setComplianceModalOpen(true);
+                                  }}
+                                  className={`font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs border ${
+                                    ewbStatus === "CANCELLED"
+                                      ? "border-rose-300 bg-rose-50/10 text-rose-700"
+                                      : "border-emerald-500 bg-emerald-50/10 text-emerald-805"
+                                  }`}
+                                >
+                                  {ewbStatus === "CANCELLED" ? "Cancelled" : "✓ Generated"}
+                                </button>
+                              );
+                            }
+
+                            const partyId = typeof sale.party === "string" ? sale.party : sale.party?._id;
+                            const resolved = parties.find(p => p._id === partyId);
+                            const isB2B = sale.saleType === "SALE" && resolved && (resolved.gstin || resolved.gstNumber || resolved.gstType?.startsWith("Registered"));
+
+                            if (isB2B) {
+                              const irnVal = sale.eInvoiceIrn || sale.irn || sale.eInvoiceInfo?.irn;
+                              if (!irnVal) {
+                                return (
+                                  <span className="text-gray-400 font-semibold text-[11px] select-none">
+                                    Waiting IRN
+                                  </span>
+                                );
+                              }
+                            }
+
+                            return (
+                              <button
+                                onClick={() => {
+                                  setSelectedComplianceSale(sale);
+                                  setComplianceModalOpen(true);
+                                }}
+                                className="border border-amber-500 bg-amber-50/5 hover:bg-amber-50 text-amber-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
+                              >
+                                ⚡ Generate
                               </button>
                             );
                           })()}
@@ -606,8 +671,20 @@ export default function CounterSales() {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
+                            {sale.saleType === "SALE" && (
+                              <button
+                                onClick={() => {
+                                  setSelectedComplianceSale(sale);
+                                  setComplianceModalOpen(true);
+                                }}
+                                className="p-2 text-gray-650 hover:text-brand-750 hover:bg-brand-50 rounded-lg transition"
+                                title="Government Compliance (E-Invoice / E-Way Bill)"
+                              >
+                                <Shield className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
-                              onClick={() => handleDownloadReceipt(sale._id, sale.invoiceNo || "Receipt")}
+                              onClick={() => handleDownloadReceipt(sale._id, sale.invoiceNo || "Receipt", sale.supplyType)}
                               className="p-2 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
                               title="Download Sales Bill PDF"
                             >
@@ -892,31 +969,7 @@ export default function CounterSales() {
         />
       )}
 
-      {/* ════════════════════════════════════════════════════════════
-         3.5 QUICK E-INVOICE GENERATION / DETAILS MODAL
-      ════════════════════════════════════════════════════════════ */}
-      {quickEInvoiceItem && (
-        <QuickEInvoiceModal
-          mode={quickEInvoiceMode}
-          item={quickEInvoiceItem}
-          resolvedParty={(() => {
-            const partyId = typeof quickEInvoiceItem.party === "string" ? quickEInvoiceItem.party : quickEInvoiceItem.party?._id;
-            return parties.find(p => p._id === partyId) || (typeof quickEInvoiceItem.party === "object" ? quickEInvoiceItem.party : null);
-          })()}
-          onClose={() => {
-            setQuickEInvoiceItem(null);
-          }}
-          onSuccess={() => {
-            setQuickEInvoiceItem(null);
-            loadListData();
-          }}
-          onViewSaleDetails={() => {
-            const targetItem = quickEInvoiceItem;
-            setQuickEInvoiceItem(null);
-            handleViewDetails(targetItem, "sale");
-          }}
-        />
-      )}
+
 
       {/* ════════════════════════════════════════════════════════════
          4. DETAILS VIEWING MODAL
@@ -934,6 +987,17 @@ export default function CounterSales() {
           handleDownloadPaymentReceipt={handleDownloadPaymentReceipt}
         />
       )}
+
+      {/* 5. GOVERNMENT COMPLIANCE MODAL */}
+      <GovernmentComplianceModal
+        isOpen={complianceModalOpen}
+        sale={selectedComplianceSale}
+        onClose={() => {
+          setComplianceModalOpen(false);
+          setSelectedComplianceSale(null);
+        }}
+        onSuccess={loadListData}
+      />
     </div>
   );
 }
@@ -1663,6 +1727,7 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
 function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownloadPaymentReceipt }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const [overrideSupplyType, setOverrideSupplyType] = useState(item.supplyType || "Tax Invoice");
   const { products, stockSummary } = useSelector((state) => state.inventory);
 
   const formatDisplayDate = (dateStr) => {
@@ -1861,6 +1926,12 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
             <div className="grid grid-cols-[120px_1fr] gap-y-3.5 text-xs">
               <div className="text-gray-500 font-semibold">{isPayment ? "Payment Mode" : "Payment Type"}</div>
               <div className="font-bold text-gray-900">{item.paymentMode || (item.billingType === "Cash" ? "Cash" : "Credit")}</div>
+              {isSale && (
+                <div style={{ display: "contents" }}>
+                  <div className="text-gray-500 font-semibold">Supply Format</div>
+                  <div className="font-bold text-emerald-700 font-bold">{item.supplyType || "Tax Invoice"}</div>
+                </div>
+              )}
               <div className="text-gray-500 font-semibold">Reference No.</div>
               <div className="font-bold text-gray-900 font-mono">{item.referenceNo || item.payments?.[0]?.referenceNo || "—"}</div>
               <div className="text-gray-500 font-semibold">Description</div>
@@ -2023,23 +2094,37 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
           </div>
         </div>
 
-        {/* E-Invoice Widget integration */}
-        {isSale && <EInvoiceWidget item={item} type={type} mode="modal" />}
-
         {/* Footer Actions block */}
         <div className="flex justify-between items-center border-t border-gray-100 pt-4 flex-wrap gap-4 select-none">
-          <button
-            onClick={() => {
-              if (isPayment) {
-                handleDownloadPaymentReceipt(item._id);
-              } else {
-                handleDownloadReceipt(item._id, item.invoiceNo || "Invoice");
-              }
-            }}
-            className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-xl text-xs transition duration-150 active:scale-95 cursor-pointer shadow-3xs bg-white"
-          >
-            <Printer size={14} /> Print / Download PDF
-          </button>
+          <div className="flex items-center gap-4 flex-wrap">
+            <button
+              onClick={() => {
+                if (isPayment) {
+                  handleDownloadPaymentReceipt(item._id);
+                } else {
+                  handleDownloadReceipt(item._id, item.invoiceNo || "Invoice", overrideSupplyType);
+                }
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-xl text-xs transition duration-150 active:scale-95 cursor-pointer shadow-3xs bg-white"
+            >
+              <Printer size={14} /> Print / Download PDF
+            </button>
+
+            {!isPayment && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PDF Title Override:</span>
+                <select
+                  value={overrideSupplyType}
+                  onChange={(e) => setOverrideSupplyType(e.target.value)}
+                  className="border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-gray-800 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500"
+                >
+                  <option value="Tax Invoice">Tax Invoice</option>
+                  <option value="Exempted Supply">Exempted Supply</option>
+                  <option value="Zero Rated">Zero Rated</option>
+                </select>
+              </div>
+            )}
+          </div>
 
           <div className="text-right flex items-baseline gap-2 leading-none">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</span>

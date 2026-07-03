@@ -48,7 +48,9 @@ export const generateEInvoice = createAsyncThunk(
   "eInvoice/generate",
   async ({ invoiceData }, { rejectWithValue }) => {
     try {
-      const response = await api.post("/e-invoice/generate", invoiceData);
+      const response = await api.post("/e-invoice/generate", invoiceData, {
+        governmentToken: "einvoice",
+      });
       return response.data?.data || response.data;
     } catch (err) {
       return rejectWithValue(
@@ -65,7 +67,9 @@ export const generateEInvoicePdf = createAsyncThunk(
     try {
       // pdfPayload: { signed_qr_code, irn, signed_invoice }
       // API returns JSON: { code, data: { irn, "e-invoice_pdf_url": "https://..." }, transaction_id }
-      const response = await api.post("/e-invoice/pdf/generate", pdfPayload);
+      const response = await api.post("/e-invoice/pdf/generate", pdfPayload, {
+        governmentToken: "einvoice",
+      });
       const pdfUrl = response.data?.data?.["e-invoice_pdf_url"];
       if (!pdfUrl) {
         return rejectWithValue("Backend did not return a PDF URL");

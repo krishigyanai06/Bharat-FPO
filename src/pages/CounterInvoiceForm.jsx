@@ -15,6 +15,7 @@ import SearchableStateSelect from "../components/SearchableStateSelect";
 import ProductModal from "../components/ProductModal";
 import { searchGstin } from "../store/thunks/eInvoiceThunk";
 import { normalizeGstinData } from "../utils/gstinNormalizer";
+import GovernmentComplianceModal from "../components/GovernmentComplianceModal";
 import {
   Plus,
   Trash2,
@@ -131,6 +132,8 @@ const getProductIcon = (category) => {
 function InvoiceFormInner({ editRecord = null, parties, products, stockSummary = [], sellLoading }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const [savedSaleForCompliance, setSavedSaleForCompliance] = useState(null);
+  const [isComplianceModalOpen, setIsComplianceModalOpen] = useState(false);
 
   const [addVendorOpen, setAddVendorOpen] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -153,6 +156,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
   const [remarks, setRemarks] = useState(editRecord ? (editRecord.remarks || "") : "");
 
   const [stateOfSupply, setStateOfSupply] = useState(editRecord ? (editRecord.stateOfSupply || "Uttar Pradesh") : "Uttar Pradesh");
+  const [supplyType, setSupplyType] = useState(editRecord ? (editRecord.supplyType || "Tax Invoice") : "Tax Invoice");
   const [termsAndConditions, setTermsAndConditions] = useState(editRecord ? (editRecord.termsAndConditions || "") : "");
   const [description, setDescription] = useState(editRecord ? (editRecord.description || "") : "");
   const [roundOff, setRoundOff] = useState(editRecord ? !!editRecord.roundOff : false);
@@ -733,6 +737,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
       totalAmount: finalTotal,
       remarks,
       stateOfSupply,
+      supplyType,
       termsAndConditions: termsAndConditions.trim() || undefined,
       description: description.trim() || undefined,
       roundOff,
@@ -742,14 +747,44 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     };
 
     try {
+      let savedSale = null;
       if (editRecord) {
-        await dispatch(updateSaleOrEstimate({ id: editRecord._id, payload })).unwrap();
+        savedSale = await dispatch(updateSaleOrEstimate({ id: editRecord._id, payload })).unwrap();
         toast.success("Transaction updated successfully!");
       } else {
-        await dispatch(createSaleOrEstimate(payload)).unwrap();
+        savedSale = await dispatch(createSaleOrEstimate(payload)).unwrap();
         toast.success("Transaction recorded successfully!");
       }
-      navigate("/sell?tab=sales");
+
+      if (saleType !== "SALE") {
+        navigate("/sell?tab=sales");
+        return;
+      }
+
+      // Check if compliance is already done
+      const partyId = typeof savedSale?.party === "string"
+        ? savedSale.party
+        : (savedSale?.party && typeof savedSale?.party === "object" ? savedSale.party._id : null);
+      
+      const resolvedParty = partyId
+        ? (parties.find(p => p._id === partyId) || (typeof savedSale?.party === "object" ? savedSale.party : null))
+        : (savedSale?.party && typeof savedSale?.party === "object" ? savedSale.party : null);
+
+      const isB2B = resolvedParty && (resolvedParty.gstin || resolvedParty.gstNumber || resolvedParty.gstType?.startsWith("Registered"));
+      
+      const irnVal = savedSale?.eInvoiceIrn || savedSale?.irn || savedSale?.eInvoiceInfo?.irn;
+      const ewbNoVal = savedSale?.ewayBillNo || savedSale?.eWayBillNo || savedSale?.eInvoiceInfo?.ewayBillNo || savedSale?.eInvoiceInfo?.eWayBillNo;
+      
+      const isComplianceDone = isB2B 
+        ? (irnVal && ewbNoVal) 
+        : ewbNoVal;
+
+      if (isComplianceDone) {
+        navigate("/sell?tab=sales");
+      } else {
+        setSavedSaleForCompliance(savedSale);
+        setIsComplianceModalOpen(true);
+      }
     } catch (err) {
       toast.error(err || "Failed to submit transaction");
     }
@@ -997,6 +1032,24 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                     onChange={(val) => setStateOfSupply(val)}
                     height="h-[42px]"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Supply Type</label>
+                  <div className="relative">
+                    <select
+                      value={supplyType}
+                      onChange={(e) => setSupplyType(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] cursor-pointer font-semibold text-gray-800 appearance-none pr-8 transition-all"
+                    >
+                      <option value="Tax Invoice">Tax Invoice</option>
+                      <option value="Exempted Supply">Exempted Supply</option>
+                      <option value="Zero Rated">Zero Rated</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-gray-400">
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </div>
                 </div>
 
                 {billingType === "Credit" && (
@@ -1772,6 +1825,15 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
           }}
         />
       )}
+
+      <GovernmentComplianceModal
+        isOpen={isComplianceModalOpen}
+        sale={savedSaleForCompliance}
+        onClose={() => {
+          setIsComplianceModalOpen(false);
+          navigate("/sell?tab=sales");
+        }}
+      />
     </div>
   );
 }

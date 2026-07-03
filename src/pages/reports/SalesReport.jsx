@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchSales } from '../../store/thunks/sellThunk';
 import { fetchParties } from '../../store/thunks/partyThunk';
+import { fetchProducts } from '../../store/thunks/inventoryThunk';
 import { downloadSalesReport } from '../../store/thunks/reportsThunk';
 import { generateClientSalesReportPDF, generateIndividualSalePDF } from '../../utils/clientPdfGenerator';
 import api from '../../lib/api';
@@ -40,6 +41,7 @@ const SalesReport = () => {
   // Redux Selectors
   const { sales, loading: salesLoading } = useSelector((state) => state.sell);
   const { parties } = useSelector((state) => state.party);
+  const { products = [] } = useSelector((state) => state.inventory || {});
   const { salesDownloadLoading, error } = useSelector((state) => state.reports);
 
   // Filters State
@@ -48,6 +50,7 @@ const SalesReport = () => {
   const [saleType, setSaleType] = useState('');
   const [billingType, setBillingType] = useState('');
   const [partyId, setPartyId] = useState('');
+  const [itemId, setItemId] = useState('');
   const [search, setSearch] = useState('');
 
   // UI Dropdowns State
@@ -82,18 +85,21 @@ const SalesReport = () => {
   // Initial Fetch
   useEffect(() => {
     dispatch(fetchParties());
+    dispatch(fetchProducts());
   }, [dispatch]);
 
   // Reactive Fetch when filters change
   useEffect(() => {
-    const currentFilters = { startDate, endDate, saleType, billingType, party: partyId };
+    const currentFilters = { startDate, endDate, saleType, billingType, party: partyId, search, item: itemId };
 
     const filtersChanged = !lastFetchedFilters.current ||
       currentFilters.startDate !== lastFetchedFilters.current.startDate ||
       currentFilters.endDate !== lastFetchedFilters.current.endDate ||
       currentFilters.saleType !== lastFetchedFilters.current.saleType ||
       currentFilters.billingType !== lastFetchedFilters.current.billingType ||
-      currentFilters.party !== lastFetchedFilters.current.party;
+      currentFilters.party !== lastFetchedFilters.current.party ||
+      currentFilters.search !== lastFetchedFilters.current.search ||
+      currentFilters.item !== lastFetchedFilters.current.item;
 
     if (!filtersChanged) return;
 
@@ -116,16 +122,18 @@ const SalesReport = () => {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [startDate, endDate, saleType, billingType, partyId]);
+  }, [startDate, endDate, saleType, billingType, partyId, search, itemId]);
 
   const handleFetchData = (targetFilters = null) => {
-    const rawFilters = targetFilters || { startDate, endDate, saleType, billingType, party: partyId };
+    const rawFilters = targetFilters || { startDate, endDate, saleType, billingType, party: partyId, search, item: itemId };
     const filters = {};
     if (rawFilters.startDate) filters.startDate = rawFilters.startDate;
     if (rawFilters.endDate) filters.endDate = rawFilters.endDate;
     if (rawFilters.saleType) filters.saleType = rawFilters.saleType;
     if (rawFilters.billingType) filters.billingType = rawFilters.billingType;
     if (rawFilters.party) filters.party = rawFilters.party;
+    if (rawFilters.search) filters.search = rawFilters.search;
+    if (rawFilters.item) filters.item = rawFilters.item;
 
     if (activeRequestRef.current) {
       activeRequestRef.current.abort();
@@ -146,9 +154,10 @@ const SalesReport = () => {
     setSaleType('');
     setBillingType('');
     setPartyId('');
+    setItemId('');
     setSearch('');
 
-    const cleanFilters = { startDate: '', endDate: '', saleType: '', billingType: '', party: '' };
+    const cleanFilters = { startDate: '', endDate: '', saleType: '', billingType: '', party: '', search: '', item: '' };
 
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
@@ -164,6 +173,14 @@ const SalesReport = () => {
     if (saleType) filters.saleType = saleType;
     if (billingType) filters.billingType = billingType;
     if (partyId) filters.party = partyId;
+    if (search) filters.search = search;
+    if (itemId) {
+      filters.item = itemId;
+      const matchedProd = products.find(p => p._id === itemId);
+      if (matchedProd) {
+        filters.itemName = matchedProd.productName;
+      }
+    }
 
     const res = await dispatch(downloadSalesReport(filters));
     
@@ -176,7 +193,8 @@ const SalesReport = () => {
   const handleDownloadIndividual = async (item) => {
     try {
       const invoiceNo = item.invoiceNo || item.invoiceNumber || item.refNo || item._id;
-      const res = await api.get(`/sell/receipt/${item._id}`, { responseType: 'blob' });
+      const supplyTypeParam = item.supplyType ? `?supplyType=${encodeURIComponent(item.supplyType)}` : "";
+      const res = await api.get(`/sell/receipt/${item._id}${supplyTypeParam}`, { responseType: 'blob' });
       const blob = new Blob([res.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -320,6 +338,18 @@ const SalesReport = () => {
       );
     }
 
+    // Client-side item filter
+    if (itemId) {
+      result = result.filter((item) => {
+        return (item.items || []).some((i) => {
+          const itemRef = i.item;
+          const refId = typeof itemRef === 'string' ? itemRef : (itemRef?._id || '');
+          const prodId = i.productId || '';
+          return refId === itemId || prodId === itemId || (itemRef?.sourceRef === itemId);
+        });
+      });
+    }
+
     // Client-side sort
     if (sortConfig.key) {
       result.sort((a, b) => {
@@ -356,7 +386,7 @@ const SalesReport = () => {
     }
 
     return result;
-  }, [sales, search, sortConfig]);
+  }, [sales, search, itemId, sortConfig]);
 
   // Paginated Rows
   const paginatedData = useMemo(() => {
@@ -563,6 +593,23 @@ const SalesReport = () => {
               {parties?.map((p) => (
                 <option key={p._id} value={p._id}>
                   {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Item filter */}
+          <div className="w-[160px] flex flex-col">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Item</span>
+            <select
+              value={itemId}
+              onChange={(e) => setItemId(e.target.value)}
+              className="w-full bg-white border border-gray-200 px-3 py-1.5 h-[38px] rounded-lg text-xs font-bold focus:outline-none focus:border-[#15803D] focus:ring-1 focus:ring-[#15803D] text-gray-750 shadow-sm cursor-pointer"
+            >
+              <option value="">All Items</option>
+              {products?.map((p) => (
+                <option key={p._id} value={p._id}>
+                  {p.productName}
                 </option>
               ))}
             </select>
