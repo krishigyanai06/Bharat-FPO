@@ -272,7 +272,7 @@ const Gstr1Report = () => {
               </div>
 
               {/* Clickable Card Selectors */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 
                 {/* Option A: GST JSON */}
                 <div
@@ -338,6 +338,38 @@ const Gstr1Report = () => {
                   </div>
                 </div>
 
+                {/* Option C: Excel Workbook */}
+                <div
+                  onClick={() => setFormat('excel')}
+                  className={`p-4 rounded-xl border-2 transition-all cursor-pointer select-none space-y-2.5 relative flex flex-col justify-between ${
+                    format === 'excel'
+                      ? 'border-emerald-500 bg-emerald-50/20'
+                      : 'border-gray-200 bg-white hover:bg-gray-50/50 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className={`p-2 rounded-lg ${format === 'excel' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'}`}>
+                        <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      {format === 'excel' && (
+                        <CheckCircle className="w-5 h-5 text-emerald-600" />
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-extrabold text-gray-900">Excel Workbook (.xlsx)</h4>
+                      <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                        Multi-tab formatted Excel workbook containing summary dashboard, B2B, B2C, CDNR/CDNUR, HSN, and doc register.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-2">
+                    <span className="inline-flex items-center text-[10px] text-green-700 font-bold bg-green-50 px-2 py-0.5 rounded">
+                      Rich Report Tabs
+                    </span>
+                  </div>
+                </div>
+
               </div>
             </div>
 
@@ -368,14 +400,14 @@ const Gstr1Report = () => {
                 <div className="flex justify-between items-center py-1">
                   <span className="text-gray-400 font-semibold">Download Format:</span>
                   <span className="font-extrabold text-emerald-700 bg-emerald-50/50 px-2 py-0.5 rounded">
-                    {format === 'json' ? 'GST JSON' : 'CSV Sales Register'}
+                    {format === 'json' ? 'GST JSON' : format === 'csv' ? 'CSV Sales Register' : 'Excel Workbook'}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center py-1">
                   <span className="text-gray-400 font-semibold">Purpose:</span>
                   <span className="font-extrabold text-gray-700 text-right">
-                    {format === 'json' ? 'GST Portal Upload' : 'Tax Reconciliation & Analysis'}
+                    {format === 'json' ? 'GST Portal Upload' : format === 'csv' ? 'Tax Reconciliation & Analysis' : 'Offline Audits & Summary'}
                   </span>
                 </div>
 

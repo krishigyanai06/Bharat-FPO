@@ -166,7 +166,12 @@ export const downloadGstr1Report = createAsyncThunk(
       console.log('[reportsThunk] Downloading GSTR-1 report with filters:', filters);
       const blob = await reportService.downloadGstr1Report(filters);
       
-      const ext = filters.format === 'csv' ? 'csv' : 'json';
+      let ext = 'json';
+      if (filters.format === 'csv') {
+        ext = 'csv';
+      } else if (filters.format === 'excel' || filters.format === 'xlsx') {
+        ext = 'xlsx';
+      }
       let filename = 'GSTR1';
       
       if (filters.month && filters.year) {

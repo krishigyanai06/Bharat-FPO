@@ -104,7 +104,7 @@ api.interceptors.request.use(
       const isValid = eWayBillToken && eWayBillExpiry && Date.now() < Number(eWayBillExpiry);
       
       if (isValid) {
-        config.headers["x-ewaybill-token"] = eWayBillToken;
+        config.headers["x-einvoice-token"] = eWayBillToken;
         console.log(`[API] 🚚 E-Way Bill session token injected automatically: ${url}`);
       } else {
         console.warn(`[API] ⚠️ E-Way Bill token is missing or expired for: ${url}`);
@@ -237,7 +237,7 @@ api.interceptors.response.use(
       const originalRequest = error.config || {};
       const tokenType = error.config?.governmentToken;
       const eInvoiceHeader = originalRequest.headers ? originalRequest.headers["x-einvoice-token"] : undefined;
-      const eWayBillHeader = originalRequest.headers ? originalRequest.headers["x-ewaybill-token"] : undefined;
+      const eWayBillHeader = originalRequest.headers ? originalRequest.headers["x-einvoice-token"] : undefined;
       
       const isEWayBillRequest = tokenType === "ewaybill" || (!tokenType && (url.includes("/e-invoice/e-way-bill") || eWayBillHeader));
       const isEInvoiceRequest = tokenType === "einvoice" || (!tokenType && (url.includes("/e-invoice") || eInvoiceHeader));
@@ -261,7 +261,7 @@ api.interceptors.response.use(
             failedEWayBillQueue.push({ resolve, reject });
           })
             .then((token) => {
-              originalRequest.headers["x-ewaybill-token"] = token;
+              originalRequest.headers["x-einvoice-token"] = token;
               return api(originalRequest);
             })
             .catch((err) => Promise.reject(err));
@@ -298,7 +298,7 @@ api.interceptors.response.use(
           addAuditLog("EWAYBILL_AUTH_SUCCESS", { tokenPreview: token.substring(0, 10) + "..." });
           
           // Inject new token, resolve all queued promises, and release lock
-          originalRequest.headers["x-ewaybill-token"] = token;
+          originalRequest.headers["x-einvoice-token"] = token;
           processEWayBillQueue(null, token);
           isEWayBillReauthenticating = false;
           

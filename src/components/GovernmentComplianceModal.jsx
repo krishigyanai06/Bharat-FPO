@@ -51,10 +51,12 @@ import {
   updateEWayBillTransporter,
   generateEWayBillPdf
 } from "../store/thunks/eWayBillThunk";
+import { updateSaleOrEstimate } from "../store/thunks/sellThunk";
 import {
   clearEWayBillStatus,
   setSelectedEWayBill
 } from "../store/slices/eWayBillSlice";
+import { updateSaleEInvoice } from "../store/slices/sellSlice";
 
 import { isEInvoiceSessionValid, isEWayBillSessionValid, addAuditLog } from "../lib/api";
 import {
@@ -259,12 +261,77 @@ export default function GovernmentComplianceModal({
       toast.success("E-Invoice generated successfully!");
 
       dispatch(
+        updateSaleEInvoice({
+          id: localSale?._id || sale?._id || localSale?.id || sale?.id,
+          irn: normalized.irn,
+          ackNo: normalized.ackNo || "—",
+          ackDt: normalized.ackDt || "—",
+          signedInvoice: normalized.signed_invoice,
+          signedQrCode: normalized.signed_qr_code,
+        })
+      );
+
+      const saleId = localSale?._id || sale?._id || localSale?.id || sale?.id;
+      try {
+        await dispatch(
+          updateSaleOrEstimate({
+            id: saleId,
+            payload: {
+              eInvoiceIrn: normalized.irn,
+              eInvoiceAckNo: normalized.ackNo,
+              eInvoiceAckDt: normalized.ackDt,
+              irn: normalized.irn,
+              ackNo: normalized.ackNo,
+              ackDt: normalized.ackDt,
+              eInvoiceStatus: "SUCCESS",
+              signedInvoice: normalized.signed_invoice,
+              signedQrCode: normalized.signed_qr_code,
+              eInvoiceQrCode: normalized.signed_qr_code,
+              eInvoiceInfo: {
+                irn: normalized.irn,
+                ackNo: normalized.ackNo,
+                ackDt: normalized.ackDt,
+                signed_invoice: normalized.signed_invoice,
+                signed_qr_code: normalized.signed_qr_code,
+              }
+            }
+          })
+        ).unwrap();
+      } catch (err) {
+        console.error("Failed to update compliance details in backend database:", err);
+      }
+
+      setLocalSale((prev) => ({
+        ...prev,
+        eInvoiceIrn: normalized.irn,
+        eInvoiceAckNo: normalized.ackNo,
+        eInvoiceAckDt: normalized.ackDt,
+        irn: normalized.irn,
+        ackNo: normalized.ackNo,
+        ackDt: normalized.ackDt,
+        eInvoiceStatus: "SUCCESS",
+        signedInvoice: normalized.signed_invoice,
+        signedQrCode: normalized.signed_qr_code,
+        eInvoiceQrCode: normalized.signed_qr_code,
+        eInvoiceInfo: {
+          irn: normalized.irn,
+          ackNo: normalized.ackNo,
+          ackDt: normalized.ackDt,
+          signed_invoice: normalized.signed_invoice,
+          signed_qr_code: normalized.signed_qr_code,
+        }
+      }));
+
+      dispatch(
         generateEInvoicePdf({
           signed_qr_code: normalized.signed_qr_code,
           irn: normalized.irn,
           signed_invoice: normalized.signed_invoice
         })
-      ).then(url => setCachedPdfUrl(url)).catch(() => {});
+      )
+        .unwrap()
+        .then(url => setCachedPdfUrl(url))
+        .catch(() => {});
 
       await fetchLatestSale();
       if (onSuccess) onSuccess();
@@ -317,13 +384,14 @@ export default function GovernmentComplianceModal({
     const sellerGstin = sellerData?.eInvoiceGstin || sellerData?.gstNumber || sellerData?.gstin || "29AAACQ3770E005";
 
     try {
+      let ewb = null;
       if (isB2B) {
         if (!isEInvoiceSessionValid(sellerGstin)) {
           await dispatch(authenticateSession({})).unwrap();
         }
 
         const currentIrn = eInvoiceIrn || localSale.eInvoiceIrn || localSale.irn || localSale.eInvoiceInfo?.irn || localSale.eInvoice?.irn;
-        await dispatch(
+        ewb = await dispatch(
           generateEWayBillByIrn({
             irn: currentIrn,
             payload: transportPayload
@@ -335,12 +403,45 @@ export default function GovernmentComplianceModal({
         }
 
         const standalonePayload = compileB2CSaleToStandalonePayload(localSale, transportPayload, sellerData, resolvedParty);
-        await dispatch(
+        ewb = await dispatch(
           generateStandaloneEWayBill(standalonePayload)
         ).unwrap();
       }
 
       toast.success("E-Way Bill registered successfully!");
+
+      const saleId = localSale?._id || sale?._id || localSale?.id || sale?.id;
+      if (saleId && ewb) {
+        const ewbNo = ewb.ewbNo || ewb.ewayBillNo || ewb.ewaybillNo || ewb.data?.ewbNo || ewb.data?.ewayBillNo;
+        const ewbDate = ewb.ewbDate || ewb.ewbDt || ewb.ewayBillDate || ewb.ewaybillDate || ewb.createdAt || ewb.data?.ewbDate;
+
+        try {
+          await dispatch(
+            updateSaleOrEstimate({
+              id: saleId,
+              payload: {
+                ewayBillNo: ewbNo,
+                ewayBillDate: ewbDate,
+                ewayBillStatus: ewb.status || "ACTIVE",
+                eWayBill: ewb
+              }
+            })
+          ).unwrap();
+        } catch (dbErr) {
+          console.error("Failed to update E-Way Bill details in backend database:", dbErr);
+        }
+
+        setLocalSale(prev => ({
+          ...prev,
+          ewayBillNo: ewbNo,
+          eWayBillNo: ewbNo,
+          ewayBillDate: ewbDate,
+          ewayBillStatus: ewb.status || "ACTIVE",
+          eWayBill: ewb,
+          ewayBill: ewb
+        }));
+      }
+
       setActiveDialog(null);
       await fetchLatestSale();
       if (onSuccess) onSuccess();
@@ -575,7 +676,7 @@ export default function GovernmentComplianceModal({
           <div className="p-6 space-y-5 flex-1 max-h-[75vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
             
             {/* Buyer / Party Card */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-4.5 space-y-4 relative">
+            <div className="bg-slate-50/65 border border-slate-100 rounded-2xl p-5 space-y-4 relative">
               <div className="flex items-center gap-3">
                 <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
                   isB2B 
@@ -585,418 +686,366 @@ export default function GovernmentComplianceModal({
                   {isB2B ? <Building className="w-5 h-5" /> : <User className="w-5 h-5" />}
                 </span>
                 <div>
-                  <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider">Buyer / Party</span>
-                  <p className="font-extrabold text-gray-905 text-sm leading-tight mt-0.5">
+                  <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider">Buyer / Party</span>
+                  <p className="font-extrabold text-gray-905 text-base leading-tight mt-0.5">
                     {resolvedParty?.name || sale.buyerName || "Direct Walk-In Customer"}
                   </p>
                   {isB2B ? (
-                    <span className="font-semibold font-mono text-gray-500 text-[10px] block mt-0.5">
+                    <span className="font-semibold font-mono text-gray-500 text-xs block mt-0.5">
                       GSTIN: {resolvedParty?.gstin || resolvedParty?.gstNumber || "—"}
                     </span>
                   ) : (
-                    <span className="font-semibold text-gray-500 text-[10px] block mt-0.5">
+                    <span className="font-semibold text-gray-500 text-xs block mt-0.5">
                       Mobile: {resolvedParty?.mobile || resolvedParty?.phone || sale.buyerMobile || "9876543210"}
                     </span>
                   )}
                 </div>
 
                 {/* Badge top right */}
-                <span className={`absolute top-4 right-4 px-3 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-wide border ${
+                <span className={`absolute top-5 right-5 px-3 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-wide border ${
                   isB2B 
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : "bg-purple-50 text-purple-700 border-purple-200"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-250"
+                    : "bg-purple-50 text-purple-700 border-purple-250"
                 }`}>
                   {isB2B ? "B2B (GST REGISTERED)" : "B2C (NON-GST)"}
                 </span>
               </div>
 
               {/* Invoices details grid */}
-              <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-150/40 text-xs">
+              <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-250/30 text-xs">
                 <div>
-                  <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider">Invoice Number</span>
-                  <span className="font-extrabold text-gray-855 mt-0.5 block">{resolvedInvoiceNo}</span>
+                  <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider">Invoice Number</span>
+                  <span className="font-extrabold text-gray-800 mt-0.5 block text-sm">{resolvedInvoiceNo}</span>
                 </div>
                 <div>
-                  <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider">Invoice Date</span>
-                  <span className="font-extrabold text-gray-855 mt-0.5 block">{resolvedInvoiceDate}</span>
+                  <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider">Invoice Date</span>
+                  <span className="font-extrabold text-gray-800 mt-0.5 block text-sm">{resolvedInvoiceDate}</span>
                 </div>
                 <div>
-                  <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider">Total Amount</span>
-                  <span className="font-extrabold text-emerald-700 mt-0.5 block">{resolvedAmount}</span>
+                  <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider">Total Amount</span>
+                  <span className="font-extrabold text-emerald-600 mt-0.5 block text-sm">{resolvedAmount}</span>
                 </div>
               </div>
             </div>
 
             {/* Layout based on B2B / B2C */}
             {isB2B ? (
-              <div className="flex gap-4">
-                
-                {/* Left Side: Timeline Progress Bar */}
-                <div className="flex flex-col items-center w-10 shrink-0 pt-2 select-none">
-                  <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white shadow-sm transition ${
-                    isEInvoiceGenerated ? "bg-emerald-600" : "bg-gray-200"
-                  }`}>
-                    {isEInvoiceGenerated ? <Check className="w-4 h-4 stroke-[3]" /> : "1"}
-                  </span>
-                  
-                  {/* Vertical dashed line with arrow */}
-                  <div className="w-0.5 flex-1 min-h-[120px] bg-gray-200 my-2 relative flex items-center justify-center">
-                    <ArrowDown className="w-4 h-4 text-gray-400 absolute bottom-0" />
-                  </div>
+              <div className="space-y-6">
 
-                  <span className={`w-8 h-8 rounded-full flex items-center justify-center border-2 shadow-sm transition ${
-                    activeEwbNo && activeEwbStatus !== "CANCELLED"
-                      ? "bg-emerald-600 border-emerald-600 text-white"
-                      : "bg-white border-amber-500 text-amber-500"
-                  }`}>
-                    {activeEwbNo && activeEwbStatus !== "CANCELLED" ? <Check className="w-4 h-4 stroke-[3]" /> : <Truck className="w-4 h-4" />}
-                  </span>
-                </div>
-
-                {/* Right Side: Compliance cards */}
-                <div className="flex-1 space-y-4">
-
-                  {/* 1. GST E-Invoice Card */}
-                  <div className={`border rounded-2xl p-4.5 space-y-4 bg-white transition-all ${
-                    isEInvoiceGenerated ? "border-emerald-250 bg-emerald-50/5 shadow-2xs" : "border-gray-200"
-                  }`}>
-                    <div className="flex justify-between items-start pb-2 border-b border-gray-100">
-                      <div className="flex gap-2">
-                        <FileText className={`w-5 h-5 shrink-0 ${isEInvoiceGenerated ? "text-emerald-650" : "text-gray-400"}`} />
-                        <div>
-                          <span className="font-extrabold text-xs text-gray-900 uppercase tracking-wider block">
-                            GST E-Invoice
-                          </span>
-                          <span className="text-[10px] text-gray-400 font-bold mt-0.5 block leading-tight">
-                            {isEInvoiceGenerated ? "IRN has been generated successfully." : "NIC Portal digital registration."}
-                          </span>
-                        </div>
+                {/* 1. GST E-Invoice Card */}
+                <div className={`border rounded-2xl p-5 space-y-4 bg-white transition-all duration-200 ${
+                  isEInvoiceGenerated ? "border-emerald-200/80 bg-emerald-50/5 shadow-3xs" : "border-slate-200"
+                }`}>
+                  {/* Header row of E-Invoice card */}
+                  <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                    <div className="flex gap-3 items-center">
+                      <div className={`p-2 rounded-lg ${isEInvoiceGenerated ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"}`}>
+                        <FileText className="w-5 h-5 shrink-0" />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold border flex items-center gap-1 uppercase tracking-wider ${
-                          isEInvoiceGenerated
-                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                            : isEInvoiceFailed
-                              ? "bg-rose-50 text-rose-800 border-rose-200"
-                              : "bg-amber-50 text-amber-850 border-amber-200"
-                        }`}>
-                          {isEInvoiceGenerated && <Check className="w-2.5 h-2.5 text-emerald-600 stroke-[3.5]" />}
-                          {isEInvoiceGenerated ? "GENERATED" : isEInvoiceFailed ? "FAILED" : "NOT GENERATED"}
+                      <div>
+                        <span className="font-extrabold text-sm text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                          Step 1: GST E-Invoice
                         </span>
-                        <ChevronUp className="w-4 h-4 text-gray-400 shrink-0 cursor-pointer" />
+                        <span className="text-[10px] text-gray-400 font-bold mt-0.5 block leading-tight">
+                          {isEInvoiceGenerated ? "Registered and active IRN." : "NIC Portal digital registration."}
+                        </span>
                       </div>
                     </div>
-
-                    {isEInvoiceGenerated ? (
-                      <div className="space-y-4">
-                        {/* 3-Column details layout */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white border border-gray-150 rounded-2xl p-5 md:p-6 leading-normal text-xs shadow-3xs">
-                          {/* Col 1 */}
-                          <div className="space-y-4">
-                            <div>
-                              <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider font-semibold">IRN</span>
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <span className="font-mono text-[10px] font-bold text-gray-805 break-all select-all leading-normal" title={currentIrn}>
-                                  {currentIrn}
-                                </span>
-                                <button
-                                  onClick={() => copyToClipboard(currentIrn, "IRN")}
-                                  className="p-1.5 text-gray-400 hover:text-brand-650 hover:bg-gray-55 rounded-md transition-all shrink-0 bg-transparent border-0 cursor-pointer"
-                                  title="Copy IRN"
-                                >
-                                  <Copy className="w-3 h-3" />
-                                </button>
-                              </div>
-                            </div>
-                            <div>
-                              <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider font-semibold">Ack No.</span>
-                              <p className="font-bold text-gray-900 mt-1">{ackNo || sale.eInvoiceAckNo || sale.ackNo || "—"}</p>
-                            </div>
-                          </div>
-
-                          {/* Col 2 */}
-                          <div className="space-y-4">
-                            <div>
-                              <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider font-semibold">Ack Date</span>
-                              <p className="font-bold text-gray-900 mt-1">
-                                {formatDateTime(ackDt || sale.eInvoiceAckDt || sale.ackDt || sale.eInvoiceInfo?.ackDt || sale.eInvoiceInfo?.ackDate || sale.eInvoice?.ackDate || sale.ackDate || "—")}
-                              </p>
-                            </div>
-                            <div>
-                              <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider font-semibold">Generated On</span>
-                              <p className="font-bold text-gray-900 mt-1">
-                                {formatDateTime(sale.createdAt || sale.billDate || "—")}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Col 3 */}
-                          <div className="space-y-4">
-                            <div>
-                              <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider font-semibold">Signed Invoice (JWT)</span>
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 mt-1 text-[9px] font-extrabold text-emerald-805 bg-emerald-50 border border-emerald-100 rounded-full">
-                                Available
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider font-semibold">Signed QR Code</span>
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 mt-1 text-[9px] font-extrabold text-emerald-805 bg-emerald-50 border border-emerald-100 rounded-full">
-                                Available
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Actions buttons */}
-                        <div className="flex gap-3">
-                          <button
-                            onClick={handleDownloadPdf}
-                            disabled={pdfLoading}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs border border-emerald-500 hover:bg-emerald-50 text-emerald-700 font-bold rounded-xl transition cursor-pointer bg-white"
-                          >
-                            {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
-                            View Details
-                          </button>
-                          <button
-                            onClick={() => {
-                              setActiveDialog("view_qr");
-                            }}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs border border-emerald-500 hover:bg-emerald-50 text-emerald-700 font-bold rounded-xl transition cursor-pointer bg-white"
-                          >
-                            <QrCode className="w-3.5 h-3.5" />
-                            View QR Code
-                          </button>
-                          <button
-                            onClick={handleDownloadPdf}
-                            disabled={pdfLoading}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs border border-emerald-500 hover:bg-emerald-50 text-emerald-700 font-bold rounded-xl transition cursor-pointer bg-white"
-                          >
-                            {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                            Download PDF
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <p className="text-xs text-gray-500 font-semibold leading-relaxed">
-                          E-Invoice is required for B2B transactions.
-                        </p>
-
-                        {eInvoiceLocalError && (
-                          <div className="bg-rose-50 border border-rose-150 p-3 rounded-xl flex items-start gap-2.5 text-xs text-rose-800 leading-relaxed font-semibold">
-                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                            <div>
-                              <p className="font-bold">E-Invoice Failed</p>
-                              <p className="text-[11px] text-rose-700 mt-0.5">{eInvoiceLocalError}</p>
-                            </div>
-                          </div>
-                        )}
-
-                        <button
-                          onClick={handleGenerateEInvoice}
-                          disabled={eInvoiceLocalLoading}
-                          className="w-full h-10 flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all disabled:opacity-50 border-0 cursor-pointer shadow-sm"
-                        >
-                          {eInvoiceLocalLoading ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Registering with NIC Portal...
-                            </>
-                          ) : (
-                            "⚡ Generate GST E-Invoice"
-                          )}
-                        </button>
-                      </div>
-                    )}
+                    
+                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold border flex items-center gap-1 uppercase tracking-wider ${
+                      isEInvoiceGenerated
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-250"
+                        : isEInvoiceFailed
+                          ? "bg-rose-50 text-rose-800 border-rose-250"
+                          : "bg-amber-50 text-amber-850 border-amber-250"
+                    }`}>
+                      {isEInvoiceGenerated && <Check className="w-2.5 h-2.5 text-emerald-655 stroke-[3.5]" />}
+                      {isEInvoiceGenerated ? "GENERATED" : isEInvoiceFailed ? "FAILED" : "NOT GENERATED"}
+                    </span>
                   </div>
 
-                  {/* Middle Transition Banner */}
-                  {isEInvoiceGenerated && !activeEwbNo && (
-                    <div className="flex items-center justify-center gap-2 py-1.5 text-xs font-bold text-gray-500 select-none">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 stroke-[2.5]" />
-                      <span className="text-emerald-700 font-semibold">E-Invoice Generated</span>
-                      <span className="text-gray-300">----------➔</span>
-                      <span>You can now generate E-Way Bill</span>
+                  {isEInvoiceGenerated ? (
+                    <div className="space-y-4">
+                      {/* Compact Details layout */}
+                      <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4.5 space-y-3.5 leading-normal text-xs">
+                        <div>
+                          <span className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Invoice Reference Number (IRN)</span>
+                          <div className="flex items-center gap-2 mt-1 bg-white border border-slate-200 rounded-lg p-2 font-mono text-[10px] font-bold text-slate-700">
+                            <span className="break-all select-all flex-1 leading-normal" title={currentIrn}>
+                              {currentIrn}
+                            </span>
+                            <button
+                              onClick={() => copyToClipboard(currentIrn, "IRN")}
+                              className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-slate-100 rounded transition shrink-0 bg-transparent border-0 cursor-pointer"
+                              title="Copy IRN"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <span className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Ack No.</span>
+                            <p className="font-extrabold text-slate-800 mt-0.5">{ackNo || sale.eInvoiceAckNo || sale.ackNo || "—"}</p>
+                          </div>
+                          <div>
+                            <span className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Ack Date</span>
+                            <p className="font-extrabold text-slate-800 mt-0.5">
+                              {formatDateTime(ackDt || sale.eInvoiceAckDt || sale.ackDt || sale.eInvoiceInfo?.ackDt || sale.eInvoiceInfo?.ackDate || sale.eInvoice?.ackDate || sale.ackDate || "—")}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <span className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Signed Invoice</span>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 mt-0.5 text-[9px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-full">
+                              ✓ Available
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-450 font-bold text-[9px] uppercase tracking-wider block">Signed QR Code</span>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 mt-0.5 text-[9px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-full">
+                              ✓ Available
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions buttons */}
+                      <div className="flex gap-3">
+                        <button
+                          onClick={handleDownloadPdf}
+                          disabled={pdfLoading}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-4 h-9 text-xs border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-xl transition cursor-pointer bg-white"
+                        >
+                          {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+                          View Details
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActiveDialog("view_qr");
+                          }}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-4 h-9 text-xs border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-xl transition cursor-pointer bg-white"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          View QR Code
+                        </button>
+                        <button
+                          onClick={handleDownloadPdf}
+                          disabled={pdfLoading}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-4 h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition cursor-pointer border-0 shadow-sm"
+                        >
+                          {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                          Download PDF
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 pt-1">
+                      <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+                        An official E-Invoice with a unique IRN must be registered with the NIC compliance portal for B2B transactions.
+                      </p>
+
+                      {eInvoiceLocalError && (
+                        <div className="bg-rose-50 border border-rose-150 p-3.5 rounded-xl flex items-start gap-2.5 text-xs text-rose-800 leading-relaxed font-semibold">
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold">E-Invoice Registration Failed</p>
+                            <p className="text-[11px] text-rose-700 mt-0.5">{eInvoiceLocalError}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={handleGenerateEInvoice}
+                        disabled={eInvoiceLocalLoading}
+                        className="w-full h-10 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all disabled:opacity-50 border-0 cursor-pointer shadow-sm active:scale-99"
+                      >
+                        {eInvoiceLocalLoading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Registering with Government NIC Portal...
+                          </>
+                        ) : (
+                          "Generate GST E-Invoice"
+                        )}
+                      </button>
                     </div>
                   )}
+                </div>
 
-                  {/* 2. E-Way Bill (IRN-Linked) Card */}
-                  <div className={`border rounded-2xl p-4.5 space-y-4 bg-white transition-all ${
-                    hasEWayBill && activeEwbStatus !== "CANCELLED"
-                      ? "border-emerald-250 bg-emerald-50/5 shadow-2xs"
-                      : "border-amber-250 bg-amber-50/5 shadow-3xs"
-                  }`}>
-                    <div className="flex justify-between items-start pb-2 border-b border-gray-100">
-                      <div className="flex gap-2">
-                        <Truck className={`w-5 h-5 shrink-0 ${hasEWayBill && activeEwbStatus !== "CANCELLED" ? "text-emerald-650" : "text-amber-500"}`} />
-                        <div>
-                          <span className="font-extrabold text-xs text-gray-900 uppercase tracking-wider block">
-                            2. E-Way Bill (IRN-Linked)
-                          </span>
-                          <span className="text-[10px] text-gray-400 font-bold mt-0.5 block leading-tight">
-                            {hasEWayBill ? "Logistics tracking registered." : "E-Invoice is completed. Generate the official logistics permit."}
-                          </span>
-                        </div>
+                {/* 2. E-Way Bill (IRN-Linked) Card */}
+                <div className={`border rounded-2xl p-5 space-y-4 bg-white transition-all duration-200 ${
+                  hasEWayBill && activeEwbStatus !== "CANCELLED"
+                    ? "border-emerald-200 bg-emerald-50/5 shadow-3xs"
+                    : "border-slate-200"
+                }`}>
+                  <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                    <div className="flex gap-3 items-center">
+                      <div className={`p-2 rounded-lg ${hasEWayBill && activeEwbStatus !== "CANCELLED" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"}`}>
+                        <Truck className="w-5 h-5 shrink-0" />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold border flex items-center gap-1 uppercase tracking-wider ${
-                          !isEInvoiceGenerated
-                            ? "bg-slate-50 text-slate-400 border-slate-200"
-                            : hasEWayBill
-                              ? (activeEwbStatus === "CANCELLED" ? "bg-rose-50 text-rose-850 border-rose-200" : "bg-emerald-50 text-emerald-805 border-emerald-200")
-                              : "bg-amber-50 text-amber-800 border-amber-200"
-                        }`}>
-                          {hasEWayBill && activeEwbStatus !== "CANCELLED" && <Check className="w-2.5 h-2.5 text-emerald-600 stroke-[3.5]" />}
-                          {!isEInvoiceGenerated 
-                            ? "WAITING FOR IRN" 
-                            : hasEWayBill 
-                              ? (activeEwbStatus === "CANCELLED" ? "CANCELLED" : "GENERATED") 
-                              : "PENDING"}
+                      <div>
+                        <span className="font-extrabold text-sm text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                          Step 2: E-Way Bill (IRN-Linked)
                         </span>
-                        <ChevronDown className="w-4 h-4 text-gray-400 shrink-0 cursor-pointer" />
+                        <span className="text-[10px] text-gray-400 font-bold mt-0.5 block leading-tight">
+                          {hasEWayBill ? "Logistics permit registered and active." : "E-Way Bill logistics permit."}
+                        </span>
                       </div>
                     </div>
+                    
+                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold border flex items-center gap-1 uppercase tracking-wider ${
+                      !isEInvoiceGenerated
+                        ? "bg-slate-50 text-slate-400 border-slate-200"
+                        : hasEWayBill
+                          ? (activeEwbStatus === "CANCELLED" ? "bg-rose-50 text-rose-850 border-rose-200" : "bg-emerald-50 text-emerald-805 border-emerald-250")
+                          : "bg-amber-50 text-amber-800 border-amber-250"
+                    }`}>
+                      {hasEWayBill && activeEwbStatus !== "CANCELLED" && <Check className="w-2.5 h-2.5 text-emerald-600 stroke-[3.5]" />}
+                      {!isEInvoiceGenerated 
+                        ? "WAITING FOR STEP 1" 
+                        : hasEWayBill 
+                          ? (activeEwbStatus === "CANCELLED" ? "CANCELLED" : "GENERATED") 
+                          : "PENDING"}
+                    </span>
+                  </div>
 
-                    {!isEInvoiceGenerated ? (
-                      <div className="space-y-3 py-1">
-                        <p className="text-xs text-gray-500 font-semibold leading-relaxed">
-                          Generate GST E-Invoice first to enable E-Way Bill.
-                        </p>
-                        <button
-                          disabled
-                          className="w-full h-10 bg-gray-100 text-gray-400 border border-gray-205 rounded-xl text-xs font-bold cursor-not-allowed flex items-center justify-center gap-1.5"
-                        >
-                          🔒 Generate E-Way Bill
-                        </button>
-                      </div>
-                    ) : hasEWayBill ? (
-                      <div className="space-y-4">
-                        {/* Status and EWB details grid */}
-                        <div className="grid grid-cols-2 gap-4 text-xs bg-white border border-gray-150 rounded-2xl p-5 md:p-6 shadow-3xs leading-normal">
-                          <div className="space-y-4">
-                            <div>
-                              <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider">Status</span>
-                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 mt-1 text-[9px] font-extrabold border rounded-full uppercase tracking-wider ${
-                                activeEwbStatus === "CANCELLED"
-                                  ? "bg-rose-50 text-rose-805 border-rose-200"
-                                  : "bg-emerald-50 text-emerald-805 border-emerald-200"
-                              }`}>
-                                {activeEwbStatus === "CANCELLED" && <X className="w-2.5 h-2.5 text-rose-600 stroke-[3]" />}
-                                {activeEwbStatus === "CANCELLED" ? "CANCELLED" : "GENERATED"}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider">EWB Number</span>
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <span className="font-mono font-extrabold text-gray-900 tracking-wider select-all">{activeEwbNo}</span>
-                                <button
-                                  onClick={() => copyToClipboard(activeEwbNo, "E-Way Bill Number")}
-                                  className="p-1 text-gray-400 hover:text-brand-650 hover:bg-gray-100 rounded-md transition-all shrink-0 bg-transparent border-0 cursor-pointer"
-                                  title="Copy EWB"
-                                >
-                                  <Copy className="w-3 h-3" />
-                                </button>
-                              </div>
+                  {!isEInvoiceGenerated ? (
+                    <div className="bg-slate-50/50 rounded-xl p-4.5 text-center border border-dashed border-slate-200">
+                      <p className="text-xs text-slate-400 font-semibold leading-relaxed">
+                        🔒 Complete Step 1 (GST E-Invoice) first to enable E-Way Bill logistics registration.
+                      </p>
+                    </div>
+                  ) : hasEWayBill ? (
+                    <div className="space-y-4">
+                      {/* EWB details grid */}
+                      <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4.5 space-y-3 leading-normal text-xs">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <span className="text-slate-450 font-bold block text-[9px] uppercase tracking-wider">E-Way Bill Number</span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="font-mono font-extrabold text-slate-805 tracking-wider select-all text-sm">{activeEwbNo}</span>
+                              <button
+                                onClick={() => copyToClipboard(activeEwbNo, "E-Way Bill Number")}
+                                className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-slate-100 rounded transition shrink-0 bg-transparent border-0 cursor-pointer"
+                                title="Copy EWB"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
-                          
-                          <div className="space-y-4">
-                            <div>
-                              <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider">Generated On</span>
-                              <p className="font-extrabold text-gray-900 mt-1">{formatDateTime(activeEwbDate)}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-400 font-bold block text-[8px] uppercase tracking-wider">Valid Till</span>
-                              <p className="font-extrabold text-gray-900 mt-1">{formatDateTime(activeEwbValidUpto)}</p>
-                            </div>
+                          <div>
+                            <span className="text-slate-450 font-bold block text-[9px] uppercase tracking-wider">Status</span>
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 mt-1 text-[9px] font-extrabold border rounded-full uppercase tracking-wider ${
+                              activeEwbStatus === "CANCELLED"
+                                ? "bg-rose-50 text-rose-805 border-rose-200"
+                                : "bg-emerald-50 text-emerald-805 border-emerald-100"
+                            }`}>
+                              {activeEwbStatus === "CANCELLED" && <X className="w-2.5 h-2.5 text-rose-600 stroke-[3]" />}
+                              {activeEwbStatus === "CANCELLED" ? "CANCELLED" : "GENERATED"}
+                            </span>
                           </div>
                         </div>
 
-                        {/* Lifecycle buttons */}
-                        <div className="flex flex-wrap gap-2 pt-1 justify-start">
-                          <button
-                            onClick={handlePrintEWayBillSlip}
-                            className="px-4 py-2 text-xs border border-emerald-500 text-emerald-700 bg-white font-bold rounded-xl hover:bg-emerald-50 transition cursor-pointer flex items-center gap-1.5"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                            View PDF
-                          </button>
-
-                          {activeEwbStatus !== "CANCELLED" && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setVehNo(activeVehicleNo === "—" ? "" : activeVehicleNo);
-                                  setVehType(activeEwb?.vehicleType || activeEwb?.VehType || "R");
-                                  setTransMode(activeEwb?.transMode || "1");
-                                  setTripPinCode(localSale?.buyerPinCode || sellerData?.pinCode || "");
-                                  setFromState(getGstinStateCode(sellerData?.gstNumber || sellerData?.gstin || "29", "29"));
-                                  setReasonCode("1");
-                                  setReasonRemarks("");
-                                  setActiveDialog("vehicle");
-                                }}
-                                className="px-4 py-2 text-xs border border-emerald-500 text-emerald-750 bg-white font-bold rounded-xl hover:bg-emerald-50 transition cursor-pointer"
-                              >
-                                Update Vehicle
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setTransId(activeTransporterId === "—" ? "" : activeTransporterId);
-                                  setTransName(activeTransporterName === "—" ? "" : activeTransporterName);
-                                  setActiveDialog("transporter");
-                                }}
-                                className="px-4 py-2 text-xs border border-emerald-500 text-emerald-750 bg-white font-bold rounded-xl hover:bg-emerald-50 transition cursor-pointer"
-                              >
-                                Update Transporter
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setExtendReason("1");
-                                  setRemainingDistance("");
-                                  setExtendRemarks("");
-                                  setActiveDialog("extend");
-                                }}
-                                className="px-4 py-2 text-xs border border-emerald-500 text-emerald-755 bg-white font-bold rounded-xl hover:bg-emerald-50 transition cursor-pointer"
-                              >
-                                Extend Validity
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCancelRemarks("");
-                                  setActiveDialog("cancel");
-                                }}
-                                className="px-4 py-2 text-xs bg-rose-50 border border-rose-200 text-rose-700 font-bold rounded-xl hover:bg-rose-100 transition cursor-pointer"
-                              >
-                                Cancel E-Way Bill
-                              </button>
-                            </>
-                          )}
+                        <div className="grid grid-cols-2 gap-4 pt-1 border-t border-slate-100">
+                          <div>
+                            <span className="text-slate-450 font-bold block text-[9px] uppercase tracking-wider">Generated On</span>
+                            <p className="font-extrabold text-slate-800 mt-0.5">{formatDateTime(activeEwbDate)}</p>
+                          </div>
+                          <div>
+                            <span className="text-slate-450 font-bold block text-[9px] uppercase tracking-wider">Valid Till</span>
+                            <p className="font-extrabold text-slate-800 mt-0.5">{formatDateTime(activeEwbValidUpto)}</p>
+                          </div>
                         </div>
                       </div>
-                    ) : (
-                      /* Alert banner state - ORANGE button */
-                      <div className="bg-amber-50/45 border border-amber-100 rounded-2xl py-4.5 px-6 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs leading-normal shadow-3xs">
-                        <div className="flex items-center gap-2 text-amber-800 font-semibold py-1">
-                          <Info className="w-4 h-4 text-amber-600 shrink-0" />
-                          <span>You can now generate E-Way Bill for this invoice.</span>
-                        </div>
+
+                      {/* Lifecycle buttons */}
+                      <div className="flex flex-wrap gap-2 justify-start">
                         <button
-                          onClick={() => setActiveDialog("generate_ewb")}
-                          className="h-10 px-5 flex items-center justify-center gap-1.5 bg-[#d97706] hover:bg-[#b45309] text-white font-extrabold rounded-xl text-xs transition-all border-0 cursor-pointer shrink-0 shadow-md active:scale-98"
+                          onClick={handlePrintEWayBillSlip}
+                          className="h-9 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition cursor-pointer border-0 shadow-sm flex items-center gap-1.5"
                         >
-                          ⚡ Generate E-Way Bill
+                          <FileText className="w-3.5 h-3.5" />
+                          View PDF Receipt
                         </button>
+
+                        {activeEwbStatus !== "CANCELLED" && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setVehNo(activeVehicleNo === "—" ? "" : activeVehicleNo);
+                                setVehType(activeEwb?.vehicleType || activeEwb?.VehType || "R");
+                                setTransMode(activeEwb?.transMode || "1");
+                                setTripPinCode(localSale?.buyerPinCode || sellerData?.pinCode || "");
+                                setFromState(getGstinStateCode(sellerData?.gstNumber || sellerData?.gstin || "29", "29"));
+                                setReasonCode("1");
+                                setReasonRemarks("");
+                                setActiveDialog("vehicle");
+                              }}
+                              className="h-9 px-4 text-xs border border-slate-200 text-slate-700 bg-white font-bold rounded-xl hover:bg-slate-50 transition cursor-pointer"
+                            >
+                              Update Vehicle
+                            </button>
+                            <button
+                              onClick={() => {
+                                setTransId(activeTransporterId === "—" ? "" : activeTransporterId);
+                                setTransName(activeTransporterName === "—" ? "" : activeTransporterName);
+                                setActiveDialog("transporter");
+                              }}
+                              className="h-9 px-4 text-xs border border-slate-200 text-slate-700 bg-white font-bold rounded-xl hover:bg-slate-50 transition cursor-pointer"
+                            >
+                              Update Transporter
+                            </button>
+                            <button
+                              onClick={() => {
+                                setExtendReason("1");
+                                setRemainingDistance("");
+                                setExtendRemarks("");
+                                setActiveDialog("extend");
+                              }}
+                              className="h-9 px-4 text-xs border border-slate-200 text-slate-755 bg-white font-bold rounded-xl hover:bg-slate-50 transition cursor-pointer"
+                            >
+                              Extend Validity
+                            </button>
+                            <button
+                              onClick={() => {
+                                setCancelRemarks("");
+                                setActiveDialog("cancel");
+                              }}
+                              className="h-9 px-4 text-xs bg-rose-50 border border-rose-100 text-rose-700 font-bold rounded-xl hover:bg-rose-100 transition cursor-pointer"
+                            >
+                              Cancel E-Way Bill
+                            </button>
+                          </>
+                        )}
                       </div>
-                    )}
-                  </div>
-
-                  {/* Bottom Blue Disclaimer banner */}
-                  <div className="bg-blue-50/50 border border-blue-150 rounded-2xl p-3 flex items-start gap-2.5 text-[11px] text-blue-800 leading-relaxed font-semibold">
-                    <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                    <p>E-Way Bill can be updated, extended or cancelled as per your requirement.</p>
-                  </div>
-
+                    </div>
+                  ) : (
+                    /* Generate button state */
+                    <div className="bg-amber-50/40 border border-amber-100 rounded-xl p-4.5 flex items-center justify-between gap-4 text-xs leading-normal">
+                      <div className="flex items-center gap-2 text-amber-805 font-semibold">
+                        <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Ready to register E-Way Bill logistics permit.</span>
+                      </div>
+                      <button
+                        onClick={() => setActiveDialog("generate_ewb")}
+                        className="h-9 px-4 flex items-center justify-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl text-xs transition border-0 cursor-pointer shrink-0 shadow-sm active:scale-98"
+                      >
+                        Generate E-Way Bill
+                      </button>
+                    </div>
+                  )}
                 </div>
+
+                {/* Bottom Blue Disclaimer banner */}
+                <div className="bg-blue-50/35 border border-blue-100 rounded-xl p-3.5 flex items-start gap-2.5 text-[11px] text-blue-800 leading-normal font-semibold">
+                  <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                  <p>Compliance Notice: E-Invoice registration is real-time. E-Way Bill details can be updated, extended or cancelled directly from this dashboard within portal timelines.</p>
+                </div>
+
               </div>
             ) : (
               /* B2C Layout Flow */

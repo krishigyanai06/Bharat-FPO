@@ -172,9 +172,9 @@ const eInvoiceSlice = createSlice({
           state.jobId = payload.jobId;
         } else {
           state.status = "SUCCESS";
-          state.irn = payload?.irn || payload?.data?.irn;
-          state.ackNo = payload?.ackNo || payload?.data?.ackNo || "—";
-          state.ackDt = payload?.ackDt || payload?.data?.ackDt || "—";
+          state.irn = payload?.irn || payload?.Irn || payload?.data?.irn || payload?.data?.Irn || payload?.Data?.irn || payload?.Data?.Irn;
+          state.ackNo = payload?.ackNo || payload?.AckNo || payload?.data?.ackNo || payload?.data?.AckNo || payload?.Data?.ackNo || payload?.Data?.AckNo || "—";
+          state.ackDt = payload?.ackDt || payload?.AckDt || payload?.data?.ackDt || payload?.data?.AckDt || payload?.Data?.ackDt || payload?.Data?.AckDt || "—";
         }
       })
       .addCase(generateEInvoice.rejected, (state, action) => {
