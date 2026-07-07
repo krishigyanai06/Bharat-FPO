@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchBalanceSheet, downloadBalanceSheetPdf } from '../../store/thunks/reportsThunk';
 import { generateClientBalanceSheetPDF } from '../../utils/clientPdfGenerator';
+import ErrorState from '../../components/ErrorState';
 import { 
   RotateCw, 
   AlertCircle,
@@ -136,9 +137,12 @@ const BalanceSheetReport = () => {
 
       {/* Error alert */}
       {error && (
-        <div className="bg-red-50 border border-red-100 text-red-700 text-[11px] px-3.5 py-2.5 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span className="font-semibold">{error} — showing simulated snapshot database values.</span>
+        <div className="mb-4">
+          <ErrorState
+            error={`${error} — showing simulated snapshot database values.`}
+            variant="inline"
+            onRetry={() => handleFetchData()}
+          />
         </div>
       )}
 

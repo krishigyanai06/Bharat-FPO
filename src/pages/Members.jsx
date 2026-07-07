@@ -26,6 +26,7 @@ import {
 import AddMemberButton from "../components/AddMemberButton";
 import api from "../lib/api";
 import { usePermissions } from "../hooks/usePermissions";
+import ErrorState from "../components/ErrorState";
 
 const KYC_BADGE = {
   Approved: "bg-brand-100 text-brand-700",
@@ -296,20 +297,12 @@ function Members() {
     <div className="space-y-6">
       {/* ERROR DISPLAY */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-red-800">Failed to load members</p>
-              <p className="text-xs text-red-600 mt-1">{error}</p>
-            </div>
-            <button
-              onClick={() => dispatch(fetchMembers())}
-              className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-100 rounded-lg hover:bg-red-200"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
+        <ErrorState
+          title="Failed to load members"
+          error={error}
+          onRetry={() => dispatch(fetchMembers())}
+          variant="page"
+        />
       )}
 
       {/* HEADER */}

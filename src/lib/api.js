@@ -2,6 +2,7 @@ import axios from "axios";
 import theme from "../config/theme";
 import { getToken } from "./tokenStorage";
 import toast from "react-hot-toast";
+import { showOfflineAlert, showServerUnavailableAlert, showTimeoutAlert } from "../utils/notificationService";
 
 const api = axios.create({
   baseURL: theme.apiBase,
@@ -231,6 +232,103 @@ api.interceptors.response.use(
       console.warn("404 NOT FOUND:", error.config?.url);
       return Promise.reject(error);
     }
+
+    // 1. Normalize error structure
+    let normalizedError = {
+      type: "INTERNAL",
+      title: "Internal Server Error",
+      message: "An unexpected error occurred. Please try again.",
+      retryable: false,
+      status: error.response?.status || 500,
+      originalError: error,
+    };
+
+    if (!error.response) {
+      if (!navigator.onLine) {
+        normalizedError = {
+          type: "OFFLINE",
+          title: "No Internet Connection",
+          message: "Please check your internet connection and try again.",
+          retryable: true,
+          status: 0,
+        };
+        showOfflineAlert();
+      } else if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
+        normalizedError = {
+          type: "TIMEOUT",
+          title: "Request Timed Out",
+          message: "The request took too long. Please try again.",
+          retryable: true,
+          status: 408,
+        };
+        showTimeoutAlert(() => {
+          if (error.config) {
+            api(error.config);
+          }
+        });
+      } else {
+        normalizedError = {
+          type: "SERVER",
+          title: "Server Unavailable",
+          message: "Unable to connect to the server. Please try again later.",
+          retryable: true,
+          status: 0,
+        };
+        showServerUnavailableAlert();
+      }
+    } else {
+      const status = error.response.status;
+      const data = error.response.data;
+      const serverMsg = data?.message || data?.error || (Array.isArray(data?.message) ? data?.message[0] : null);
+
+      if (status === 401) {
+        normalizedError = {
+          type: "AUTH",
+          title: "Authentication Required",
+          message: serverMsg || "Your session has expired. Please log in again.",
+          retryable: false,
+          status,
+        };
+      } else if (status === 403) {
+        normalizedError = {
+          type: "PERMISSION",
+          title: "Permission Denied",
+          message: serverMsg || "You do not have permission to perform this action.",
+          retryable: false,
+          status,
+        };
+      } else if (status === 400 || status === 422) {
+        normalizedError = {
+          type: "VALIDATION",
+          title: "Validation Error",
+          message: serverMsg || "The provided data is invalid.",
+          retryable: false,
+          status,
+        };
+      } else if (status >= 500) {
+        normalizedError = {
+          type: "INTERNAL",
+          title: "Server Error",
+          message: serverMsg || "A server error occurred. Please try again later.",
+          retryable: true,
+          status,
+        };
+      }
+    }
+
+    // Attach normalized error to error object
+    error.normalizedError = normalizedError;
+
+    // Mutate the error.response data message to show clean messages in thunks
+    error.response = {
+      ...error.response,
+      status: normalizedError.status,
+      data: {
+        ...error.response?.data,
+        message: normalizedError.message,
+        normalizedError,
+      }
+    };
     
     if (error.response?.status === 401) {
       const url = error.config?.url || "";

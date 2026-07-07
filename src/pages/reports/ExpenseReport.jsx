@@ -5,6 +5,7 @@ import { fetchParties } from '../../store/thunks/partyThunk';
 import { downloadExpenseReport } from '../../store/thunks/reportsThunk';
 import { generateClientExpenseReportPDF, generateIndividualExpensePDF } from '../../utils/clientPdfGenerator';
 import api from '../../lib/api';
+import ErrorState from '../../components/ErrorState';
 import { 
   Check, 
   RotateCw, 
@@ -293,9 +294,12 @@ const ExpenseReport = () => {
 
       {/* Error alert */}
       {error && (
-        <div className="bg-red-50 border border-red-100 text-red-700 text-[11px] px-3.5 py-2.5 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span className="font-semibold">{error}</span>
+        <div className="mb-4">
+          <ErrorState
+            error={error}
+            variant="inline"
+            onRetry={() => handleFetchData()}
+          />
         </div>
       )}
 

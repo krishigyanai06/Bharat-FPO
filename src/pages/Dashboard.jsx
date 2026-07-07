@@ -34,6 +34,7 @@ import {
   SkeletonStatCards,
   SkeletonTable,
 } from "../components/Skeleton";
+import ErrorState from "../components/ErrorState";
 
 /* ================= HELPERS ================= */
 
@@ -276,19 +277,13 @@ function Dashboard() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <div className="max-w-md p-6 border border-red-200 bg-red-50 rounded-xl">
-          <h3 className="mb-2 text-lg font-semibold text-red-800">
-            Failed to Load Dashboard
-          </h3>
-          <p className="mb-4 text-sm text-red-600">{error}</p>
-          <button
-            onClick={() => dispatch(getDashboardData())}
-            className="px-4 py-2 text-white transition bg-red-600 rounded-lg hover:bg-red-700"
-          >
-            Retry
-          </button>
-        </div>
+      <div className="flex items-center justify-center min-h-[400px] w-full">
+        <ErrorState
+          title="Failed to Load Dashboard"
+          error={error}
+          onRetry={() => dispatch(getDashboardData())}
+          variant="page"
+        />
       </div>
     );
   }

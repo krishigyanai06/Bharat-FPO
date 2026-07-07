@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchParties, addParty, updateParty, deleteParty } from "../store/thunks/partyThunk";
 import { clearPartyStatus } from "../store/slices/partySlice";
 import { usePermissions } from "../hooks/usePermissions";
+import ErrorState from "../components/ErrorState";
 import {
     Users,
     Plus,
@@ -298,6 +299,14 @@ export default function Party() {
 
     return (
         <div className="space-y-6">
+            {error && (
+                <ErrorState
+                    title="Failed to load parties"
+                    error={error}
+                    onRetry={() => dispatch(fetchParties())}
+                    variant="page"
+                />
+            )}
             {parties.length === 0 ? (
                 /* ================= EMPTY STATE CONTAINER ================= */
                 <div className="flex flex-col items-center justify-center min-h-[70vh] bg-white rounded-2xl border border-gray-200 p-8 text-center shadow-sm">

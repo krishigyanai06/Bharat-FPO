@@ -63,6 +63,7 @@ import { fetchParties, addParty } from "../store/thunks/partyThunk";
 import { fetchProducts, addProduct, updateProduct, fetchStockSummary } from "../store/thunks/inventoryThunk";
 import { clearPurchaseStatus } from "../store/slices/purchaseSlice";
 import { usePermissions } from "../hooks/usePermissions";
+import ErrorState from "../components/ErrorState";
 import api from "../lib/api";
 import SearchableStateSelect from "../components/SearchableStateSelect";
 import { searchGstin } from "../store/thunks/eInvoiceThunk";
@@ -757,14 +758,12 @@ export default function Purchases() {
       {loading ? (
         <TableSkeleton />
       ) : error ? (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700 shadow-sm flex flex-col items-center gap-2">
-          <AlertTriangle className="w-10 h-10 text-red-500" />
-          <p className="font-semibold">Failed to load purchases data</p>
-          <p className="text-xs">{error}</p>
-          <button onClick={loadListData} className="mt-2 px-4 py-2 bg-red-650 text-white rounded-xl text-xs hover:bg-red-700 transition">
-            Retry Loading
-          </button>
-        </div>
+        <ErrorState
+          title="Failed to load purchases data"
+          error={error}
+          onRetry={loadListData}
+          variant="page"
+        />
       ) : (
         <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
