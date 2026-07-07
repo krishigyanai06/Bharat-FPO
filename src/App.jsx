@@ -52,7 +52,48 @@ function App() {
   return (
     <Provider store={store}>
       <NetworkProvider>
-        <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 3500,
+            style: {
+              background: "#ffffff",
+              color: "#1e293b",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.02)",
+              borderRadius: "12px",
+              padding: "12px 16px",
+              minHeight: "56px",
+              maxWidth: "360px",
+              minWidth: "320px",
+              borderLeft: "4px solid #16A34A",
+              fontSize: "13px",
+              fontWeight: "600"
+            },
+            success: {
+              style: {
+                borderLeft: "4px solid #16A34A"
+              },
+              iconTheme: {
+                primary: "#16A34A",
+                secondary: "#ffffff"
+              }
+            },
+            error: {
+              style: {
+                borderLeft: "4px solid #EF4444"
+              },
+              iconTheme: {
+                primary: "#EF4444",
+                secondary: "#ffffff"
+              }
+            },
+            loading: {
+              style: {
+                borderLeft: "4px solid #3B82F6"
+              }
+            }
+          }}
+        />
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Suspense fallback={<PageLoader />}><Login /></Suspense>} />
