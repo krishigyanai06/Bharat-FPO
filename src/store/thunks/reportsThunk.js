@@ -203,3 +203,60 @@ export const downloadGstr1Report = createAsyncThunk(
     }
   }
 );
+
+export const downloadGstr3bReport = createAsyncThunk(
+  'reports/downloadGstr3bReport',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Downloading GSTR-3B report with filters:', filters);
+      const blob = await reportService.downloadGstr3bReport(filters);
+      
+      let ext = 'json';
+      if (filters.format === 'excel' || filters.format === 'xlsx') {
+        ext = 'xlsx';
+      }
+      let filename = 'GSTR3B';
+      
+      if (filters.month && filters.year) {
+        const monthNames = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const monthIdx = parseInt(filters.month, 10) - 1;
+        const monthName = monthNames[monthIdx] || filters.month;
+        filename = `GSTR3B_${monthName}_${filters.year}.${ext}`;
+      } else if (filters.startDate && filters.endDate) {
+        filename = `GSTR3B_${filters.startDate}_to_${filters.endDate}.${ext}`;
+      } else {
+        const monthNames = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const now = new Date();
+        const monthName = monthNames[now.getMonth()];
+        const year = now.getFullYear();
+        filename = `GSTR3B_${monthName}_${year}.${ext}`;
+      }
+      
+      downloadBlob(blob, filename);
+      return { success: true };
+    } catch (err) {
+      console.error('[reportsThunk] downloadGstr3bReport error:', err);
+      return rejectWithValue(err.response?.data?.message || 'Failed to download GSTR-3B Report');
+    }
+  }
+);
+
+export const fetchGstr3bReport = createAsyncThunk(
+  'reports/fetchGstr3bReport',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Fetching GSTR-3B report JSON with filters:', filters);
+      const data = await reportService.fetchGstr3bReport(filters);
+      return data?.data || data || null;
+    } catch (err) {
+      console.error('[reportsThunk] fetchGstr3bReport error:', err);
+      return rejectWithValue(err.response?.data?.message || 'Failed to fetch GSTR-3B details');
+    }
+  }
+);

@@ -84,15 +84,15 @@ const GstDashboardContent = ({ onNavigate }) => {
             </div>
           </div>
 
-          {/* Card 3: GSTR-3B (Coming Soon) */}
-          <div className="bg-white rounded-xl border border-gray-100 p-5 flex flex-col justify-between h-[165px] opacity-75">
+          {/* Card 3: GSTR-3B (Available) */}
+          <div className="bg-white rounded-xl border border-gray-150 p-5 flex flex-col justify-between h-[165px] hover:shadow-md transition-all">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                <div className="p-2 bg-emerald-50 text-emerald-700 rounded-lg">
                   <Percent className="w-4.5 h-4.5" />
                 </div>
-                <span className="px-2 py-0.5 text-[9px] font-bold rounded bg-gray-50 text-gray-500 border border-gray-200">
-                  Coming Soon
+                <span className="px-2 py-0.5 text-[9px] font-bold rounded bg-green-50 text-[#15803D] border border-green-100">
+                  Available
                 </span>
               </div>
               <div className="space-y-0.5">
@@ -102,8 +102,14 @@ const GstDashboardContent = ({ onNavigate }) => {
                 </p>
               </div>
             </div>
-            <div className="border-t border-gray-50 pt-2.5">
-              <span className="text-gray-400 text-xs font-semibold">Coming Soon</span>
+            <div className="flex items-center justify-between border-t border-gray-50 pt-2.5">
+              <button 
+                onClick={() => onNavigate('gstr3b')}
+                className="text-[#15803D] font-bold text-xs hover:underline cursor-pointer"
+              >
+                Open Report
+              </button>
+              <ArrowRight onClick={() => onNavigate('gstr3b')} className="w-4 h-4 text-[#15803D] cursor-pointer" />
             </div>
           </div>
 

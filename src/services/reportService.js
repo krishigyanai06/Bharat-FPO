@@ -127,6 +127,31 @@ const reportService = {
     });
     return res.data;
   },
+
+  /**
+   * Downloads GSTR-3B Report matching query options.
+   * @param {object} filters - month, year, startDate, endDate, format
+   * @returns {Promise<Blob>}
+   */
+  downloadGstr3bReport: async (filters) => {
+    const res = await api.get('/reports/gstr-3b', {
+      params: filters,
+      responseType: 'blob',
+    });
+    return res.data;
+  },
+
+  /**
+   * Fetches JSON data for GSTR-3B report.
+   * @param {object} filters - month, year, startDate, endDate
+   * @returns {Promise<object>}
+   */
+  fetchGstr3bReport: async (filters) => {
+    const res = await api.get('/reports/gstr-3b', {
+      params: { ...filters, format: 'json' },
+    });
+    return res.data;
+  },
 };
 
 export default reportService;

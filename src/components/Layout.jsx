@@ -283,7 +283,7 @@ export default function Layout() {
 
   /* CURRENT PAGE LABEL */
   const currentPage = location.pathname.startsWith("/gst-reports")
-    ? (location.pathname.includes("/gstr-1") ? "GSTR-1 Report" : "GST Reports")
+    ? (location.pathname.includes("/gstr-1") ? "GSTR-1 Report" : location.pathname.includes("/gstr-3b") ? "GSTR-3B Report" : "GST Reports")
     : menuItems.find((m) => m.path === location.pathname)?.label || "Dashboard";
 
   /* GLOBAL SEARCH — lazy-load search data on first keystroke */

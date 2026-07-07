@@ -80,6 +80,7 @@ function App() {
               <Route path="gst-reports">
                 <Route index element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/gst-reports']}><Suspense fallback={<PageLoader />}><GstReportsDashboard /></Suspense></ProtectedRoute>} />
                 <Route path="gstr-1" element={<Navigate to="/gst-reports?tab=gstr1" replace />} />
+                <Route path="gstr-3b" element={<Navigate to="/gst-reports?tab=gstr3b" replace />} />
               </Route>
               <Route path="settings" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/settings']}><Suspense fallback={<PageLoader />}><Settings /></Suspense></ProtectedRoute>} />
               <Route path="sell" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterSales /></Suspense></ProtectedRoute>} />

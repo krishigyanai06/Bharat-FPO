@@ -14,18 +14,20 @@ import {
 } from 'lucide-react';
 import GstDashboardContent from './GstDashboardContent';
 import Gstr1Report from './Gstr1Report';
+import Gstr3bReport from './Gstr3bReport';
 
 const ALL_TABS = {
   dashboard: { key: 'dashboard', label: 'Dashboard', icon: ShieldCheck },
   gstr1: { key: 'gstr1', label: 'GSTR-1 Return', icon: FileText },
   gstr2b: { key: 'gstr2b', label: 'GSTR-2B ITC Statement', icon: Layers, disabled: true },
-  gstr3b: { key: 'gstr3b', label: 'GSTR-3B Summary Return', icon: Percent, disabled: true },
+  gstr3b: { key: 'gstr3b', label: 'GSTR-3B Summary Return', icon: Percent },
   gstr9: { key: 'gstr9', label: 'GSTR-9 Annual Return', icon: Calculator, disabled: true }
 };
 
 const REPORT_COMPONENTS = {
   dashboard: GstDashboardContent,
-  gstr1: Gstr1Report
+  gstr1: Gstr1Report,
+  gstr3b: Gstr3bReport
 };
 
 const GstReportsWorkspace = () => {
