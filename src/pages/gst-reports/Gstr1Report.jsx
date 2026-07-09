@@ -18,7 +18,8 @@ import {
   ArrowRight,
   TrendingUp,
   FileSignature,
-  ArrowLeft
+  ArrowLeft,
+  Loader2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -127,20 +128,41 @@ const Gstr1Report = () => {
       </div>
 
       {/* ── Compliance Banner/Header ── */}
-        <div className="bg-gradient-to-r from-emerald-800 to-green-700 text-white rounded-2xl p-6 shadow-sm relative overflow-hidden">
-          <div className="absolute right-0 top-0 opacity-10 transform translate-x-12 -translate-y-12">
-            <ShieldCheck className="w-96 h-96" />
+      <div className="bg-gradient-to-r from-emerald-800 to-green-700 text-white rounded-xl p-4 shadow-sm relative overflow-hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="absolute right-0 top-0 opacity-10 transform translate-x-12 -translate-y-12 pointer-events-none">
+          <ShieldCheck className="w-64 h-64" />
+        </div>
+        <div className="relative z-10 space-y-1">
+          <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-900/50 backdrop-blur-md rounded text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20 text-emerald-250">
+            Government Compliance
           </div>
-          <div className="relative z-10 space-y-2.5 max-w-3xl">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-900/50 backdrop-blur-md rounded-full text-xs font-semibold tracking-wide border border-emerald-500/20 text-emerald-200">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Government Compliance Portal
-            </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">GSTR-1 Tax Return Center</h1>
-            <p className="text-sm text-emerald-100 leading-relaxed font-medium">
-              Generate and export sales return information. Output government-compliant JSON schemas compatible with the official GST offline utility tool, or CSV spreadsheets ready for internal auditing and reconciliation.
-            </p>
+          <h1 className="text-lg font-bold tracking-tight">GSTR-1 Tax Return</h1>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-100 font-semibold">
+            <span className="bg-emerald-900/40 px-2 py-0.5 rounded">
+              {periodMode === 'monthly' ? `${selectedMonthName} ${year}` : (startDate && endDate ? `${startDate} to ${endDate}` : 'Custom Period')}
+            </span>
+            <span>•</span>
+            <span className="uppercase bg-emerald-900/40 px-2 py-0.5 rounded">{format} format</span>
+            <span>•</span>
+            <span className="flex items-center gap-1 bg-emerald-900/40 px-2 py-0.5 rounded">
+              <span className={`w-1.5 h-1.5 rounded-full ${validationError ? 'bg-red-400' : 'bg-green-400'}`} />
+              {validationError ? 'Error' : 'Ready'}
+            </span>
           </div>
         </div>
+        <button
+          onClick={handleDownload}
+          disabled={!!validationError || gstr1DownloadLoading}
+          className={`relative z-10 w-fit flex items-center gap-1.5 py-2 px-4 rounded-lg text-xs font-bold text-emerald-900 bg-white hover:bg-emerald-50 shadow transition duration-150 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed`}
+        >
+          {gstr1DownloadLoading ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Download className="w-3.5 h-3.5" />
+          )}
+          Download Return
+        </button>
+      </div>
 
         {/* ── Main Layout Grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

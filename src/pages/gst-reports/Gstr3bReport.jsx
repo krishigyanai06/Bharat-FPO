@@ -58,7 +58,7 @@ const Gstr3bReport = () => {
   const [format, setFormat] = useState('json'); // 'json' | 'excel'
 
   // Sub-tab selection for Preview
-  const [activePreviewTab, setActivePreviewTab] = useState('section31'); // 'section31' | 'section32'
+  const [activePreviewTab, setActivePreviewTab] = useState('section31'); // 'section31' | 'section32' | 'section4_5'
 
   // Clear reports error on mount and unmount
   useEffect(() => {
@@ -178,13 +178,14 @@ const Gstr3bReport = () => {
     };
   }, [month, year]);
 
-  // Determine active report data
+  // Determine active report data (avoid fallback simulation in production view)
   const reportData = useMemo(() => {
-    if (gstr3bData && Object.keys(gstr3bData).length > 0) {
-      return gstr3bData;
-    }
-    return fallbackData;
-  }, [gstr3bData, fallbackData]);
+    return gstr3bData;
+  }, [gstr3bData]);
+
+  const hasReportData = useMemo(() => {
+    return reportData && Object.keys(reportData).length > 0;
+  }, [reportData]);
 
   // Safe mapping arrays for Section 3.1 supplies
   const suppliesList = useMemo(() => {
@@ -219,10 +220,54 @@ const Gstr3bReport = () => {
     return Array.isArray(reportData?.section32) ? reportData.section32 : [];
   }, [reportData]);
 
-  // Formatting helper
+  // Safe mapping for Section 4 (ITC Available & Ineligible ITC)
+  const itcData = useMemo(() => {
+    const sec4 = reportData?.section4 || {};
+    const a = sec4.a || {};
+    const d = sec4.d || {};
+    
+    const defaultItcRow = { igst: 0, cgst: 0, sgst: 0, cess: 0 };
+    
+    return {
+      a: {
+        importOfGoods: a.importOfGoods || defaultItcRow,
+        importOfServices: a.importOfServices || defaultItcRow,
+        reverseCharge: a.reverseCharge || defaultItcRow,
+        isd: a.isd || defaultItcRow,
+        allOtherItc: a.allOtherItc || defaultItcRow
+      },
+      d: {
+        section17_5: d.section17_5 || defaultItcRow,
+        others: d.others || defaultItcRow
+      }
+    };
+  }, [reportData]);
+
+  // Safe mapping for Section 5 (Exempt Supplies)
+  const exemptData = useMemo(() => {
+    const sec5 = reportData?.section5 || {};
+    const defaultExemptRow = { interState: 0, intraState: 0 };
+    
+    return {
+      compositionExemptNil: sec5.compositionExemptNil || defaultExemptRow,
+      nonGst: sec5.nonGst || defaultExemptRow
+    };
+  }, [reportData]);
+
+  // Formatting helper (rounded to integer)
   const fmtINR = (v) => {
     if (v === undefined || v === null || isNaN(v)) return '₹0';
     return '₹' + Number(v).toLocaleString('en-IN');
+  };
+
+  // Formatting helper for currency with 2 decimal places
+  const fmtCurrency = (v) => {
+    const val = Number(v);
+    if (v === undefined || v === null || isNaN(val)) return '₹0.00';
+    return '₹' + val.toLocaleString('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   };
 
   // Handle Download Request
@@ -253,8 +298,58 @@ const Gstr3bReport = () => {
 
   return (
     <div className="space-y-6 w-full bg-white rounded-2xl p-6 border border-gray-150 min-h-[80vh] select-none">
+      <style>{`
+        @media print {
+          body {
+            background: white !important;
+            color: black !important;
+          }
+          .no-print,
+          button,
+          nav,
+          header,
+          footer,
+          .lg\\:col-span-1,
+          .flex-col.sm\\:flex-row,
+          .bg-gradient-to-r.from-emerald-800,
+          .no-print-grid {
+            display: none !important;
+          }
+          .space-y-6 {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .p-6, .p-5, .p-4 {
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+          .shadow-sm, .shadow-md, .shadow-lg {
+            box-shadow: none !important;
+          }
+          .border, .border-gray-150, .border-gray-200 {
+            border-color: #e2e8f0 !important;
+          }
+          thead {
+            display: table-header-group !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+          }
+          .bg-white.rounded-2xl.border {
+            border: none !important;
+          }
+          .p-6.relative {
+            padding: 0 !important;
+          }
+          .bg-gray-50.border-b {
+            display: none !important;
+          }
+        }
+      `}</style>
+
       {/* ── Breadcrumbs Navigation & Back Button ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-1">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-1 no-print">
         <div className="flex items-center gap-2 text-xs text-gray-400 font-semibold">
           <span className="hover:text-emerald-700 hover:underline cursor-pointer" onClick={() => navigate('/gst-reports')}>
             GST Reports
@@ -271,23 +366,44 @@ const Gstr3bReport = () => {
       </div>
 
       {/* ── Compliance Banner/Header ── */}
-      <div className="bg-gradient-to-r from-emerald-800 to-green-700 text-white rounded-2xl p-6 shadow-sm relative overflow-hidden">
-        <div className="absolute right-0 top-0 opacity-10 transform translate-x-12 -translate-y-12">
-          <Percent className="w-96 h-96" />
+      <div className="bg-gradient-to-r from-emerald-800 to-green-700 text-white rounded-xl p-4 shadow-sm relative overflow-hidden no-print flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="absolute right-0 top-0 opacity-10 transform translate-x-12 -translate-y-12 pointer-events-none">
+          <Percent className="w-64 h-64" />
         </div>
-        <div className="relative z-10 space-y-2.5 max-w-3xl">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-900/50 backdrop-blur-md rounded-full text-xs font-semibold tracking-wide border border-emerald-500/20 text-emerald-250">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Government Compliance Portal
+        <div className="relative z-10 space-y-1">
+          <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-900/50 backdrop-blur-md rounded text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20 text-emerald-250">
+            Government Compliance
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">GSTR-3B Summary Return Center</h1>
-          <p className="text-sm text-emerald-100 leading-relaxed font-medium">
-            Generate and export consolidated monthly summary returns. Download government-compliant Section 3.1 JSON schemas containing outward/inward supplies, or formatted Excel spreadsheets matching the offline GSTR-3B government utility structure.
-          </p>
+          <h1 className="text-lg font-bold tracking-tight">GSTR-3B Summary Return</h1>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-100 font-semibold">
+            <span className="bg-emerald-900/40 px-2 py-0.5 rounded">
+              {periodMode === 'monthly' ? `${selectedMonthName} ${year}` : (startDate && endDate ? `${startDate} to ${endDate}` : 'Custom Period')}
+            </span>
+            <span>•</span>
+            <span className="uppercase bg-emerald-900/40 px-2 py-0.5 rounded">{format} format</span>
+            <span>•</span>
+            <span className="flex items-center gap-1 bg-emerald-900/40 px-2 py-0.5 rounded">
+              <span className={`w-1.5 h-1.5 rounded-full ${validationError ? 'bg-red-400' : 'bg-green-400'}`} />
+              {validationError ? 'Error' : 'Ready'}
+            </span>
+          </div>
         </div>
+        <button
+          onClick={handleDownload}
+          disabled={!!validationError || gstr3bDownloadLoading}
+          className={`relative z-10 w-fit flex items-center gap-1.5 py-2 px-4 rounded-lg text-xs font-bold text-emerald-900 bg-white hover:bg-emerald-50 shadow transition duration-150 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed`}
+        >
+          {gstr3bDownloadLoading ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Download className="w-3.5 h-3.5" />
+          )}
+          Download Return
+        </button>
       </div>
 
       {/* ── Main Layout Grid ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 no-print-grid no-print">
         
         {/* Left Side: Filter Form & Selector Controls */}
         <div className="lg:col-span-2 space-y-6">
@@ -587,39 +703,44 @@ const Gstr3bReport = () => {
       </div>
 
       {/* ── Interactive Preview Tables Container ── */}
-      <div className="bg-white rounded-2xl border border-gray-150 shadow-sm overflow-hidden flex flex-col">
+      <div className="bg-white rounded-lg border border-gray-200 shadow-none overflow-hidden flex flex-col">
         
         {/* Preview Segment Tabs */}
-        <div className="bg-gray-50 border-b border-gray-200 px-5 pt-3 flex items-center justify-between gap-4">
+        <div className="bg-gray-50 border-b border-gray-200 px-5 pt-2 flex items-center justify-between gap-4 no-print">
           <div className="flex items-center gap-1 -mb-[1px]">
             <button
               onClick={() => setActivePreviewTab('section31')}
-              className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-4 py-2 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
                 activePreviewTab === 'section31'
-                  ? 'border-emerald-600 text-emerald-700 font-extrabold'
+                  ? 'border-emerald-600 text-emerald-800 font-bold'
                   : 'border-transparent text-gray-500 hover:text-gray-800'
               }`}
             >
-              <Percent className="w-3.5 h-3.5" /> Section 3.1: Outward & Inward Supplies
+              <Percent className="w-3.5 h-3.5" /> Section 3.1 – Outward Supplies
             </button>
             <button
               onClick={() => setActivePreviewTab('section32')}
-              className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-4 py-2 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
                 activePreviewTab === 'section32'
-                  ? 'border-emerald-600 text-emerald-700 font-extrabold'
+                  ? 'border-emerald-600 text-emerald-800 font-bold'
                   : 'border-transparent text-gray-500 hover:text-gray-800'
               }`}
             >
-              <Layers className="w-3.5 h-3.5" /> Section 3.2: Inter-State Supplies
+              <Layers className="w-3.5 h-3.5" /> Section 3.2 – Inter-State Supplies
+            </button>
+            <button
+              onClick={() => setActivePreviewTab('section4_5')}
+              className={`px-4 py-2 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+                activePreviewTab === 'section4_5'
+                  ? 'border-emerald-600 text-emerald-800 font-bold'
+                  : 'border-transparent text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <Building className="w-3.5 h-3.5" /> Section 4 & 5 – ITC & Inward Supplies
             </button>
           </div>
           
-          <div className="pb-2 text-[10px] text-gray-400 font-semibold flex items-center gap-1.5">
-            {!gstr3bData && (
-              <span className="bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
-                Showing Fallback Simulation
-              </span>
-            )}
+          <div className="pb-1.5 text-[10px] text-gray-400 font-semibold flex items-center gap-1.5">
             {gstr3bLoading && (
               <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
             )}
@@ -627,7 +748,7 @@ const Gstr3bReport = () => {
         </div>
 
         {/* Preview Tables Display */}
-        <div className="p-6 relative min-h-[250px]">
+        <div className="p-4 md:p-6 relative min-h-[250px] bg-white">
           {gstr3bLoading ? (
             <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center z-10">
               <div className="flex flex-col items-center gap-2">
@@ -637,133 +758,326 @@ const Gstr3bReport = () => {
             </div>
           ) : null}
 
-          {activePreviewTab === 'section31' ? (
-            <div className="space-y-4 animate-fade-in">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xs font-extrabold text-gray-800">Section 3.1 — Details of outward supplies and inward supplies liable to reverse charge</h3>
-                  <p className="text-[11px] text-gray-400 font-medium">All amounts net of sell return credit notes for the period.</p>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto border border-gray-150 rounded-xl">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-gray-50/75 border-b border-gray-150 text-gray-500 font-extrabold text-[10px] uppercase tracking-wider">
-                      <th className="px-4 py-3 w-[45%]">Nature of Supplies</th>
-                      <th className="px-4 py-3 text-right">Total Taxable Value</th>
-                      <th className="px-4 py-3 text-right">Integrated Tax (IGST)</th>
-                      <th className="px-4 py-3 text-right">Central Tax (CGST)</th>
-                      <th className="px-4 py-3 text-right">State/UT Tax (SGST)</th>
-                      <th className="px-4 py-3 text-right">Cess</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {suppliesList.map((row) => (
-                      <tr key={row.key} className="hover:bg-gray-50/50 transition">
-                        <td className="px-4 py-3.5 font-semibold text-gray-700 leading-normal">{row.description}</td>
-                        <td className="px-4 py-3.5 text-right font-extrabold text-gray-900">{fmtINR(row.taxableValue)}</td>
-                        <td className="px-4 py-3.5 text-right font-extrabold text-gray-900">{fmtINR(row.igst)}</td>
-                        <td className="px-4 py-3.5 text-right font-extrabold text-gray-900">{fmtINR(row.cgst)}</td>
-                        <td className="px-4 py-3.5 text-right font-extrabold text-gray-900">{fmtINR(row.sgst)}</td>
-                        <td className="px-4 py-3.5 text-right font-extrabold text-gray-900">{fmtINR(row.cess)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          {!hasReportData && !gstr3bLoading ? (
+            <div className="flex flex-col items-center justify-center py-16 px-4 text-center animate-fade-in">
+              <AlertCircle className="w-10 h-10 text-gray-300 mb-3" />
+              <h3 className="text-[14px] font-bold text-gray-800">No GSTR-3B Data Available</h3>
+              <p className="text-[12px] text-gray-500 mt-1 max-w-sm leading-normal">
+                No GSTR-3B data available for the selected period.
+              </p>
             </div>
           ) : (
-            <div className="space-y-4 animate-fade-in">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xs font-extrabold text-gray-800">Section 3.2 — Of the supplies shown in 3.1(a), details of inter-state supplies</h3>
-                  <p className="text-[11px] text-gray-400 font-medium">Captures inter-state outward taxable supplies (excluding zero-rated/exempt supplies). Net of credit notes.</p>
-                </div>
-              </div>
+            <>
+              {activePreviewTab === 'section31' && (
+                <div className="space-y-4 animate-fade-in">
+                  {/* Accounting Style Header */}
+                  <div className="bg-[#F4FBF6] border border-gray-200 border-b-0 p-3 rounded-t-md">
+                    <h3 className="text-[14px] font-bold text-emerald-900">
+                      Section 3.1 – Details of Outward Supplies and Inward Supplies Liable to Reverse Charge
+                    </h3>
+                    <p className="text-[11px] text-gray-500 mt-0.5 font-normal">
+                      Summary of taxable outward supplies, zero-rated, nil-rated, exempted, non-GST, and RCM inward supplies.
+                    </p>
+                  </div>
 
-              <div className="overflow-x-auto border border-gray-150 rounded-xl">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-gray-50/75 border-b border-gray-150 text-gray-500 font-extrabold text-[10px] uppercase tracking-wider">
-                      <th className="px-4 py-3 rowspan-2">Place of Supply (State/UT)</th>
-                      <th className="px-4 py-3 text-center">State Code</th>
-                      <th className="px-4 py-3 text-center border-l border-gray-150" colSpan={2}>Supplies Made to Unregistered Persons</th>
-                      <th className="px-4 py-3 text-center border-l border-gray-150" colSpan={2}>Supplies Made to Composition Taxable Persons</th>
-                      <th className="px-4 py-3 text-center border-l border-gray-150" colSpan={2}>Supplies Made to UIN Holders</th>
-                    </tr>
-                    <tr className="bg-gray-50/30 border-b border-gray-150 text-gray-400 text-[9px] uppercase tracking-wider">
-                      <th className="px-2 py-1.5 text-center">Code</th>
-                      <th className="px-3 py-1.5 text-right border-l border-gray-100">Taxable Value</th>
-                      <th className="px-3 py-1.5 text-right">IGST Amount</th>
-                      <th className="px-3 py-1.5 text-right border-l border-gray-100">Taxable Value</th>
-                      <th className="px-3 py-1.5 text-right">IGST Amount</th>
-                      <th className="px-3 py-1.5 text-right border-l border-gray-100">Taxable Value</th>
-                      <th className="px-3 py-1.5 text-right">IGST Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {section32List.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="text-center py-8 text-gray-400 italic">No inter-state supplies recorded for the period.</td>
-                      </tr>
-                    ) : (
-                      [...section32List]
-                        .sort((a, b) => Number(a.stateCode || 0) - Number(b.stateCode || 0))
-                        .map((row, idx) => (
-                          <tr key={idx} className="hover:bg-gray-50/50 transition">
-                            <td className="px-4 py-3 font-semibold text-gray-700">{row.placeOfSupply}</td>
-                            <td className="px-4 py-3 text-center font-bold text-gray-500">{row.stateCode}</td>
-                            
-                            {/* Unregistered */}
-                            <td className="px-3 py-3 text-right font-extrabold text-gray-900 border-l border-gray-100">{fmtINR(row.unregistered?.taxableValue)}</td>
-                            <td className="px-3 py-3 text-right font-extrabold text-emerald-700">{fmtINR(row.unregistered?.igst)}</td>
-                            
-                            {/* Composition */}
-                            <td className="px-3 py-3 text-right font-extrabold text-gray-900 border-l border-gray-100">{fmtINR(row.composition?.taxableValue)}</td>
-                            <td className="px-3 py-3 text-right font-extrabold text-emerald-700">{fmtINR(row.composition?.igst)}</td>
-                            
-                            {/* UIN Holders */}
-                            <td className="px-3 py-3 text-right font-extrabold text-gray-900 border-l border-gray-100">{fmtINR(row.uinHolders?.taxableValue)}</td>
-                            <td className="px-3 py-3 text-right font-extrabold text-emerald-700">{fmtINR(row.uinHolders?.igst)}</td>
+                  <div className="overflow-x-auto border border-gray-200 rounded-b-md">
+                    <table className="w-full text-left border-collapse text-[13px]">
+                      <thead>
+                        <tr className="bg-gray-50/75 border-b border-gray-200 text-gray-600 font-semibold text-[11px] uppercase tracking-wider">
+                          <th className="px-4 py-2.5 w-[40%] border-r border-gray-200">Nature of Supplies</th>
+                          <th className="px-4 py-2.5 text-right border-r border-gray-200">Total Taxable Value</th>
+                          <th className="px-4 py-2.5 text-right border-r border-gray-200">Integrated Tax (IGST)</th>
+                          <th className="px-4 py-2.5 text-right border-r border-gray-200">Central Tax (CGST)</th>
+                          <th className="px-4 py-2.5 text-right border-r border-gray-200">State/UT Tax (SGST)</th>
+                          <th className="px-4 py-2.5 text-right">Cess</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {suppliesList.map((row) => (
+                          <tr key={row.key} className="hover:bg-gray-50/30 transition even:bg-gray-50/15">
+                            <td className="px-4 py-2 font-medium text-gray-700 leading-normal border-r border-gray-150">{row.description}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(row.taxableValue)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(row.igst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(row.cgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(row.sgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800">{fmtCurrency(row.cess)}</td>
                           </tr>
-                        ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {activePreviewTab === 'section32' && (
+                <div className="space-y-4 animate-fade-in">
+                  {/* Accounting Style Header */}
+                  <div className="bg-[#F4FBF6] border border-gray-200 border-b-0 p-3 rounded-t-md">
+                    <h3 className="text-[14px] font-bold text-emerald-900">
+                      Section 3.2 – Of the supplies shown in 3.1(a), details of inter-state supplies
+                    </h3>
+                    <p className="text-[11px] text-gray-500 mt-0.5 font-normal">
+                      Inter-state taxable supplies made to unregistered persons, composition taxable persons, and UIN holders.
+                    </p>
+                  </div>
+
+                  <div className="overflow-x-auto border border-gray-200 rounded-b-md">
+                    <table className="w-full text-left border-collapse text-[13px]">
+                      <thead>
+                        <tr className="bg-gray-50/75 border-b border-gray-200 text-gray-600 font-semibold text-[11px] uppercase tracking-wider">
+                          <th className="px-4 py-2.5 rowspan-2 border-r border-gray-200">Place of Supply (State/UT)</th>
+                          <th className="px-4 py-2.5 text-center border-r border-gray-200">Code</th>
+                          <th className="px-4 py-2.5 text-center border-r border-gray-200" colSpan={2}>Supplies to Unregistered</th>
+                          <th className="px-4 py-2.5 text-center border-r border-gray-200" colSpan={2}>Supplies to Composition</th>
+                          <th className="px-4 py-2.5 text-center" colSpan={2}>Supplies to UIN Holders</th>
+                        </tr>
+                        <tr className="bg-gray-50/30 border-b border-gray-200 text-gray-500 text-[10px] uppercase font-semibold">
+                          <th className="px-2 py-1.5 text-center border-r border-gray-150">Code</th>
+                          <th className="px-3 py-1.5 text-right border-r border-gray-150">Taxable Value</th>
+                          <th className="px-3 py-1.5 text-right border-r border-gray-150">IGST Amount</th>
+                          <th className="px-3 py-1.5 text-right border-r border-gray-150">Taxable Value</th>
+                          <th className="px-3 py-1.5 text-right border-r border-gray-150">IGST Amount</th>
+                          <th className="px-3 py-1.5 text-right border-r border-gray-150">Taxable Value</th>
+                          <th className="px-3 py-1.5 text-right">IGST Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {section32List.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="text-center py-8 text-gray-400 italic">No inter-state supplies recorded for the period.</td>
+                          </tr>
+                        ) : (
+                          [...section32List]
+                            .sort((a, b) => Number(a.stateCode || 0) - Number(b.stateCode || 0))
+                            .map((row, idx) => (
+                              <tr key={idx} className="hover:bg-gray-50/30 transition even:bg-gray-50/15">
+                                <td className="px-4 py-2 font-medium text-gray-700 border-r border-gray-150">{row.placeOfSupply}</td>
+                                <td className="px-4 py-2 text-center font-bold text-gray-500 border-r border-gray-150">{row.stateCode}</td>
+                                
+                                {/* Unregistered */}
+                                <td className="px-3 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(row.unregistered?.taxableValue)}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-emerald-800 border-r border-gray-150">{fmtCurrency(row.unregistered?.igst)}</td>
+                                
+                                {/* Composition */}
+                                <td className="px-3 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(row.composition?.taxableValue)}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-emerald-800 border-r border-gray-150">{fmtCurrency(row.composition?.igst)}</td>
+                                
+                                {/* UIN Holders */}
+                                <td className="px-3 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(row.uinHolders?.taxableValue)}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-emerald-800">{fmtCurrency(row.uinHolders?.igst)}</td>
+                              </tr>
+                            ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {activePreviewTab === 'section4_5' && (
+                <div className="space-y-8 animate-fade-in">
+                  
+                  {/* Section 4 Card container */}
+                  <div className="space-y-4">
+                    {/* Accounting Style Header */}
+                    <div className="bg-[#F4FBF6] border border-gray-200 border-b-0 p-3 rounded-t-md">
+                      <h3 className="text-[14px] font-bold text-emerald-900">
+                        Section 4 – Input Tax Credit (ITC)
+                      </h3>
+                      <p className="text-[11px] text-gray-500 mt-0.5 font-normal">
+                        Details of Input Tax Credit (ITC) available and ineligible ITC.
+                      </p>
+                    </div>
+
+                    <div className="overflow-x-auto border border-gray-200 rounded-b-md">
+                      <table className="w-full text-left border-collapse text-[13px]">
+                        <thead>
+                          <tr className="bg-gray-50/75 border-b border-gray-200 text-gray-600 font-semibold text-[11px] uppercase tracking-wider">
+                            <th className="px-4 py-2.5 w-[40%] border-r border-gray-200">Details</th>
+                            <th className="px-4 py-2.5 text-right border-r border-gray-200">IGST</th>
+                            <th className="px-4 py-2.5 text-right border-r border-gray-200">CGST</th>
+                            <th className="px-4 py-2.5 text-right border-r border-gray-200">SGST / UTGST</th>
+                            <th className="px-4 py-2.5 text-right">Cess</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {/* (A) ITC Available Header */}
+                          <tr className="bg-[#F4FBF6]/50 font-bold border-y border-gray-200">
+                            <td colSpan={5} className="px-4 py-2 text-emerald-900 font-bold text-[12px] uppercase">
+                              (A) ITC Available (whether in full or part)
+                            </td>
+                          </tr>
+                          {/* A1. Import of Goods */}
+                          <tr className="hover:bg-gray-50/30 transition even:bg-gray-50/15">
+                            <td className="px-4 py-2 font-medium text-gray-700 pl-6 border-r border-gray-150">1. Import of Goods</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.importOfGoods.igst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.importOfGoods.cgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.importOfGoods.sgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800">{fmtCurrency(itcData.a.importOfGoods.cess)}</td>
+                          </tr>
+                          {/* A2. Import of Services */}
+                          <tr className="hover:bg-gray-50/30 transition even:bg-gray-50/15">
+                            <td className="px-4 py-2 font-medium text-gray-700 pl-6 border-r border-gray-150">2. Import of Services</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.importOfServices.igst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.importOfServices.cgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.importOfServices.sgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800">{fmtCurrency(itcData.a.importOfServices.cess)}</td>
+                          </tr>
+                          {/* A3. Reverse Charge */}
+                          <tr className="hover:bg-gray-50/30 transition even:bg-gray-50/15">
+                            <td className="px-4 py-2 font-medium text-gray-700 pl-6 border-r border-gray-150">3. Inward Supplies liable to Reverse Charge (other than 1 & 2 above)</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.reverseCharge.igst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.reverseCharge.cgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.reverseCharge.sgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800">{fmtCurrency(itcData.a.reverseCharge.cess)}</td>
+                          </tr>
+                          {/* A4. ISD */}
+                          <tr className="hover:bg-gray-50/30 transition even:bg-gray-50/15">
+                            <td className="px-4 py-2 font-medium text-gray-700 pl-6 border-r border-gray-150">4. Inward Supplies from ISD</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.isd.igst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.isd.cgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.isd.sgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800">{fmtCurrency(itcData.a.isd.cess)}</td>
+                          </tr>
+                          {/* A5. All Other ITC */}
+                          <tr className="hover:bg-gray-50/30 transition even:bg-gray-50/15">
+                            <td className="px-4 py-2 font-medium text-gray-700 pl-6 border-r border-gray-150">5. All Other ITC</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.allOtherItc.igst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.allOtherItc.cgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.a.allOtherItc.sgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800">{fmtCurrency(itcData.a.allOtherItc.cess)}</td>
+                          </tr>
+
+                          {/* (D) Ineligible ITC Header */}
+                          <tr className="bg-[#F4FBF6]/50 font-bold border-y border-gray-200">
+                            <td colSpan={5} className="px-4 py-2 text-emerald-900 font-bold text-[12px] uppercase">
+                              (D) Ineligible ITC
+                            </td>
+                          </tr>
+                          {/* D1. Section 17(5) */}
+                          <tr className="hover:bg-gray-50/30 transition even:bg-gray-50/15">
+                            <td className="px-4 py-2 font-medium text-gray-700 pl-6 border-r border-gray-150">1. As per Section 17(5)</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.d.section17_5.igst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.d.section17_5.cgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.d.section17_5.sgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800">{fmtCurrency(itcData.d.section17_5.cess)}</td>
+                          </tr>
+                          {/* D2. Others */}
+                          <tr className="hover:bg-gray-50/30 transition even:bg-gray-50/15">
+                            <td className="px-4 py-2 font-medium text-gray-700 pl-6 border-r border-gray-150">2. Others</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.d.others.igst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.d.others.cgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">{fmtCurrency(itcData.d.others.sgst)}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800">{fmtCurrency(itcData.d.others.cess)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Clean Horizontal Divider */}
+                  <hr className="border-gray-200" />
+
+                  {/* Section 5 Card container */}
+                  <div className="space-y-4">
+                    {/* Accounting Style Header */}
+                    <div className="bg-[#F4FBF6] border border-gray-200 border-b-0 p-3 rounded-t-md">
+                      <h3 className="text-[14px] font-bold text-emerald-900">
+                        Section 5 – Exempt, Nil-rated & Non-GST Inward Supplies
+                      </h3>
+                      <p className="text-[11px] text-gray-500 mt-0.5 font-normal">
+                        Values of Exempt, Nil-rated and Non-GST Inward Supplies.
+                      </p>
+                    </div>
+
+                    <div className="overflow-x-auto border border-gray-200 rounded-b-md">
+                      <table className="w-full text-left border-collapse text-[13px]">
+                        <thead>
+                          <tr className="bg-gray-50/75 border-b border-gray-200 text-gray-600 font-semibold text-[11px] uppercase tracking-wider">
+                            <th className="px-4 py-2.5 w-[50%] border-r border-gray-200">Nature of Supplies</th>
+                            <th className="px-4 py-2.5 text-right border-r border-gray-200">Inter-State Supplies</th>
+                            <th className="px-4 py-2.5 text-right">Intra-State Supplies</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          <tr className="hover:bg-gray-50/30 transition even:bg-gray-50/15">
+                            <td className="px-4 py-2 font-medium text-gray-700 border-r border-gray-150">
+                              From a supplier under Composition Scheme, Exempt and Nil-rated Supply
+                            </td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">
+                              {fmtCurrency(exemptData.compositionExemptNil.interState)}
+                            </td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800">
+                              {fmtCurrency(exemptData.compositionExemptNil.intraState)}
+                            </td>
+                          </tr>
+                          <tr className="hover:bg-gray-50/30 transition even:bg-gray-50/15">
+                            <td className="px-4 py-2 font-medium text-gray-700 border-r border-gray-150">
+                              Non-GST Supply
+                            </td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800 border-r border-gray-150">
+                              {fmtCurrency(exemptData.nonGst.interState)}
+                            </td>
+                            <td className="px-4 py-2 text-right font-semibold text-gray-800">
+                              {fmtCurrency(exemptData.nonGst.intraState)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
       </div>
 
-      {/* ── Section: Mockup Bottom Cards Grid ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-4 bg-white border border-gray-150 rounded-xl flex items-center gap-3">
+      {/* ── Section: Interactive Bottom Cards Grid ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
+        <div 
+          onClick={() => hasReportData && setActivePreviewTab('section31')}
+          className={`p-4 bg-white border border-gray-150 rounded-xl flex items-center gap-3 ${hasReportData ? 'cursor-pointer hover:bg-gray-50/80 transition-colors shadow-sm' : ''}`}
+        >
           <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span className="font-extrabold text-xs text-gray-800">3.1(a) Outward Taxable Supplies</span>
+          <span className="font-semibold text-xs text-gray-700">3.1(a) Outward Taxable Supplies</span>
         </div>
-        <div className="p-4 bg-white border border-gray-150 rounded-xl flex items-center gap-3">
+        <div 
+          onClick={() => hasReportData && setActivePreviewTab('section31')}
+          className={`p-4 bg-white border border-gray-150 rounded-xl flex items-center gap-3 ${hasReportData ? 'cursor-pointer hover:bg-gray-50/80 transition-colors shadow-sm' : ''}`}
+        >
           <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span className="font-extrabold text-xs text-gray-800">3.1(b) Zero Rated Supplies</span>
+          <span className="font-semibold text-xs text-gray-700">3.1(b) Zero Rated Supplies</span>
         </div>
-        <div className="p-4 bg-white border border-gray-150 rounded-xl flex items-center gap-3">
+        <div 
+          onClick={() => hasReportData && setActivePreviewTab('section31')}
+          className={`p-4 bg-white border border-gray-150 rounded-xl flex items-center gap-3 ${hasReportData ? 'cursor-pointer hover:bg-gray-50/80 transition-colors shadow-sm' : ''}`}
+        >
           <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span className="font-extrabold text-xs text-gray-800">3.1(c) Nil Rated & Exempted Supplies</span>
+          <span className="font-semibold text-xs text-gray-700">3.1(c) Nil Rated & Exempted Supplies</span>
         </div>
-        <div className="p-4 bg-white border border-gray-150 rounded-xl flex items-center gap-3">
+        <div 
+          onClick={() => hasReportData && setActivePreviewTab('section31')}
+          className={`p-4 bg-white border border-gray-150 rounded-xl flex items-center gap-3 ${hasReportData ? 'cursor-pointer hover:bg-gray-50/80 transition-colors shadow-sm' : ''}`}
+        >
           <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span className="font-extrabold text-xs text-gray-800">3.1(d) RCM Inward Reverse Charge Supplies</span>
+          <span className="font-semibold text-xs text-gray-700">3.1(d) RCM Inward Reverse Charge Supplies</span>
         </div>
-        <div className="p-4 bg-white border border-gray-150 rounded-xl flex items-center gap-3">
+        <div 
+          onClick={() => hasReportData && setActivePreviewTab('section31')}
+          className={`p-4 bg-white border border-gray-150 rounded-xl flex items-center gap-3 ${hasReportData ? 'cursor-pointer hover:bg-gray-50/80 transition-colors shadow-sm' : ''}`}
+        >
           <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span className="font-extrabold text-xs text-gray-800">3.1(e) Non-GST Outward Supplies</span>
+          <span className="font-semibold text-xs text-gray-700">3.1(e) Non-GST Outward Supplies</span>
         </div>
-        <div className="p-4 bg-white border border-gray-150 rounded-xl flex items-center justify-between gap-3">
+        <div 
+          onClick={() => hasReportData && setActivePreviewTab('section4_5')}
+          className={`p-4 bg-white border border-gray-150 rounded-xl flex items-center justify-between gap-3 ${hasReportData ? 'cursor-pointer hover:bg-gray-50/80 transition-colors shadow-sm' : ''}`}
+        >
           <div className="flex items-center gap-3">
             <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="font-extrabold text-xs text-gray-800">Section 4 Eligible ITC</span>
+            <span className="font-semibold text-xs text-gray-700">Section 4 Eligible ITC & Section 5</span>
           </div>
           <ArrowRight className="w-4 h-4 text-emerald-600 shrink-0" />
         </div>
