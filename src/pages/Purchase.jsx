@@ -2591,7 +2591,19 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
         data.append("subTotal", subTotal);
         data.append("totalAmount", grandTotal);
         if (remarks) data.append("remarks", remarks);
-        data.append("items", JSON.stringify(payloadItems));
+        payloadItems.forEach((item, idx) => {
+          data.append(`items[${idx}][item]`, item.item);
+          data.append(`items[${idx}][itemName]`, item.itemName || "");
+          data.append(`items[${idx}][quantity]`, String(item.quantity));
+          data.append(`items[${idx}][unit]`, item.unit || "");
+          data.append(`items[${idx}][pricePerUnit]`, String(item.pricePerUnit));
+          data.append(`items[${idx}][taxType]`, item.taxType || "");
+          data.append(`items[${idx}][discountPercent]`, String(item.discountPercent || 0));
+          data.append(`items[${idx}][discountAmount]`, String(item.discountAmount || 0));
+          data.append(`items[${idx}][taxPercent]`, String(item.taxPercent || 0));
+          data.append(`items[${idx}][taxAmount]`, String(item.taxAmount || 0));
+          data.append(`items[${idx}][amount]`, String(item.amount || 0));
+        });
         data.append("image", uploadedFile);
 
         if (editRecord) {
@@ -3071,208 +3083,202 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                   <div className="space-y-3">
                     {/* Search Select dropdown */}
                     <div ref={productDropdownRef} className="w-full relative">
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Search Product</label>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">PRODUCT *</label>
+                      <div className="flex gap-2 items-center">
+                        <div className="flex-1 relative">
+                          <input
+                            type="text"
+                            ref={searchInputRef}
+                            value={productSearchQuery}
+                            onFocus={() => setProductDropdownOpen(true)}
+                            onKeyDown={(e) => {
+                              if (e.key === "ArrowDown") {
+                                e.preventDefault();
+                                setProductDropdownOpen(true);
+                                setActiveIndex((prev) => {
+                                  const max = Math.min(searchResults.length, visibleCount) - 1;
+                                  const next = prev + 1;
+                                  if (next > max) {
+                                    if (visibleCount < searchResults.length) {
+                                      setVisibleCount((v) => Math.min(searchResults.length, v + 30));
+                                    }
+                                    return Math.min(searchResults.length - 1, next);
+                                  }
+                                  return next;
+                                });
+                              } else if (e.key === "ArrowUp") {
+                                e.preventDefault();
+                                setActiveIndex((prev) => (prev > 0 ? prev - 1 : 0));
+                              } else if (e.key === "Enter") {
+                                if (productDropdownOpen && searchResults.length > 0 && activeIndex >= 0) {
+                                  e.preventDefault();
+                                  const activeItem = searchResults[activeIndex];
+                                  if (activeItem) {
+                                    const { product, variant } = activeItem;
+                                    if (variant) {
+                                      handleProductVariantSelect(product, variant);
+                                    } else {
+                                      handleProductChange(product._id);
+                                    }
+                                    setProductDropdownOpen(false);
+                                  }
+                                }
+                              } else if (e.key === "Escape") {
+                                e.preventDefault();
+                                setProductDropdownOpen(false);
+                              }
+                            }}
+                            onChange={(e) => {
+                              setProductSearchQuery(e.target.value);
+                              setProductDropdownOpen(true);
+                              if (e.target.value) {
+                                setErrors(prev => {
+                                  const next = { ...prev };
+                                  delete next.formProductId;
+                                  return next;
+                                });
+                              }
+                            }}
+                            placeholder="Search item by name / code"
+                            aria-invalid={errors.formProductId ? "true" : "false"}
+                            aria-describedby={errors.formProductId ? "product-search-error" : undefined}
+                            className={`pl-10 pr-10 w-full border rounded-xl text-xs h-[46px] transition-all font-semibold ${
+                              errors.formProductId
+                                ? "border-[#EF4444] bg-[#FEF2F2] focus:ring-red-500/10 focus:border-[#EF4444] text-slate-855"
+                                : productDropdownOpen
+                                ? "border-emerald-500 bg-white ring-4 ring-emerald-500/10 text-slate-855"
+                                : "border-slate-200 hover:border-slate-355 bg-white text-slate-700"
+                            }`}
+                          />
+                          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                          <ChevronDown
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProductDropdownOpen(!productDropdownOpen);
+                            }}
+                            className={`absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 cursor-pointer transition-transform duration-200 text-slate-400 ${
+                              productDropdownOpen ? "rotate-180 text-emerald-600" : ""
+                            }`}
+                          />
+
+                          {productDropdownOpen && (
+                            <div className="absolute left-0 right-0 z-[100] mt-1 bg-white border border-slate-200 rounded-[8px] shadow-sm overflow-hidden flex flex-col max-h-[350px]">
+                              {/* List container */}
+                              <div
+                                onScroll={(e) => {
+                                  const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+                                  if (scrollHeight - scrollTop <= clientHeight + 50) {
+                                    if (visibleCount < searchResults.length) {
+                                      setVisibleCount((v) => Math.min(searchResults.length, v + 30));
+                                    }
+                                  }
+                                }}
+                                className="overflow-y-auto divide-y divide-slate-100 flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                              >
+                                {searchResults.length === 0 ? (
+                                  <div className="p-8 text-center text-slate-400">
+                                    <ShoppingBag className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                                    <p className="font-bold text-xs">No products matched</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setAddProductOpen(true);
+                                        setProductDropdownOpen(false);
+                                      }}
+                                      className="mt-2 text-emerald-600 hover:text-emerald-700 font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1 mx-auto transition"
+                                    >
+                                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                                      + New Product
+                                    </button>
+                                  </div>
+                                ) : (
+                                  searchResults.slice(0, visibleCount).map((item, index) => {
+                                    const { product, variant } = item;
+                                    const isSelected = index === activeIndex;
+
+                                    const pName = product.productName || "Product";
+                                    const pBrand = product.brand || "Generic";
+                                    const categoryLabel = product.productCategory ? String(product.productCategory).toUpperCase() : "GENERAL";
+                                    const packLabel = variant ? formatPackSize(variant.parameter, variant.unit) : "Standard Pack";
+                                    const hsnCode = product.hsnCode || "—";
+                                    const skuCode = variant?.sku || variant?.itemCode || product.sku || product.itemCode || "—";
+                                    const liveStock = variant ? getLiveVariantStock(product, variant) : getLiveProductStock(product);
+                                    
+                                    const stockVal = Number(liveStock || 0);
+                                    let stockColor = "text-emerald-600";
+                                    if (stockVal <= 0) {
+                                      stockColor = "text-rose-600 font-bold";
+                                    } else if (stockVal < 50) {
+                                      stockColor = "text-amber-600";
+                                    }
+
+                                    const priceVal = variant
+                                      ? (variant.purchasePrice || variant.pricePerUnit || 0)
+                                      : (product.purchasePrice || product.pricePerUnit || 0);
+
+                                    return (
+                                      <div
+                                        key={`${product._id}-${variant?._id || 'main'}-${index}`}
+                                        onMouseEnter={() => setActiveIndex(index)}
+                                        onClick={() => {
+                                          if (variant) {
+                                            handleProductVariantSelect(product, variant);
+                                          } else {
+                                            handleProductChange(product._id);
+                                          }
+                                          setProductDropdownOpen(false);
+                                        }}
+                                        className={`px-4 py-3 cursor-pointer transition flex flex-col gap-1.5 ${
+                                          isSelected ? "bg-emerald-50/40" : "bg-white hover:bg-slate-50/50"
+                                        }`}
+                                      >
+                                        <div className="flex justify-between items-start gap-4">
+                                          <div className="font-bold text-slate-800 leading-tight text-xs">
+                                            {pName} <span className="text-[10px] text-slate-400 font-semibold">({pBrand})</span>
+                                          </div>
+                                          {Number(priceVal) > 0 && (
+                                            <span className="text-[12px] font-semibold text-slate-800 shrink-0">
+                                              ₹{Number(priceVal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <div className="text-[10px] text-slate-505 font-medium leading-none">
+                                          {categoryLabel} • {packLabel} • HSN: {hsnCode}
+                                        </div>
+
+                                        <div className="flex justify-between text-[10px] font-medium leading-none mt-0.5">
+                                          <span className={stockColor}>Stock: {liveStock}</span>
+                                          <span className="text-slate-500">SKU: {skuCode}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                              <div className="bg-slate-50 border-t border-slate-100 px-4 py-2 flex items-center justify-center text-[10px] text-slate-400 font-bold select-none shrink-0">
+                                <span>↑↓ Navigate  |  Enter Select  |  Ctrl+N New Product  |  Esc Close</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
                         <button
                           type="button"
                           onClick={() => {
                             setAddProductOpen(true);
                             setProductDropdownOpen(false);
                           }}
-                          className="text-[#16A34A] hover:text-emerald-700 font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1 transition"
+                          className="px-4 border border-emerald-600 text-emerald-600 hover:bg-emerald-50 rounded-xl h-[46px] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shrink-0 active:scale-95 bg-white"
                         >
-                          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                          + New Product
+                          <Plus className="w-4 h-4 stroke-[2.5]" />
+                          New Product
                         </button>
-                      </div>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          ref={searchInputRef}
-                          value={productSearchQuery}
-                          onFocus={() => setProductDropdownOpen(true)}
-                          onKeyDown={(e) => {
-                            if (e.key === "ArrowDown") {
-                              e.preventDefault();
-                              setProductDropdownOpen(true);
-                              setActiveIndex((prev) => {
-                                const max = Math.min(searchResults.length, visibleCount) - 1;
-                                const next = prev + 1;
-                                if (next > max) {
-                                  if (visibleCount < searchResults.length) {
-                                    setVisibleCount((v) => Math.min(searchResults.length, v + 30));
-                                  }
-                                  return Math.min(searchResults.length - 1, next);
-                                }
-                                return next;
-                              });
-                            } else if (e.key === "ArrowUp") {
-                              e.preventDefault();
-                              setActiveIndex((prev) => (prev > 0 ? prev - 1 : 0));
-                            } else if (e.key === "Enter") {
-                              if (productDropdownOpen && searchResults.length > 0 && activeIndex >= 0) {
-                                e.preventDefault();
-                                const activeItem = searchResults[activeIndex];
-                                if (activeItem) {
-                                  const { product, variant } = activeItem;
-                                  if (variant) {
-                                    handleProductVariantSelect(product, variant);
-                                  } else {
-                                    handleProductChange(product._id);
-                                  }
-                                  setProductDropdownOpen(false);
-                                }
-                              }
-                            } else if (e.key === "Escape") {
-                              e.preventDefault();
-                              setProductDropdownOpen(false);
-                            }
-                          }}
-                          onChange={(e) => {
-                            setProductSearchQuery(e.target.value);
-                            setProductDropdownOpen(true);
-                            if (e.target.value) {
-                              setErrors(prev => {
-                                const next = { ...prev };
-                                delete next.formProductId;
-                                return next;
-                              });
-                            }
-                          }}
-                          placeholder="Search by Product Name, SKU, Barcode, Category or HSN..."
-                          aria-invalid={errors.formProductId ? "true" : "false"}
-                          aria-describedby={errors.formProductId ? "product-search-error" : undefined}
-                          className={`pl-10 pr-10 w-full border rounded-xl text-xs h-[46px] transition-all font-semibold ${
-                            errors.formProductId
-                              ? "border-[#EF4444] bg-[#FEF2F2] focus:ring-red-500/10 focus:border-[#EF4444] text-slate-850"
-                              : productDropdownOpen
-                              ? "border-emerald-500 bg-white ring-4 ring-emerald-500/10 text-slate-850"
-                              : "border-slate-200 hover:border-slate-355 bg-white text-slate-700"
-                          }`}
-                        />
-                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                        <ChevronDown
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setProductDropdownOpen(!productDropdownOpen);
-                          }}
-                          className={`absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 cursor-pointer transition-transform duration-200 text-slate-400 ${
-                            productDropdownOpen ? "rotate-180 text-emerald-600" : ""
-                          }`}
-                        />
                       </div>
                       {errors.formProductId && (
                         <p id="product-search-error" className="text-xs text-[#DC2626] font-medium mt-1 select-none animate-in fade-in duration-200">
                           ⚠ {errors.formProductId}
                         </p>
-                      )}
-
-                      {productDropdownOpen && (
-                        <div className="absolute left-0 right-0 z-[100] mt-1 bg-white border border-slate-200 rounded-[8px] shadow-sm overflow-hidden flex flex-col max-h-[350px]">
-                          {/* List container */}
-                          <div
-                            onScroll={(e) => {
-                              const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-                              if (scrollHeight - scrollTop - clientHeight < 50) {
-                                setVisibleCount((prev) => Math.min(searchResults.length, prev + 30));
-                              }
-                            }}
-                            className="overflow-y-auto divide-y divide-slate-100 flex-1 max-h-[280px] pointer-events-auto"
-                          >
-                            {searchResults.length === 0 ? (
-                              <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-                                <p className="text-xs font-semibold text-slate-500">
-                                  No matching products found.
-                                </p>
-                                <p className="text-[10px] text-slate-450 mt-1">
-                                  Press Ctrl+N to create a new product.
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setAddProductOpen(true);
-                                    setProductDropdownOpen(false);
-                                  }}
-                                  className="mt-3 px-4 py-2 bg-[#16A34A] hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-sm transition active:scale-95 flex items-center gap-1"
-                                >
-                                  + New Product
-                                </button>
-                              </div>
-                            ) : (
-                              searchResults.slice(0, visibleCount).map((item, idx) => {
-                                const p = item.product;
-                                const v = item.variant;
-                                const isSelectedActive = idx === activeIndex;
-                                const isSelectedValue = formProductId === p._id && (v ? formVariantParameter === v.parameter && formUnit === v.unit : true);
-
-                                const categoryLabel = p.productCategory ? p.productCategory.charAt(0).toUpperCase() + p.productCategory.slice(1) : "General";
-                                const packLabel = v ? formatPackSize(v.parameter, v.unit) : "N/A";
-                                const priceVal = v ? (v.purchasePrice || v.pricePerUnit) : null;
-                                const totalStock = v ? getLiveVariantStock(p, v) : getLiveProductStock(p);
-                                const hsnCode = p.hsnCode || "N/A";
-                                const skuCode = v?.itemCode || "N/A";
-
-                                // stock color
-                                let stockColor = "text-slate-500";
-                                if (totalStock <= 0) {
-                                  stockColor = "text-rose-600 font-semibold";
-                                } else if (totalStock <= 10) {
-                                  stockColor = "text-amber-600 font-semibold";
-                                }
-
-                                return (
-                                  <div
-                                    key={item.key}
-                                    ref={isSelectedActive ? activeItemRef : null}
-                                    onClick={() => {
-                                      if (v) {
-                                        handleProductVariantSelect(p, v);
-                                      } else {
-                                        handleProductChange(p._id);
-                                      }
-                                      setProductDropdownOpen(false);
-                                    }}
-                                    className={`px-4 py-2 cursor-pointer transition-colors duration-150 flex flex-col justify-center gap-1 border-l-[3px] border-b border-slate-100 min-h-[62px] ${
-                                      isSelectedActive
-                                        ? "bg-[#F0FDF4] border-l-[#16A34A]"
-                                        : isSelectedValue
-                                        ? "bg-[#F0FDF4]/70 border-l-[#16A34A]/80"
-                                        : "bg-white border-l-transparent hover:bg-[#F8FAFC] hover:border-l-[#16A34A] hover:border-l-[2px]"
-                                    }`}
-                                  >
-                                    {/* Row 1: Product Name & Purchase Price */}
-                                    <div className="flex justify-between items-baseline gap-2">
-                                      <span className="text-[14px] font-semibold text-slate-800 truncate">
-                                        {p.productName}
-                                        {p.brand && <span className="text-xs text-slate-450 font-normal ml-1">[{p.brand}]</span>}
-                                      </span>
-                                      {priceVal !== null && (
-                                        <span className="text-[15px] font-semibold text-slate-800 shrink-0">
-                                          ₹{Number(priceVal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    {/* Row 2: Category • Pack Size • HSN Code */}
-                                    <div className="text-[12px] text-slate-500 font-medium leading-none">
-                                      {categoryLabel} • {packLabel} • HSN: {hsnCode}
-                                    </div>
-
-                                    {/* Row 3: Stock & SKU */}
-                                    <div className="flex justify-between text-[12px] font-medium leading-none mt-0.5">
-                                      <span className={stockColor}>Stock: {totalStock}</span>
-                                      <span className="text-slate-500">SKU: {skuCode}</span>
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
-                          {/* Footer */}
-                          <div className="bg-slate-50 border-t border-slate-100 px-4 py-2 flex items-center justify-center text-[10px] text-slate-400 font-bold select-none shrink-0">
-                            <span>↑↓ Navigate  |  Enter Select  |  Ctrl+N New Product  |  Esc Close</span>
-                          </div>
-                        </div>
                       )}
                     </div>
 
@@ -5226,71 +5232,35 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// COMPONENT: QUICK ADD PRODUCT MODAL (Simplified Variant Modal)
+// COMPONENT: QUICK ADD PRODUCT MODAL (Unified Variant Modal)
 // ─────────────────────────────────────────────────────────────
 function QuickAddProductModal({ onClose, onSuccess, defaultName = "" }) {
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(false);
-
   const [form, setForm] = useState({
     productName: defaultName || "",
     brand: "",
-    productCategory: "fertilizers",
-    itemType: "PRODUCT",
-    taxRate: "18",
-    description: "",
-    hsnCode: "",
-  });
-
-  const [variant, setVariant] = useState({
-    parameter: "50",
-    unit: "kg",
-    quantity: 100,
-    purchasePrice: "",
+    productCategory: "Fertilizers",
+    unit: "Kg",
+    parameter: "",
     mrp: "",
     salePrice: "",
-    purchasePriceTaxType: "Without Tax"
+    purchasePrice: "",
+    quantity: ""
   });
-
-  useEffect(() => {
-    if (!form.hsnCode || form.hsnCode.trim().length < 4) return;
-
-    const delayDebounceFn = setTimeout(async () => {
-      try {
-        const res = await api.get(`/hsn/code/${form.hsnCode.trim()}`);
-        if (res.data && res.data.taxRate !== undefined) {
-          setForm(prev => ({
-            ...prev,
-            taxRate: String(res.data.taxRate)
-          }));
-          toast.success(`HSN Code recognized. GST Tax Rate set to ${res.data.taxRate}%`);
-        }
-      } catch (err) {
-        console.warn("HSN Lookup failed:", err);
-      }
-    }, 500);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [form.hsnCode]);
+  const [errors, setErrors] = useState({});
 
   const validate = () => {
-    if (!form.productName.trim()) {
-      toast.error("Product name is required");
-      return false;
-    }
-    if (!form.brand.trim()) {
-      toast.error("Brand name is required");
-      return false;
-    }
-    if (!variant.parameter.trim() || !variant.unit.trim()) {
-      toast.error("Variant measure & unit are required");
-      return false;
-    }
-    if (variant.purchasePrice === "" || variant.mrp === "") {
-      toast.error("Variant MRP and Purchase Price are required");
-      return false;
-    }
-    return true;
+    const temp = {};
+    if (!form.productName.trim()) temp.productName = "Product Name is required";
+    if (!form.parameter.trim()) temp.parameter = "Size / Parameter is required";
+    if (form.mrp === "" || Number(form.mrp) <= 0) temp.mrp = "MRP must be greater than zero";
+    if (form.purchasePrice === "" || Number(form.purchasePrice) < 0) temp.purchasePrice = "Purchase Price is required";
+    if (form.salePrice === "" || Number(form.salePrice) <= 0) temp.salePrice = "Sale Price must be greater than zero";
+    if (form.quantity === "" || Number(form.quantity) < 0) temp.quantity = "Quantity is required";
+
+    setErrors(temp);
+    return Object.keys(temp).length === 0;
   };
 
   const handleSubmit = async (e) => {
@@ -5299,47 +5269,36 @@ function QuickAddProductModal({ onClose, onSuccess, defaultName = "" }) {
     if (!validate()) return;
 
     setLoading(true);
-
     const payload = {
-      productName: form.productName,
-      brand: form.brand,
+      productName: form.productName.trim(),
+      brand: form.brand.trim() || undefined,
       productCategory: form.productCategory,
-      description: form.description,
-      itemType: form.itemType,
-      hsnCode: form.hsnCode,
-      taxRate: String(form.taxRate),
-      targetCrops: ["Cotton", "Wheat"],
-      productImages: [],
-      productVideos: [],
-      products: [
-        {
-          parameter: variant.parameter,
-          unit: variant.unit,
-          quantity: Number(variant.quantity) || 0,
-          purchasePrice: Number(variant.purchasePrice),
-          purchasePriceTaxType: variant.purchasePriceTaxType,
-          mrp: Number(variant.mrp),
-          salePrice: Number(variant.salePrice) || Number(variant.mrp),
-          salePriceTaxType: variant.purchasePriceTaxType,
-          purchaseDate: new Date().toISOString().split("T")[0],
-          discountOnSalePrice: 0,
-          discountType: "Percentage"
-        }
-      ]
+      unit: form.unit,
+      parameter: form.parameter.trim(),
+      mrp: Number(form.mrp),
+      salePrice: Number(form.salePrice),
+      purchasePrice: Number(form.purchasePrice),
+      quantity: Number(form.quantity)
     };
 
     try {
-      const res = await dispatch(addProduct(payload)).unwrap();
-      toast.success("Product added successfully");
+      const res = await api.post("/product/quickAdd", payload);
+      const resData = res.data?.data || res.data;
+      toast.success("Product variant created successfully!");
 
-      // Reload global list in Redux
+      // Refresh product lists in store
       const refreshedProds = await dispatch(fetchProducts()).unwrap();
       await dispatch(fetchStockSummary()).unwrap();
-      const match = refreshedProds.find(p => p.productName === payload.productName || p._id === res._id || p._id === res.data?._id);
 
-      onSuccess(match?._id || res._id || res.data?._id);
+      // Find match to select newly created product
+      const match = refreshedProds.find(
+        (p) => p.productName?.toLowerCase() === payload.productName.toLowerCase() || p._id === resData?._id || p._id === resData?.productId
+      );
+
+      onSuccess(match?._id || resData?._id || resData?.productId);
     } catch (err) {
-      toast.error(typeof err === "string" ? err : err?.message || "Failed to create product");
+      console.error("[QuickAddProductModal submit error]:", err);
+      toast.error(err?.response?.data?.message || err || "Failed to add product");
     } finally {
       setLoading(false);
     }
@@ -5347,182 +5306,207 @@ function QuickAddProductModal({ onClose, onSuccess, defaultName = "" }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-xs select-none">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-150 bg-white">
-          <h3 className="font-bold text-gray-905">Register New Product</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200 text-xs">
+        {/* Modal Header */}
+        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-white">
+          <h2 className="text-lg font-bold text-gray-900">Quick Add Product</h2>
+          <button type="button" onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-655 rounded-lg transition hover:bg-gray-100">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 bg-gray-50/20 text-xs">
+        {/* Modal Body / Form */}
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1 bg-gray-55/30 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Product Name */}
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold text-gray-500 mb-1">
+                Product Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.productName}
+                onChange={(e) => setForm({ ...form, productName: e.target.value })}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-805 ${
+                  errors.productName ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                }`}
+                placeholder="e.g. Urea Coarse"
+              />
+              {errors.productName && <p className="text-[11px] text-red-500 mt-1">{errors.productName}</p>}
+            </div>
 
-          {/* Base product info */}
-          <div className="bg-white p-4 rounded-xl border border-gray-150 space-y-3 shadow-xs">
-            <h4 className="font-bold text-gray-800 border-b pb-1.5 border-gray-100">Base Details</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-gray-550 font-semibold mb-1">Product Name *</label>
-                <input
-                  type="text"
-                  value={form.productName}
-                  onChange={(e) => setForm({ ...form, productName: e.target.value })}
-                  placeholder="Urea Fertilizer"
-                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500 h-[32px]"
-                  required
-                />
-              </div>
+            {/* Brand */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Brand</label>
+              <input
+                type="text"
+                value={form.brand}
+                onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-805"
+                placeholder="e.g. IFFCO"
+              />
+            </div>
 
-              <div>
-                <label className="block text-gray-550 font-semibold mb-1">Brand Name *</label>
-                <input
-                  type="text"
-                  value={form.brand}
-                  onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                  placeholder="IFFCO"
-                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500 h-[32px]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-550 font-semibold mb-1">Category</label>
+            {/* Category */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Category *</label>
+              <div className="relative">
                 <select
                   value={form.productCategory}
                   onChange={(e) => setForm({ ...form, productCategory: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[32px] cursor-pointer"
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white appearance-none cursor-pointer h-[38px] font-bold text-gray-850"
                 >
-                  <option value="fertilizers">Fertilizers</option>
-                  <option value="seeds">Seeds</option>
-                  <option value="insecticides">Insecticides</option>
-                  <option value="organic">Organic</option>
-                  <option value="tools">Tools</option>
+                  <option value="Fertilizers">Fertilizers</option>
+                  <option value="Insecticides">Insecticides</option>
+                  <option value="Fungicides">Fungicides</option>
+                  <option value="Herbicides">Herbicides</option>
+                  <option value="Seeds">Seeds</option>
+                  <option value="Organic">Organic</option>
+                  <option value="Pgr">Pgr</option>
+                  <option value="Tools">Tools</option>
+                  <option value="Other">Other</option>
                 </select>
+                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-400">
+                  <ChevronDown className="w-4 h-4" />
+                </div>
               </div>
+            </div>
 
-              <div>
-                <label className="block text-gray-550 font-semibold mb-1">GST Tax Rate (%)</label>
-                <input
-                  type="number"
-                  value={form.taxRate}
-                  onChange={(e) => setForm({ ...form, taxRate: e.target.value })}
-                  placeholder="18"
-                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500 h-[32px]"
-                />
-              </div>
+            {/* Size / Parameter */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">
+                Size / Parameter <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.parameter}
+                onChange={(e) => setForm({ ...form, parameter: e.target.value })}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-805 ${
+                  errors.parameter ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                }`}
+                placeholder="e.g. 50"
+              />
+              {errors.parameter && <p className="text-[11px] text-red-500 mt-1">{errors.parameter}</p>}
+            </div>
 
-              <div>
-                <label className="block text-gray-550 font-semibold mb-1">HSN Code</label>
-                <input
-                  type="text"
-                  value={form.hsnCode}
-                  onChange={(e) => setForm({ ...form, hsnCode: e.target.value })}
-                  placeholder="3102"
-                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500 h-[32px]"
-                />
+            {/* Unit */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Unit *</label>
+              <div className="relative">
+                <select
+                  value={form.unit}
+                  onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white appearance-none cursor-pointer h-[38px] font-bold text-gray-850"
+                >
+                  <option value="Kg">Kg</option>
+                  <option value="L">L</option>
+                  <option value="ml">ml</option>
+                  <option value="gm">gm</option>
+                  <option value="pcs">pcs</option>
+                  <option value="bag">bag</option>
+                  <option value="box">box</option>
+                </select>
+                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-400">
+                  <ChevronDown className="w-4 h-4" />
+                </div>
               </div>
+            </div>
+
+            {/* MRP */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">
+                MRP (₹) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={form.mrp}
+                onChange={(e) => setForm({ ...form, mrp: e.target.value })}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${
+                  errors.mrp ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                }`}
+                placeholder="0.00"
+              />
+              {errors.mrp && <p className="text-[11px] text-red-500 mt-1">{errors.mrp}</p>}
+            </div>
+
+            {/* Purchase Price */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">
+                Purchase Price (₹) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={form.purchasePrice}
+                onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${
+                  errors.purchasePrice ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                }`}
+                placeholder="0.00"
+              />
+              {errors.purchasePrice && <p className="text-[11px] text-red-500 mt-1">{errors.purchasePrice}</p>}
+            </div>
+
+            {/* Sale Price */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">
+                Sale Price (₹) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={form.salePrice}
+                onChange={(e) => setForm({ ...form, salePrice: e.target.value })}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${
+                  errors.salePrice ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                }`}
+                placeholder="0.00"
+              />
+              {errors.salePrice && <p className="text-[11px] text-red-500 mt-1">{errors.salePrice}</p>}
+            </div>
+
+            {/* Opening Quantity */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">
+                Opening Quantity <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={form.quantity}
+                onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${
+                  errors.quantity ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                }`}
+                placeholder="0"
+              />
+              {errors.quantity && <p className="text-[11px] text-red-500 mt-1">{errors.quantity}</p>}
             </div>
           </div>
 
-          {/* Variant Detail */}
-          <div className="bg-white p-4 rounded-xl border border-gray-150 space-y-3 shadow-xs">
-            <h4 className="font-bold text-gray-800 border-b pb-1.5 border-gray-100">Default Variant Details</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-gray-550 font-semibold mb-1">Size / Measure *</label>
-                <input
-                  type="text"
-                  value={variant.parameter}
-                  onChange={(e) => setVariant({ ...variant, parameter: e.target.value })}
-                  placeholder="50"
-                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500 h-[32px]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-550 font-semibold mb-1">Unit *</label>
-                <select
-                  value={variant.unit}
-                  onChange={(e) => setVariant({ ...variant, unit: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[32px] cursor-pointer"
-                >
-                  <option value="kg">kg</option>
-                  <option value="bags">bags</option>
-                  <option value="ml">ml</option>
-                  <option value="L">L</option>
-                  <option value="pcs">pcs</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-gray-550 font-semibold mb-1">Opening Stock Qty</label>
-                <input
-                  type="number"
-                  value={variant.quantity}
-                  onChange={(e) => setVariant({ ...variant, quantity: e.target.value === "" ? "" : parseInt(e.target.value) || 0 })}
-                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500 h-[32px]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-550 font-semibold mb-1">Purchase Cost Price *</label>
-                <input
-                  type="number"
-                  value={variant.purchasePrice}
-                  onChange={(e) => setVariant({ ...variant, purchasePrice: e.target.value === "" ? "" : parseFloat(e.target.value) || 0 })}
-                  placeholder="0.00"
-                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500 h-[32px]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-550 font-semibold mb-1">Purchase Tax Type</label>
-                <select
-                  value={variant.purchasePriceTaxType}
-                  onChange={(e) => setVariant({ ...variant, purchasePriceTaxType: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[32px] cursor-pointer"
-                >
-                  <option value="Without Tax">Without Tax (Exclusive)</option>
-                  <option value="With Tax">With Tax (Inclusive)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-gray-550 font-semibold mb-1">Max Printed Price (MRP) *</label>
-                <input
-                  type="number"
-                  value={variant.mrp}
-                  onChange={(e) => setVariant({ ...variant, mrp: e.target.value === "" ? "" : parseFloat(e.target.value) || 0 })}
-                  placeholder="0.00"
-                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500 h-[32px]"
-                  required
-                />
-              </div>
-            </div>
+          {/* Modal Footer Controls */}
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-150 bg-white">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2.5 text-xs font-semibold border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition bg-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center gap-1.5 px-6 py-2.5 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded-lg transition"
+            >
+              {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {loading ? "Adding..." : "Add Product"}
+            </button>
           </div>
         </form>
-
-        <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-            className="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-100 bg-white"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-semibold shadow-sm"
-          >
-            {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            Save Product
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -6243,6 +6227,7 @@ function ExpenseModal({ parties, onClose, onSuccess }) {
 function DetailsModal({ item, type, onClose, handleDownloadPurchaseReceipt, handleDownloadPaymentOutReceipt, handleDownloadPurchaseReturnReceipt }) {
   const { products } = useSelector((state) => state.inventory);
   const [linkedBill, setLinkedBill] = useState(null);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     if (type === "return" && item.purchase) {
@@ -6272,7 +6257,8 @@ function DetailsModal({ item, type, onClose, handleDownloadPurchaseReceipt, hand
   const isImageFile = (fileUrl) => {
     if (!fileUrl) return false;
     const url = String(fileUrl).toLowerCase();
-    return url.includes(".png") || url.includes(".jpg") || url.includes(".jpeg") || url.startsWith("data:image/") || url.includes("s3.amazonaws.com");
+    if (url.includes(".pdf")) return false;
+    return url.includes(".png") || url.includes(".jpg") || url.includes(".jpeg") || url.includes(".webp") || url.includes(".gif") || url.startsWith("data:image/");
   };
 
   // Safe metrics calculations for the invoice
@@ -6511,28 +6497,40 @@ function DetailsModal({ item, type, onClose, handleDownloadPurchaseReceipt, hand
           )}
 
           {/* Delete Record? Document attachments */}
-          {type === "bill" && (item.invoiceFile || item.image) && (
-            <div className="bg-white border border-gray-150 p-4 rounded-xl shadow-xs space-y-2">
-              <span className="block text-[10px] text-gray-400 font-semibold uppercase">Uploaded Bill Document</span>
-              {isImageFile(item.invoiceFile || item.image) ? (
-                <img
-                  src={item.invoiceFile || item.image}
-                  alt="Supplier Invoice Document"
-                  className="max-h-64 rounded-lg object-contain border shadow-sm"
-                />
-              ) : (
-                <a
-                  href={item.invoiceFile || item.image}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 px-4 py-2 border border-brand-200 rounded-lg hover:bg-brand-100"
-                >
-                  <Paperclip className="w-4 h-4" />
-                  Download/View Invoice PDF Document
-                </a>
-              )}
-            </div>
-          )}
+          {type === "bill" && (item.invoiceFile || item.image) && (() => {
+            const fileUrl = item.invoiceFile?.url || item.image?.url || (typeof item.invoiceFile === 'string' ? item.invoiceFile : '') || (typeof item.image === 'string' ? item.image : '');
+            if (!fileUrl) return null;
+            return (
+              <div className="bg-white border border-gray-150 p-4 rounded-xl shadow-xs space-y-2">
+                <span className="block text-[10px] text-gray-400 font-semibold uppercase">Uploaded Bill Document</span>
+                {isImageFile(fileUrl) && !imageError ? (
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block w-fit cursor-zoom-in"
+                  >
+                    <img
+                      src={fileUrl}
+                      alt="Supplier Invoice Document"
+                      onError={() => setImageError(true)}
+                      className="max-h-64 rounded-lg object-contain border shadow-sm hover:opacity-90 transition"
+                    />
+                  </a>
+                ) : (
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 px-4 py-2 border border-brand-200 rounded-lg hover:bg-brand-100"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                    Download/View Invoice Document
+                  </a>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Remarks/Notes */}
           {(item.remarks || item.description) && (
