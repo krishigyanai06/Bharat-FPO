@@ -1373,7 +1373,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 bg-white h-[42px] disabled:bg-gray-50 disabled:text-gray-400 font-bold text-gray-800 appearance-none pr-8 transition-all cursor-pointer shadow-2xs"
                         >
                           <option value="Percentage">Percentage (%)</option>
-                          <option value="Fixed Amount">Fixed Amount (₹)</option>
+                          <option value="Fixed Amount">Flat (₹)</option>
                         </select>
                         <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-gray-400">
                           <ChevronDown className="w-4 h-4" />

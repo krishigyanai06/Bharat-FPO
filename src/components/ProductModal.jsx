@@ -195,14 +195,14 @@ function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemov
                 placeholder="Discount value"
               />
             </FIELD>
-            <FIELD label="Discount Type" helperText="Percentage or fixed amount">
+            <FIELD label="Discount Type" helperText="Percentage or flat amount">
               <select
                 value={variant.discountType}
                 onChange={(e) => onUpdate("discountType", e.target.value)}
                 className={inputCls}
               >
                 <option value="Percentage">Percentage</option>
-                <option value="Fixed Amount">Fixed Amount</option>
+                <option value="Fixed Amount">Flat</option>
               </select>
             </FIELD>
           </div>
@@ -753,25 +753,21 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
     onSave(form, variants, images, videos, selectedCrops);
   };
 
-  const isEdit = !!initial;
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/55 z-50 flex items-center justify-center p-4 overflow-y-auto"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-8 flex flex-col max-h-[90vh]">
+  const isEdit = !!initial;  return (
+    <div className="w-full bg-[#F8FAFC] h-[calc(100vh-140px)] lg:h-[calc(100vh-112px)] flex flex-col border border-slate-200 rounded-3xl overflow-hidden shadow-sm animate-in fade-in duration-200">
+      <div className="bg-white w-full flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
+        <div className="flex items-center justify-between px-8 py-4 border-b border-slate-100 bg-white">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">
+            <h2 className="text-xl font-extrabold text-gray-900 leading-tight">
               {isEdit ? "Edit Product" : "Add New Product"}
             </h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-xs text-gray-500 mt-0.5 font-medium">
               Add product details, variants, images and other information.
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition"
           >
@@ -779,8 +775,8 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
-          <div className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-slate-50/50">
             {/* Three Column Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Left Column (spans 2) */}
@@ -1330,7 +1326,7 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
+          <div className="flex items-center justify-between px-8 py-4 border-t bg-gray-50 shrink-0">
             <button
               type="button"
               onClick={onClose}

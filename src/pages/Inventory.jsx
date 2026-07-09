@@ -769,39 +769,40 @@ function Inventory() {
     );
   }
 
+  if (showModal) {
+    return (
+      <ProductModal
+        initial={editRow ?? null}
+        onClose={() => {
+          setShowModal(false);
+          setEditRow(null);
+        }}
+        onSave={handleSaveProduct}
+        saving={saving}
+      />
+    );
+  }
+
   if (selectedProductDetailId) {
     const detailProduct = products.find((p) => p._id === selectedProductDetailId);
     return (
-      <>
-        <ProductDetailView
-          productId={selectedProductDetailId}
-          products={products}
-          stockSummary={stockSummary}
-          isReadOnly={isReadOnly}
-          onBack={() => setSelectedProductDetailId(null)}
-          onEdit={() => {
-            if (detailProduct) {
-              setEditRow(detailProduct);
-              setShowModal(true);
-            }
-          }}
-          onRefresh={() => {
-            dispatch(fetchProducts());
-            dispatch(fetchStockSummary());
-          }}
-        />
-        {showModal && (
-          <ProductModal
-            initial={editRow ?? null}
-            onClose={() => {
-              setShowModal(false);
-              setEditRow(null);
-            }}
-            onSave={handleSaveProduct}
-            saving={saving}
-          />
-        )}
-      </>
+      <ProductDetailView
+        productId={selectedProductDetailId}
+        products={products}
+        stockSummary={stockSummary}
+        isReadOnly={isReadOnly}
+        onBack={() => setSelectedProductDetailId(null)}
+        onEdit={() => {
+          if (detailProduct) {
+            setEditRow(detailProduct);
+            setShowModal(true);
+          }
+        }}
+        onRefresh={() => {
+          dispatch(fetchProducts());
+          dispatch(fetchStockSummary());
+        }}
+      />
     );
   }
 
@@ -1596,17 +1597,6 @@ function Inventory() {
         </div>
       )}
 
-      {showModal && (
-        <ProductModal
-          initial={editRow ?? null}
-          onClose={() => {
-            setShowModal(false);
-            setEditRow(null);
-          }}
-          onSave={handleSaveProduct}
-          saving={saving}
-        />
-      )}
 
       {confirmId && (
         <ConfirmDialog
