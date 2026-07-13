@@ -74,6 +74,14 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    proxy: {
+      "/api": {
+        target: process.env.VITE_API_PROXY_TARGET || "https://master-app-h957.onrender.com",
+        changeOrigin: true,
+      },
+    },
+  },
   optimizeDeps: { exclude: ["lucide-react"] },
   build: {
     rollupOptions: {

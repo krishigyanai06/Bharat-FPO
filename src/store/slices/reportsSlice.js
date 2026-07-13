@@ -203,6 +203,7 @@ const reportsSlice = createSlice({
       /* ================= FETCH GSTR-3B REPORT JSON ================= */
       .addCase(fetchGstr3bReport.pending, (state) => {
         state.gstr3bLoading = true;
+        state.gstr3bData = null;
         state.error = null;
       })
       .addCase(fetchGstr3bReport.fulfilled, (state, action) => {
@@ -211,6 +212,7 @@ const reportsSlice = createSlice({
       })
       .addCase(fetchGstr3bReport.rejected, (state, action) => {
         state.gstr3bLoading = false;
+        state.gstr3bData = null;
         state.error = action.payload;
       });
   },

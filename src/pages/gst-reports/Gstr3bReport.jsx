@@ -276,6 +276,10 @@ const Gstr3bReport = () => {
       toast.error(validationError);
       return;
     }
+    if (!hasReportData) {
+      toast.error('No GSTR-3B data available for the selected period.');
+      return;
+    }
 
     const filters = { format };
     if (periodMode === 'monthly') {
@@ -390,7 +394,7 @@ const Gstr3bReport = () => {
         </div>
         <button
           onClick={handleDownload}
-          disabled={!!validationError || gstr3bDownloadLoading}
+          disabled={!!validationError || gstr3bDownloadLoading || !hasReportData}
           className={`relative z-10 w-fit flex items-center gap-1.5 py-2 px-4 rounded-lg text-xs font-bold text-emerald-900 bg-white hover:bg-emerald-50 shadow transition duration-150 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed`}
         >
           {gstr3bDownloadLoading ? (
@@ -664,9 +668,9 @@ const Gstr3bReport = () => {
             {/* Main Action Button */}
             <button
               onClick={handleDownload}
-              disabled={!!validationError || gstr3bDownloadLoading}
+              disabled={!!validationError || gstr3bDownloadLoading || !hasReportData}
               className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold text-white shadow-md transition-all cursor-pointer ${
-                validationError
+                validationError || !hasReportData
                   ? 'bg-gray-300 shadow-none cursor-not-allowed text-gray-500'
                   : 'bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98]'
               }`}

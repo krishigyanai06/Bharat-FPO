@@ -2,6 +2,17 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import reportService from '../../services/reportService';
 import { downloadBlob } from '../../utils/downloadFile';
 
+const parseBlobError = async (err, defaultMsg) => {
+  if (err.response?.data instanceof Blob) {
+    try {
+      const text = await err.response.data.text();
+      const parsed = JSON.parse(text);
+      return parsed.message || parsed.error || defaultMsg;
+    } catch (_) {}
+  }
+  return err.response?.data?.message || err.response?.data?.error || defaultMsg;
+};
+
 export const downloadSalesReport = createAsyncThunk(
   'reports/downloadSalesPdf',
   async (filters, { rejectWithValue }) => {
@@ -18,8 +29,8 @@ export const downloadSalesReport = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadSalesReport error:', err);
-      // For blobs, Axios error details are stored inside blob text sometimes, but we catch them cleanly
-      return rejectWithValue(err.response?.data?.message || 'Failed to download Sales Report PDF');
+      const msg = await parseBlobError(err, 'Failed to download Sales Report PDF');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -40,7 +51,8 @@ export const downloadPurchaseReport = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadPurchaseReport error:', err);
-      return rejectWithValue(err.response?.data?.message || 'Failed to download Purchase Report PDF');
+      const msg = await parseBlobError(err, 'Failed to download Purchase Report PDF');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -72,7 +84,8 @@ export const downloadBalanceSheetPdf = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadBalanceSheetPdf error:', err);
-      return rejectWithValue(err.response?.data?.message || 'Failed to download Balance Sheet PDF');
+      const msg = await parseBlobError(err, 'Failed to download Balance Sheet PDF');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -90,7 +103,8 @@ export const downloadPaymentInReport = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadPaymentInReport error:', err);
-      return rejectWithValue(err.response?.data?.message || 'Failed to download Payment In Report PDF');
+      const msg = await parseBlobError(err, 'Failed to download Payment In Report PDF');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -108,7 +122,8 @@ export const downloadPaymentOutReport = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadPaymentOutReport error:', err);
-      return rejectWithValue(err.response?.data?.message || 'Failed to download Payment Out Report PDF');
+      const msg = await parseBlobError(err, 'Failed to download Payment Out Report PDF');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -126,7 +141,8 @@ export const downloadExpenseReport = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadExpenseReport error:', err);
-      return rejectWithValue(err.response?.data?.message || 'Failed to download Expense Report PDF');
+      const msg = await parseBlobError(err, 'Failed to download Expense Report PDF');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -199,7 +215,8 @@ export const downloadGstr1Report = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadGstr1Report error:', err);
-      return rejectWithValue(err.response?.data?.message || 'Failed to download GSTR-1 Report');
+      const msg = await parseBlobError(err, 'Failed to download GSTR-1 Report');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -242,7 +259,8 @@ export const downloadGstr3bReport = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadGstr3bReport error:', err);
-      return rejectWithValue(err.response?.data?.message || 'Failed to download GSTR-3B Report');
+      const msg = await parseBlobError(err, 'Failed to download GSTR-3B Report');
+      return rejectWithValue(msg);
     }
   }
 );
