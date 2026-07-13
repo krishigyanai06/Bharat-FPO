@@ -4645,6 +4645,14 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
       return;
     }
 
+    const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+    if (!gstinRegex.test(trimmedGstin)) {
+      setGstinError("Invalid GSTIN format. The 14th character must be 'Z' (e.g. 29AAACQ3770E1Z5).");
+      setVerifiedGstinDetails(null);
+      setHasAttemptedGstin(true);
+      return;
+    }
+
     setGstinError(null);
     setVerifiedGstinDetails(null);
     setHasAttemptedGstin(true);

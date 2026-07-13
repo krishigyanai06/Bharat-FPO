@@ -35,6 +35,8 @@ import {
   Calendar,
   Info,
   User,
+  Users,
+  ShoppingBag,
   Minus,
   Pencil,
   ChevronDown,
@@ -163,7 +165,85 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
   const [receivedAmount, setReceivedAmount] = useState(editRecord ? (editRecord.receivedAmount !== undefined ? editRecord.receivedAmount : 0) : 0);
   const [isReceivedManual, setIsReceivedManual] = useState(editRecord ? (editRecord.receivedAmount !== undefined) : false);
 
-  // Items checkout array
+  const [activeStep, setActiveStep] = useState(1);
+  const [customerType, setCustomerType] = useState(() => {
+    if (editRecord) {
+      return editRecord.party ? "registered" : "walkin";
+    }
+    return "registered";
+  });
+  const [buyerGstin, setBuyerGstin] = useState(editRecord ? (editRecord.buyerGstin || "") : "");
+  const [errors, setErrors] = useState({});
+
+  const partySelectRef = useRef(null);
+  const buyerNameInputRef = useRef(null);
+  const dueDateInputRef = useRef(null);
+
+  const handleCustomerTypeChange = (type) => {
+    setCustomerType(type);
+    setErrors({});
+    if (type === "registered") {
+      setBuyerName("");
+      setBuyerPhone("");
+      setBuyerAddress("");
+      setBuyerGstin("");
+      setBuyerType("FARMER");
+      setTimeout(() => {
+        partySelectRef.current?.focus();
+      }, 50);
+    } else {
+      setSelectedPartyId("");
+      setTimeout(() => {
+        buyerNameInputRef.current?.focus();
+      }, 50);
+    }
+  };
+
+  const handleNextStep = () => {
+    setErrors({});
+    if (activeStep === 1) {
+      const newErrors = {};
+      if (customerType === "registered" && !selectedPartyId) {
+        newErrors.selectedPartyId = "Party Profile is required.";
+      }
+      if (customerType === "walkin" && !buyerName.trim()) {
+        newErrors.buyerName = "Buyer Name is required.";
+      }
+      if (billingType === "Credit" && !dueDate) {
+        newErrors.dueDate = "Due Date is required for Credit transactions.";
+      }
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return;
+      }
+      setActiveStep(2);
+    } else if (activeStep === 2) {
+      const validItems = checkoutItems.filter((i) => i.productId && (i.quantity === "" ? 0 : (parseFloat(i.quantity) || 0)) > 0);
+      if (validItems.length === 0) {
+        setErrors({ checkoutItems: "Please add at least one valid product line item with quantity > 0." });
+        toast.error("Please add at least one valid product line item");
+        return;
+      }
+      setActiveStep(3);
+    }
+  };
+
+  const handlePrevStep = () => {
+    setErrors({});
+    if (activeStep > 1) {
+      setActiveStep(activeStep - 1);
+    }
+  };
+
+  useEffect(() => {
+    if (editRecord) {
+      setCustomerType(editRecord.party ? "registered" : "walkin");
+      if (editRecord.buyerGstin) {
+        setBuyerGstin(editRecord.buyerGstin);
+      }
+    }
+  }, [editRecord]);
+
   const [checkoutItems, setCheckoutItems] = useState(() => {
     if (editRecord && editRecord.items?.length > 0) {
       return editRecord.items.map((it) => {
@@ -191,7 +271,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
           productId,
           variantIndex,
           quantity: it.quantity,
-          unit: it.unit || variant?.unit || "pcs",
+          unit: it.unit || "pcs",
           pricePerUnit: it.pricePerUnit || it.rate || "",
           rate: it.rate || it.pricePerUnit || "",
           taxType: it.taxType || "Without Tax",
@@ -207,7 +287,10 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     return [];
   });
 
-  // Draft Item state for product configuration row
+  const productSearchInputRef = useRef(null);
+  const [showAdditionalDetails, setShowAdditionalDetails] = useState(false);
+  const [showAdvancedProductOptions, setShowAdvancedProductOptions] = useState(false);
+
   const [draftProductId, setDraftProductId] = useState("");
   const [draftVariantIndex, setDraftVariantIndex] = useState(0);
   const [draftQty, setDraftQty] = useState(1);
@@ -239,7 +322,6 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     return variantStock ? (variantStock.availableQuantity ?? 0) : (draftVariant?.quantity ?? 0);
   }, [draftProd, draftVariant, variantStock]);
 
-  // Auto-select state of supply when party profile is selected
   useEffect(() => {
     if (selectedPartyId) {
       const p = parties.find((party) => party._id === selectedPartyId);
@@ -249,7 +331,6 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     }
   }, [selectedPartyId, parties]);
 
-  // Sync draft price and tax rate when draft product/variant changes
   useEffect(() => {
     if (draftProd) {
       const variant = draftProd.products?.[draftVariantIndex];
@@ -273,142 +354,11 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     }
   }, [draftProductId, draftVariantIndex, draftProd]);
 
-  const handleSaveProduct = (form, variants, images, videos, selectedCrops) => {
-    setSavingProduct(true);
-
-    const fileToBase64 = (file) => {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = (error) => reject(error);
-      });
-    };
-
-    const crops = selectedCrops || ["All"];
-
-    const executeSave = async () => {
-      try {
-        const encodedImages = await Promise.all(
-          (images || []).map(async (img) => {
-            if (img.file) {
-              return await fileToBase64(img.file);
-            }
-            return img.url;
-          })
-        );
-
-        const encodedVideos = await Promise.all(
-          (videos || []).map(async (vid) => {
-            if (vid.file) {
-              return await fileToBase64(vid.file);
-            }
-            return vid.url;
-          })
-        );
-
-        const payload = {
-          productName: form.productName,
-          brand: form.brand || "",
-          productCategory: form.productCategory,
-          description: form.description || "",
-          productTechnicalDetails: form.productTechnicalDetails || "",
-          howToUse: form.howToUse || "",
-          productBenefits: form.productBenefits || "",
-          itemType: form.itemType || "PRODUCT",
-          hsnCode: form.hsnCode || "",
-          taxRate: form.taxRate !== "" && form.taxRate !== null ? String(form.taxRate) : "",
-          targetCrops: crops,
-          productImages: encodedImages,
-          productVideos: encodedVideos,
-          products: variants.map((variant) => {
-            const mrpVal = Number(variant.mrp) || 0;
-            const item = {
-              ...(variant._id && { _id: variant._id }),
-              unit: variant.unit,
-              mrp: mrpVal,
-              quantity: Number(variant.quantity) || 0,
-              purchasePrice: variant.purchasePrice !== "" && variant.purchasePrice !== null ? Number(variant.purchasePrice) : 0,
-              purchasePriceTaxType: variant.purchasePriceTaxType || "Without Tax",
-              salePrice: variant.salePrice !== "" && variant.salePrice !== null ? Number(variant.salePrice) : mrpVal,
-              salePriceTaxType: variant.salePriceTaxType || "Without Tax",
-            };
-
-            if (variant.purchaseDate) item.purchaseDate = variant.purchaseDate;
-            if (variant.parameter) item.parameter = variant.parameter;
-            if (variant.expiryDate) item.expiryDate = variant.expiryDate;
-            if (variant.itemCode) item.itemCode = variant.itemCode;
-            if (variant.location) item.location = variant.location;
-            if (variant.asOfDate) item.asOfDate = variant.asOfDate;
-
-            if (variant.discountOnSalePrice !== "" && variant.discountOnSalePrice !== null) {
-              const disc = Number(variant.discountOnSalePrice);
-              if (!isNaN(disc)) {
-                item.discountOnSalePrice = disc;
-                if (variant.discountType) item.discountType = variant.discountType;
-              }
-            }
-            if (variant.wholesalePrice !== "" && variant.wholesalePrice !== null) {
-              const wp = Number(variant.wholesalePrice);
-              if (!isNaN(wp)) {
-                item.wholesalePrice = wp;
-                if (variant.wholesalePriceTaxType) item.wholesalePriceTaxType = variant.wholesalePriceTaxType;
-              }
-            }
-            if (variant.minWholesaleQty !== "" && variant.minWholesaleQty !== null) {
-              const mwq = Number(variant.minWholesaleQty);
-              if (!isNaN(mwq)) item.minWholesaleQty = mwq;
-            }
-            if (variant.openingStockPrice !== "" && variant.openingStockPrice !== null) {
-              const osp = Number(variant.openingStockPrice);
-              if (!isNaN(osp)) item.openingStockPrice = osp;
-            }
-            if (variant.minStockToMaintain !== "" && variant.minStockToMaintain !== null) {
-              const msm = Number(variant.minStockToMaintain);
-              if (!isNaN(msm)) item.minStockToMaintain = msm;
-            }
-
-            return item;
-          }),
-        };
-
-        const res = await dispatch(addProduct(payload)).unwrap();
-        toast.success("Product added successfully");
-        setShowProductModal(false);
-
-        // Reload lists in Redux
-        const refreshedProds = await dispatch(fetchProducts()).unwrap();
-        await dispatch(fetchStockSummary()).unwrap();
-
-        // Try to find the matching product in the refreshed list
-        const match = refreshedProds.find(p => p.productName === payload.productName || p._id === res._id || p._id === res.data?._id);
-        if (match) {
-          setDraftProductId(match._id);
-          // Set first variant as default index
-          setDraftVariantIndex(0);
-        }
-      } catch (err) {
-        console.error("Add product error:", err);
-        toast.error(
-          typeof err === "string"
-            ? err
-            : err?.message || "Failed to add product"
-        );
-      } finally {
-        setSavingProduct(false);
-      }
-    };
-
-    executeSave();
-  };
-
-  // Compute draft math details
   const computedDraftDetails = useMemo(() => {
     const q = draftQty === "" ? 0 : parseFloat(draftQty) || 0;
     const price = draftPrice === "" ? 0 : parseFloat(draftPrice) || 0;
     const tPct = draftTaxPercent === "" ? 0 : parseFloat(draftTaxPercent) || 0;
 
-    // 1. Rate calculation (unit price excluding tax if inclusive)
     let rate = price;
     if (draftTaxType === "With Tax") {
       rate = price / (1 + tPct / 100);
@@ -462,7 +412,6 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     draftTaxPercent
   ]);
 
-  // Add draft to checklist
   const handleAddDraftItem = () => {
     if (!draftProductId) {
       toast.error("Please select a product first");
@@ -586,7 +535,6 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
       toast.success("Added item to list!");
     }
 
-    // Reset draft fields
     setDraftProductId("");
     setDraftVariantIndex(0);
     setDraftQty(1);
@@ -597,9 +545,12 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     setDraftDiscountType("Percentage");
     setDraftTaxPercent("");
     setDraftTaxType("Without Tax");
+
+    setTimeout(() => {
+      productSearchInputRef.current?.focus();
+    }, 50);
   };
 
-  // Load item back into draft fields for editing
   const handleEditItem = (idx) => {
     const item = checkoutItems[idx];
     setDraftProductId(item.productId);
@@ -621,7 +572,78 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     setCheckoutItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  // Compute Grand Totals for UI display
+  const handleUpdateItemInline = (idx, field, value) => {
+    setCheckoutItems((prev) => {
+      const copy = [...prev];
+      const item = { ...copy[idx] };
+      
+      if (field === "quantity" || field === "pricePerUnit") {
+        if (value === "") {
+          item[field] = "";
+        } else {
+          item[field] = parseFloat(value) || 0;
+        }
+      } else if (field === "discount") {
+        if (item.discountType === "Fixed Amount") {
+          item.discountAmount = value === "" ? "" : parseFloat(value) || 0;
+          item.discountPercent = "";
+        } else {
+          item.discountPercent = value === "" ? "" : parseFloat(value) || 0;
+          item.discountAmount = "";
+        }
+      }
+
+      // Re-run calculations
+      const q = item.quantity === "" ? 0 : parseFloat(item.quantity) || 0;
+      const price = item.pricePerUnit === "" ? 0 : parseFloat(item.pricePerUnit) || 0;
+      const tPct = parseFloat(item.taxPercent) || 0;
+      
+      let rate = price;
+      if (item.taxType === "With Tax") {
+        rate = price / (1 + tPct / 100);
+      }
+      rate = parseFloat(rate.toFixed(4));
+      item.rate = rate;
+
+      const base = q * price;
+      let discAmt = 0;
+      let discPct = 0;
+
+      if (item.discountType === "Fixed Amount") {
+        const dAmt = item.discountAmount === "" ? 0 : parseFloat(item.discountAmount) || 0;
+        discAmt = Math.min(base, Math.max(0, dAmt));
+        discPct = base > 0 ? parseFloat(((discAmt / base) * 100).toFixed(2)) : 0;
+        item.discountAmount = discAmt;
+        item.discountPercent = discPct;
+      } else {
+        const dPct = item.discountPercent === "" ? 0 : parseFloat(item.discountPercent) || 0;
+        discPct = Math.min(100, Math.max(0, dPct));
+        discAmt = parseFloat((base * (discPct / 100)).toFixed(2));
+        item.discountPercent = discPct;
+        item.discountAmount = discAmt;
+      }
+
+      const taxable = Math.max(0, base - discAmt);
+      let taxAmt = 0;
+      let amount = 0;
+
+      if (item.taxType === "With Tax") {
+        amount = parseFloat(taxable.toFixed(2));
+        const exclTax = amount / (1 + tPct / 100);
+        taxAmt = parseFloat((amount - exclTax).toFixed(2));
+      } else {
+        taxAmt = parseFloat((taxable * (tPct / 100)).toFixed(2));
+        amount = parseFloat((taxable + taxAmt).toFixed(2));
+      }
+
+      item.taxAmount = taxAmt;
+      item.amount = amount;
+
+      copy[idx] = item;
+      return copy;
+    });
+  };
+
   const subTotal = parseFloat(checkoutItems.reduce((acc, item) => acc + ((item.quantity === "" ? 0 : (parseFloat(item.quantity) || 0)) * (item.pricePerUnit === "" ? 0 : (parseFloat(item.pricePerUnit) || 0))), 0).toFixed(2));
   const totalDiscounts = parseFloat(checkoutItems.reduce((acc, item) => acc + (item.discountAmount === "" ? 0 : (parseFloat(item.discountAmount) || 0)), 0).toFixed(2));
   const totalTaxes = parseFloat(checkoutItems.reduce((acc, item) => acc + (parseFloat(item.taxAmount) || 0), 0).toFixed(2));
@@ -631,7 +653,6 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
   const finalTotal = roundOff ? Math.round(grandTotal) : grandTotal;
   const unpaidAmount = parseFloat((finalTotal - (parseFloat(receivedAmount) || 0)).toFixed(2));
 
-  // Sync receivedAmount with billing type & finalTotal
   useEffect(() => {
     if (!isReceivedManual) {
       if (billingType === "Cash") {
@@ -645,19 +666,37 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validations
-    if (!selectedPartyId && !buyerName.trim()) {
-      toast.error("Please select a registered party or enter Walk-in Buyer Name");
+    if (activeStep < 3) {
+      handleNextStep();
+      return;
+    }
+
+    const newErrors = {};
+    if (customerType === "registered" && !selectedPartyId) {
+      newErrors.selectedPartyId = "Party Profile is required.";
+    }
+    if (customerType === "walkin" && !buyerName.trim()) {
+      newErrors.buyerName = "Buyer Name is required.";
+    }
+    if (billingType === "Credit" && !dueDate) {
+      newErrors.dueDate = "Due Date is required for Credit transactions.";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setActiveStep(1);
+      toast.error("Please resolve step 1 verification errors.");
       return;
     }
 
     const validItems = checkoutItems.filter((i) => i.productId && (i.quantity === "" ? 0 : (parseFloat(i.quantity) || 0)) > 0);
     if (validItems.length === 0) {
+      setErrors({ checkoutItems: "Please add at least one valid product line item" });
+      setActiveStep(2);
       toast.error("Please add at least one valid inventory item");
       return;
     }
 
-    // Stock quantity validation for SALE type
     if (saleType === "SALE") {
       for (const item of validItems) {
         const prod = products.find((p) => p._id === item.productId);
@@ -670,7 +709,6 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
           )
         );
         const availableQty = variantStock ? (variantStock.availableQuantity ?? 0) : (variant?.quantity ?? 0);
-        // In edit mode, allow the existing qty to not trigger stock violation since it's already deducted from stock
         let originalQty = 0;
         if (editRecord) {
           const inventoryItemId = variantStock?.item?._id || variant?._id || prod?._id;
@@ -693,7 +731,6 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     const payloadItems = validItems.map((item) => {
       const prod = products.find((p) => p._id === item.productId);
       const variant = prod?.products?.[item.variantIndex];
-      // Find the correct inventory item ID from stockSummary matching the specific variant
       const stockRecord = (stockSummary || []).find(
         (s) => s.item?.variantId === variant?._id || s.item?._id === variant?._id || (
                s.item?.sourceRef === prod?._id &&
@@ -727,11 +764,18 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
       dueDate: billingType === "Credit" ? (dueDate || undefined) : undefined,
       paymentType: (billingType === "Cash" || (billingType === "Credit" && (parseFloat(receivedAmount) || 0) > 0)) ? paymentType : undefined,
       referenceNo: (billingType === "Cash" || (billingType === "Credit" && (parseFloat(receivedAmount) || 0) > 0)) && paymentType !== "Cash" ? (referenceNo.trim() || undefined) : undefined,
-      party: selectedPartyId || null,
-      buyerName: selectedPartyId ? parties.find((p) => p._id === selectedPartyId)?.name : buyerName,
-      buyerPhone: selectedPartyId ? parties.find((p) => p._id === selectedPartyId)?.phoneNumber : buyerPhone,
-      buyerAddress: selectedPartyId ? parties.find((p) => p._id === selectedPartyId)?.billingAddress : buyerAddress,
-      buyerType: selectedPartyId ? "FARMER" : buyerType,
+      party: customerType === "registered" ? (selectedPartyId || null) : null,
+      buyerName: customerType === "registered"
+        ? (parties.find((p) => p._id === selectedPartyId)?.name || "")
+        : buyerName.trim(),
+      buyerPhone: customerType === "registered"
+        ? (parties.find((p) => p._id === selectedPartyId)?.phoneNumber || "")
+        : (buyerPhone.trim() || undefined),
+      buyerAddress: customerType === "registered"
+        ? (parties.find((p) => p._id === selectedPartyId)?.billingAddress || "")
+        : (buyerAddress.trim() || undefined),
+      buyerType: customerType === "registered" ? "FARMER" : buyerType,
+      buyerGstin: customerType === "walkin" ? (buyerGstin.trim() || undefined) : undefined,
       items: payloadItems,
       subTotal,
       totalAmount: finalTotal,
@@ -761,7 +805,6 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
         return;
       }
 
-      // Check if compliance is already done
       const partyId = typeof savedSale?.party === "string"
         ? savedSale.party
         : (savedSale?.party && typeof savedSale?.party === "object" ? savedSale.party._id : null);
@@ -811,165 +854,484 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
         <button
           type="button"
           onClick={() => navigate("/sell")}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-bold transition-all shadow-xs"
+          className="flex items-center gap-2 px-4 py-2 border border-gray-200 hover:bg-gray-55 text-gray-700 rounded-xl text-xs font-bold transition-all shadow-xs bg-white active:scale-95"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to List
         </button>
       </div>
 
+      {/* Stepper Progress Indicator */}
+      <div className="bg-white border border-gray-150 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-bold w-full md:w-auto overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => activeStep > 1 && setActiveStep(1)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all whitespace-nowrap ${
+              activeStep === 1
+                ? "text-emerald-700 bg-emerald-50 border border-emerald-200 shadow-2xs animate-pulse"
+                : activeStep > 1
+                ? "text-emerald-600 hover:bg-gray-50"
+                : "text-gray-400 cursor-not-allowed"
+            }`}
+          >
+            <span>{activeStep > 1 ? "✓" : "①"} Customer & Details</span>
+          </button>
+          
+          <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+          
+          <button
+            type="button"
+            onClick={() => {
+              if (activeStep > 2) {
+                setActiveStep(2);
+              } else if (activeStep === 1) {
+                handleNextStep();
+              }
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all whitespace-nowrap ${
+              activeStep === 2
+                ? "text-emerald-700 bg-emerald-50 border border-emerald-200 shadow-2xs"
+                : activeStep > 2
+                ? "text-emerald-600 hover:bg-gray-50"
+                : "text-gray-400 cursor-not-allowed"
+            }`}
+            disabled={activeStep < 2 && !selectedPartyId && !buyerName.trim()}
+          >
+            <span>{activeStep > 2 ? "✓" : "②"} Add Products</span>
+          </button>
+          
+          <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+          
+          <button
+            type="button"
+            onClick={() => {
+              if (activeStep === 2) {
+                handleNextStep();
+              } else if (activeStep === 1) {
+                const newErrors = {};
+                if (customerType === "registered" && !selectedPartyId) {
+                  newErrors.selectedPartyId = "Party Profile is required.";
+                }
+                if (customerType === "walkin" && !buyerName.trim()) {
+                  newErrors.buyerName = "Buyer Name is required.";
+                }
+                if (billingType === "Credit" && !dueDate) {
+                  newErrors.dueDate = "Due Date is required for Credit transactions.";
+                }
+                if (Object.keys(newErrors).length > 0) {
+                  setErrors(newErrors);
+                  return;
+                }
+                const validItems = checkoutItems.filter((i) => i.productId && (i.quantity === "" ? 0 : (parseFloat(i.quantity) || 0)) > 0);
+                if (validItems.length > 0) {
+                  setActiveStep(3);
+                } else {
+                  setActiveStep(2);
+                  toast.error("Please add at least one product first");
+                }
+              }
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all whitespace-nowrap ${
+              activeStep === 3
+                ? "text-emerald-700 bg-emerald-50 border border-emerald-200 shadow-2xs"
+                : "text-gray-400 cursor-not-allowed"
+            }`}
+            disabled={activeStep < 3 && checkoutItems.length === 0}
+          >
+            <span>③ Review & Submit</span>
+          </button>
+        </div>
+        
+        {activeStep > 1 && (
+          <div className="hidden md:flex items-center gap-4 text-[10px] text-gray-500 font-bold uppercase tracking-wider select-none bg-slate-50 border border-slate-100 rounded-xl px-3.5 py-1.5">
+            <span>
+              Customer: <b className="text-gray-800">{customerType === "registered" ? (parties.find(p => p._id === selectedPartyId)?.name || "None") : (buyerName || "Walk-in")}</b>
+            </span>
+            <span>•</span>
+            <span>
+              Bill: <b className="text-gray-800">{invoiceNo || "Draft (Auto)"}</b>
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* Main Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Top Parameters (Sale Type, Payment, Party Profile) */}
-        <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm grid grid-cols-1 lg:grid-cols-3 gap-6 items-end">
-          <div>
-            <label className="block text-[10px] font-extrabold text-gray-500 mb-2 uppercase tracking-wider">Party Profile</label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <select
-                  value={selectedPartyId}
-                  onChange={(e) => setSelectedPartyId(e.target.value)}
-                  className="w-full border border-gray-200 hover:border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] cursor-pointer font-bold text-gray-800 appearance-none pr-8 transition-all"
-                >
-                  <option value="">-- Direct Walk-In (Manual Entry) --</option>
-                  {parties.map((p) => (
-                    <option key={p._id} value={p._id}>
-                      {p.name} - +91 {p.phoneNumber || "No Phone"} ({p.gstType})
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-gray-400">
-                  <ChevronDown className="w-4 h-4" />
+        
+        {/* ==================== STEP 1: CUSTOMER & INVOICE DETAILS ==================== */}
+        {activeStep === 1 && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-200">
+            {/* Customer Type Selector Card */}
+            <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-4">
+              <div>
+                <label className="block text-[10px] font-extrabold text-gray-500 mb-3 uppercase tracking-wider">Customer Type Selector</label>
+                <div role="radiogroup" aria-label="Customer Type" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Registered Party Card */}
+                  <div
+                    role="radio"
+                    aria-checked={customerType === "registered"}
+                    tabIndex={0}
+                    onClick={() => handleCustomerTypeChange("registered")}
+                    onKeyDown={(e) => {
+                      if (e.key === " " || e.key === "Enter") {
+                        e.preventDefault();
+                        handleCustomerTypeChange("registered");
+                      }
+                    }}
+                    className={`relative flex items-start gap-3 p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+                      customerType === "registered"
+                        ? "border-emerald-600 bg-emerald-50/10 shadow-md scale-[1.01]"
+                        : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                    }`}
+                  >
+                    {/* Hidden Native Input */}
+                    <input
+                      type="radio"
+                      name="customerType"
+                      value="registered"
+                      checked={customerType === "registered"}
+                      onChange={() => handleCustomerTypeChange("registered")}
+                      className="sr-only"
+                      tabIndex={-1}
+                    />
+
+                    {/* Selection Checkmark */}
+                    {customerType === "registered" && (
+                      <div className="absolute top-4 right-4 bg-emerald-600 text-white rounded-full p-0.5 shadow-xs animate-in fade-in zoom-in-75 duration-150">
+                        <Check className="w-3 h-3 stroke-[3.5]" />
+                      </div>
+                    )}
+
+                    {/* Icon */}
+                    <div className={`flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
+                      customerType === "registered" ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-500"
+                    }`}>
+                      <Users className="w-[26px] h-[26px]" />
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex flex-col pr-6">
+                      <span className="text-base font-semibold text-gray-900 leading-tight">Registered Party</span>
+                      <span className="text-[13px] text-gray-500 mt-1 leading-snug">
+                        Registered customers, farmers and B2B buyers.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Walk-in Customer Card */}
+                  <div
+                    role="radio"
+                    aria-checked={customerType === "walkin"}
+                    tabIndex={0}
+                    onClick={() => handleCustomerTypeChange("walkin")}
+                    onKeyDown={(e) => {
+                      if (e.key === " " || e.key === "Enter") {
+                        e.preventDefault();
+                        handleCustomerTypeChange("walkin");
+                      }
+                    }}
+                    className={`relative flex items-start gap-3 p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+                      customerType === "walkin"
+                        ? "border-emerald-600 bg-emerald-50/10 shadow-md scale-[1.01]"
+                        : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                    }`}
+                  >
+                    {/* Hidden Native Input */}
+                    <input
+                      type="radio"
+                      name="customerType"
+                      value="walkin"
+                      checked={customerType === "walkin"}
+                      onChange={() => handleCustomerTypeChange("walkin")}
+                      className="sr-only"
+                      tabIndex={-1}
+                    />
+
+                    {/* Selection Checkmark */}
+                    {customerType === "walkin" && (
+                      <div className="absolute top-4 right-4 bg-emerald-600 text-white rounded-full p-0.5 shadow-xs animate-in fade-in zoom-in-75 duration-150">
+                        <Check className="w-3 h-3 stroke-[3.5]" />
+                      </div>
+                    )}
+
+                    {/* Icon */}
+                    <div className={`flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
+                      customerType === "walkin" ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-500"
+                    }`}>
+                      <ShoppingBag className="w-[26px] h-[26px]" />
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex flex-col pr-6">
+                      <span className="text-base font-semibold text-gray-900 leading-tight">Walk-in Customer</span>
+                      <span className="text-[13px] text-gray-500 mt-1 leading-snug">
+                        Quick billing for cash and retail customers.
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setAddVendorOpen(true)}
-                className="px-3.5 bg-emerald-50/40 hover:bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl active:scale-95 transition-all h-[42px] flex items-center justify-center shadow-2xs"
-                title="Quick Add Party"
-              >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
-              </button>
             </div>
 
-            {/* Registered B2B or B2C Visual Indicators */}
-            {selectedPartyId ? (
-              <div className="mt-2.5">
-                {(() => {
-                  const p = parties.find((party) => party._id === selectedPartyId);
-                  const isRegistered = p && (p.gstin || p.gstType?.startsWith("Registered"));
-                  if (isRegistered) {
-                    return (
-                      <div className="bg-emerald-50/50 border border-emerald-200/60 rounded-xl p-3 flex flex-col gap-1 shadow-2xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className="flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">✓</span>
-                          <span className="font-extrabold text-[10px] text-emerald-805 uppercase tracking-wider">Registered (B2B Transaction)</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-[10px] text-gray-500 font-medium pt-1 border-t border-emerald-100/30">
-                          <div>
-                            <span className="text-gray-400 font-semibold block text-[8px] uppercase tracking-wider">GSTIN</span>
-                            <span className="font-bold text-gray-700">{p.gstin || "—"}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400 font-semibold block text-[8px] uppercase tracking-wider">GST Type</span>
-                            <span className="font-bold text-gray-700">{p.gstType || "—"}</span>
-                          </div>
+            {/* Customer Details Card */}
+            <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-6">
+              <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600 border border-emerald-100">
+                  <User className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <h3 className="font-extrabold text-gray-800 text-sm">
+                    {customerType === "registered" ? "Registered Party Details" : "Walk-in Customer Details"}
+                  </h3>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                    Provide client billing profile information
+                  </span>
+                </div>
+              </div>
+
+              {customerType === "registered" ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-500 mb-2 uppercase tracking-wider">Party Profile *</label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <select
+                          ref={partySelectRef}
+                          value={selectedPartyId}
+                          onChange={(e) => setSelectedPartyId(e.target.value)}
+                          className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] cursor-pointer font-bold text-gray-800 appearance-none pr-8 transition-all ${
+                            errors.selectedPartyId ? "border-red-400 focus:ring-red-400" : "border-gray-200 hover:border-gray-300"
+                          }`}
+                        >
+                          <option value="">-- Select Registered Party --</option>
+                          {parties.map((p) => (
+                            <option key={p._id} value={p._id}>
+                              {p.name} - +91 {p.phoneNumber || "No Phone"} ({p.gstType})
+                            </option>
+                          ))}
+                        </select>
+                        <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-gray-400">
+                          <ChevronDown className="w-4 h-4" />
                         </div>
                       </div>
-                    );
-                  } else {
-                    return (
-                      <div className="bg-gray-50 border border-gray-200/60 rounded-xl p-3 flex flex-col gap-1 shadow-2xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className="flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-700 text-[10px] font-bold">👤</span>
-                          <span className="font-extrabold text-[10px] text-gray-700 uppercase tracking-wider">Farmer / Unregistered (B2C)</span>
-                        </div>
-                        {p?.phoneNumber && (
-                          <div className="text-[10px] text-gray-500 font-medium pt-1 border-t border-gray-150/40">
-                            <span className="text-gray-400 font-semibold text-[8px] uppercase tracking-wider block">Phone Number</span>
-                            <span className="font-bold text-gray-700">+91 {p.phoneNumber}</span>
-                          </div>
-                        )}
+                      <button
+                        type="button"
+                        onClick={() => setAddVendorOpen(true)}
+                        className="px-3.5 bg-emerald-50/40 hover:bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl active:scale-95 transition-all h-[42px] flex items-center justify-center shadow-2xs"
+                        title="Quick Add Party"
+                      >
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                      </button>
+                    </div>
+                    {errors.selectedPartyId && (
+                      <p className="text-red-500 text-[10px] font-bold mt-1.5">{errors.selectedPartyId}</p>
+                    )}
+
+                    {/* Registered B2B or B2C Visual Indicators */}
+                    {selectedPartyId && (
+                      <div className="mt-3.5">
+                        {(() => {
+                          const p = parties.find((party) => party._id === selectedPartyId);
+                          const isRegistered = p && (p.gstin || p.gstType?.startsWith("Registered"));
+                          if (isRegistered) {
+                            return (
+                              <div className="bg-emerald-50/50 border border-emerald-200/60 rounded-xl p-3.5 flex flex-col gap-1 shadow-2xs">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">✓</span>
+                                  <span className="font-extrabold text-[10px] text-emerald-805 uppercase tracking-wider">Registered (B2B Transaction)</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-[10px] text-gray-500 font-medium pt-1.5 border-t border-emerald-100/30 mt-1">
+                                  <div>
+                                    <span className="text-gray-400 font-semibold block text-[8px] uppercase tracking-wider">GSTIN</span>
+                                    <span className="font-bold text-gray-700">{p.gstin || "—"}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400 font-semibold block text-[8px] uppercase tracking-wider">GST Type</span>
+                                    <span className="font-bold text-gray-700">{p.gstType || "—"}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="bg-gray-50 border border-gray-200/60 rounded-xl p-3.5 flex flex-col gap-1 shadow-2xs">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-700 text-[10px] font-bold">👤</span>
+                                  <span className="font-extrabold text-[10px] text-gray-700 uppercase tracking-wider">Farmer / Unregistered (B2C)</span>
+                                </div>
+                                {p?.phoneNumber && (
+                                  <div className="text-[10px] text-gray-500 font-medium pt-1.5 border-t border-gray-150/40 mt-1">
+                                    <span className="text-gray-400 font-semibold text-[8px] uppercase tracking-wider block">Phone Number</span>
+                                    <span className="font-bold text-gray-700">+91 {p.phoneNumber}</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                        })()}
                       </div>
-                    );
-                  }
-                })()}
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                  {/* Customer Name */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Customer Name *</label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                        <User className="w-4 h-4" />
+                      </span>
+                      <input
+                        ref={buyerNameInputRef}
+                        type="text"
+                        value={buyerName}
+                        onChange={(e) => setBuyerName(e.target.value)}
+                        placeholder="e.g. Ramesh Kumar"
+                        className={`w-full pl-10 pr-3 py-2 text-xs border rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] transition-all font-semibold text-gray-800 ${
+                          errors.buyerName ? "border-red-400 focus:ring-red-400" : "border-gray-200"
+                        }`}
+                      />
+                    </div>
+                    {errors.buyerName && (
+                      <p className="text-red-500 text-[10px] font-bold mt-1.5">{errors.buyerName}</p>
+                    )}
+                  </div>
+
+                  {/* Mobile Number */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Mobile Number</label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                        <Phone className="w-4 h-4" />
+                      </span>
+                      <input
+                        type="text"
+                        value={buyerPhone}
+                        onChange={(e) => setBuyerPhone(e.target.value)}
+                        placeholder="9876543210"
+                        className="w-full pl-10 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] transition-all font-semibold text-gray-800"
+                      />
+                    </div>
+                  </div>
+
+                  {/* GSTIN */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">GSTIN (Optional)</label>
+                    <input
+                      type="text"
+                      value={buyerGstin}
+                      onChange={(e) => setBuyerGstin(e.target.value.toUpperCase())}
+                      placeholder="22AAAAA0000A1Z5"
+                      className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] transition-all font-semibold text-gray-800 uppercase"
+                    />
+                  </div>
+
+                  {/* Address */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Address</label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                        <MapPin className="w-4 h-4" />
+                      </span>
+                      <input
+                        type="text"
+                        value={buyerAddress}
+                        onChange={(e) => setBuyerAddress(e.target.value)}
+                        placeholder="e.g. Village Deoria"
+                        className="w-full pl-10 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] transition-all font-semibold text-gray-800"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Buyer Segment */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Buyer Segment</label>
+                    <div className="relative">
+                      <select
+                        value={buyerType}
+                        onChange={(e) => setBuyerType(e.target.value)}
+                        className="w-full border border-gray-200 hover:border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] cursor-pointer font-bold text-gray-800 appearance-none pr-8 transition-all"
+                      >
+                        <option value="FARMER">Farmer</option>
+                        <option value="RETAILER">Retailer</option>
+                        <option value="DISTRIBUTOR">Distributor</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                      <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-400">
+                        <ChevronDown className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Toggles: Sale Type & Billing Type */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4 border-t border-gray-100">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-500 mb-2 uppercase tracking-wider">Sale Type</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSaleType("SALE")}
+                      className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${
+                        saleType === "SALE"
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                          : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+                      }`}
+                    >
+                      <ShoppingCart className="w-4 h-4" />
+                      Direct Sale
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSaleType("ESTIMATE")}
+                      className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${
+                        saleType === "ESTIMATE"
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                          : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+                      }`}
+                    >
+                      <FileText className="w-4 h-4" />
+                      Estimate / Quotation
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-500 mb-2 uppercase tracking-wider">Payment</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBillingType("Cash")}
+                      className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${
+                        billingType === "Cash"
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                          : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+                      }`}
+                    >
+                      <Zap className="w-4 h-4" />
+                      Money Received
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBillingType("Credit")}
+                      className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${
+                        billingType === "Credit"
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                          : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+                      }`}
+                    >
+                      <Calendar className="w-4 h-4" />
+                      Udhar (Credit)
+                    </button>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <div className="mt-2.5 bg-gray-55 border border-gray-200/60 rounded-xl p-3 flex items-center gap-1.5 shadow-2xs">
-                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-750 text-[10px] font-bold">👤</span>
-                <span className="font-extrabold text-[10px] text-gray-750 uppercase tracking-wider">Walk-in Customer (B2C)</span>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-extrabold text-gray-500 mb-2 uppercase tracking-wider">Sale Type</label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setSaleType("SALE")}
-                className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${
-                  saleType === "SALE"
-                    ? "bg-emerald-605 text-white bg-emerald-600 border-emerald-600 shadow-sm"
-                    : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
-                }`}
-              >
-                <ShoppingCart className="w-4 h-4" />
-                Direct Sale
-              </button>
-              <button
-                type="button"
-                onClick={() => setSaleType("ESTIMATE")}
-                className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${
-                  saleType === "ESTIMATE"
-                    ? "bg-emerald-605 text-white bg-emerald-600 border-emerald-600 shadow-sm"
-                    : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
-                }`}
-              >
-                <FileText className="w-4 h-4" />
-                Estimate / Quotation
-              </button>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-[10px] font-extrabold text-gray-500 mb-2 uppercase tracking-wider">Payment</label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setBillingType("Cash")}
-                className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${
-                  billingType === "Cash"
-                    ? "bg-emerald-650 text-white bg-emerald-600 border-emerald-600 shadow-sm"
-                    : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
-                }`}
-              >
-                <Zap className="w-4 h-4" />
-                Money Received
-              </button>
-              <button
-                type="button"
-                onClick={() => setBillingType("Credit")}
-                className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${
-                  billingType === "Credit"
-                    ? "bg-emerald-650 text-white bg-emerald-600 border-emerald-600 shadow-sm"
-                    : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
-                }`}
-              >
-                <Calendar className="w-4 h-4" />
-                Udhar (Credit)
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Two-Column Grid Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-          {/* Left Column (spans 3 columns) */}
-          <div className="lg:col-span-3 space-y-6">
-
-            {/* Invoice Details Card */}
+            {/* Sales Bill Details Card */}
             <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-5">
               <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
                 <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600 border border-emerald-100">
@@ -1014,14 +1376,20 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                     <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Due Date *</label>
                     <div className="relative">
                       <input
+                        ref={dueDateInputRef}
                         type="date"
                         value={dueDate}
                         onChange={(e) => setDueDate(e.target.value)}
-                        className="w-full pl-3 pr-10 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] cursor-pointer transition-all font-semibold text-gray-800"
+                        className={`w-full pl-3 pr-10 py-2 text-xs border rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] cursor-pointer transition-all font-semibold text-gray-800 ${
+                          errors.dueDate ? "border-red-400 focus:ring-red-400" : "border-gray-200"
+                        }`}
                         required
                       />
                       <Calendar className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                     </div>
+                    {errors.dueDate && (
+                      <p className="text-red-500 text-[10px] font-bold mt-1.5">{errors.dueDate}</p>
+                    )}
                   </div>
                 )}
 
@@ -1127,680 +1495,864 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                 )}
               </div>
             </div>
+          </div>
+        )}
 
-            {/* Customer Details Card (Only shown if manual walk-in is selected) */}
-            {!selectedPartyId && (
-              <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-5 animate-in fade-in duration-200">
-                <div className="flex items-center gap-2 pb-3.5 border-b border-gray-100">
-                  <div className="bg-emerald-50 p-1.5 rounded-lg text-emerald-600 border border-emerald-100">
-                    <User className="w-4 h-4" />
-                  </div>
-                  <h3 className="font-extrabold text-gray-800 text-sm">Customer Details</h3>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Buyer Name *</label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                        <User className="w-4 h-4" />
-                      </span>
-                      <input
-                        type="text"
-                        value={buyerName}
-                        onChange={(e) => setBuyerName(e.target.value)}
-                        placeholder="e.g. Ramesh Kumar"
-                        className="w-full pl-10 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] transition-all font-semibold text-gray-800"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Buyer Phone</label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                        <Phone className="w-4 h-4" />
-                      </span>
-                      <input
-                        type="text"
-                        value={buyerPhone}
-                        onChange={(e) => setBuyerPhone(e.target.value)}
-                        placeholder="9876543210"
-                        className="w-full pl-10 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] transition-all font-semibold text-gray-800"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Buyer Address</label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                        <MapPin className="w-4 h-4" />
-                      </span>
-                      <input
-                        type="text"
-                        value={buyerAddress}
-                        onChange={(e) => setBuyerAddress(e.target.value)}
-                        placeholder="e.g. Village Deoria"
-                        className="w-full pl-10 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] transition-all font-semibold text-gray-800"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  <div className="md:col-start-3">
-                    <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Buyer Segment</label>
-                    <div className="relative">
-                      <select
-                        value={buyerType}
-                        onChange={(e) => setBuyerType(e.target.value)}
-                        className="w-full border border-gray-200 hover:border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] cursor-pointer font-bold text-gray-800 appearance-none pr-8 transition-all"
-                      >
-                        <option value="FARMER">Farmer</option>
-                        <option value="RETAILER">Retailer</option>
-                        <option value="DISTRIBUTOR">Distributor</option>
-                        <option value="OTHER">Other</option>
-                      </select>
-                      <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-400">
-                        <ChevronDown className="w-4 h-4" />
+        {/* ==================== STEPS 2 & 3: GRID LAYOUT ==================== */}
+        {(activeStep === 2 || activeStep === 3) && (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+            
+            {/* Left Column (spans 3 columns) */}
+            <div className="lg:col-span-3 space-y-6">
+              
+              {activeStep === 2 && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-200">
+                  {/* Unified Billing Workspace Card */}
+                  <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-6">
+                    {/* Header */}
+                    <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                      <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600 border border-emerald-100">
+                        <ShoppingCart className="w-5 h-5" />
+                      </div>
+                      <div className="flex flex-col">
+                        <h3 className="font-extrabold text-gray-800 text-sm">Add Item</h3>
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                          Search and add items to this sales bill
+                        </span>
                       </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
-            {/* Products Selection Card */}
-            <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-6">
-              <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
-                <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600 border border-emerald-100">
-                  <ShoppingCart className="w-5 h-5" />
-                </div>
-                <div className="flex flex-col">
-                  <h3 className="font-extrabold text-gray-800 text-sm">Add Item</h3>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
-                    Search and add items to this sales bill
-                  </span>
-                </div>
-              </div>
-
-              {/* Add Item Form Controls */}
-              <div className="space-y-8">
-                {/* SECTION 1: PRODUCT DETAILS */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                    <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center font-extrabold text-[10px]">
-                      1
-                    </div>
-                    <span className="font-bold text-gray-800 text-xs uppercase tracking-wider">Product Details</span>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-end">
-                    <div className="md:col-span-8">
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Product *</label>
-                      <div className="flex gap-2 items-center">
-                        <div className="flex-1">
+                    {/* SECTION 1: SEARCH & QUICK ENTRY */}
+                    <div className="space-y-5">
+                      {/* Product Search Row */}
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                        <div className="sm:col-span-9">
+                          <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Search Product (Name / Code / Barcode) *</label>
                           <SearchableProductSelect
                             value={draftProductId}
                             onChange={(newVal) => setDraftProductId(newVal)}
                             products={products}
                             stockSummary={stockSummary}
-                            placeholder="Search item by name / code"
+                            placeholder="Search item by name, brand, item code, SKU, or barcode..."
                             onCreateProduct={() => setShowProductModal(true)}
                             hideLabel={true}
+                            inputRef={productSearchInputRef}
                           />
                         </div>
+                        <div className="sm:col-span-3">
+                          <button
+                            type="button"
+                            onClick={() => setShowProductModal(true)}
+                            className="w-full border border-emerald-600 text-emerald-600 hover:bg-emerald-50 bg-white rounded-xl h-[42px] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shrink-0 active:scale-95 shadow-xs"
+                          >
+                            <Plus className="w-4 h-4 stroke-[2.5]" />
+                            New Product
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Quick Entry fields row */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 items-start pt-1">
+                        {/* Quantity Counter */}
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">Quantity *</label>
+                          <div className="flex border border-gray-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/10 rounded-xl overflow-hidden bg-white h-10 transition-all shadow-2xs">
+                            <button
+                              type="button"
+                              disabled={!draftProductId}
+                              onClick={() => setDraftQty(prev => Math.max(1, prev - 1))}
+                              className="px-2.5 bg-gray-50 hover:bg-gray-100 text-gray-500 disabled:opacity-50 transition-colors flex items-center justify-center border-r border-gray-200"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              disabled={!draftProductId}
+                              value={draftQty}
+                              onChange={(e) => setDraftQty(Math.max(1, parseInt(e.target.value) || 1))}
+                              className="w-full text-center text-xs font-bold focus:outline-none border-0 p-0 text-gray-800 bg-transparent h-full text-center"
+                            />
+                            <button
+                              type="button"
+                              disabled={!draftProductId}
+                              onClick={() => setDraftQty(prev => prev + 1)}
+                              className="px-2.5 bg-gray-50 hover:bg-gray-100 text-gray-500 disabled:opacity-50 transition-colors flex items-center justify-center border-l border-gray-200"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+                          {draftProductId && (
+                            <span className="text-[10px] text-gray-400 font-semibold block mt-0.5">
+                              Stock: <b className="text-gray-700">{availableQty} {draftUnit}</b>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Unit variant selection */}
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">Unit / Variant *</label>
+                          <div className="relative">
+                            <select
+                              disabled={!draftProductId}
+                              value={draftVariantIndex}
+                              onChange={(e) => setDraftVariantIndex(parseInt(e.target.value) || 0)}
+                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 bg-white h-10 disabled:bg-gray-50 disabled:text-gray-450 font-bold text-gray-850 appearance-none pr-8 transition-all cursor-pointer shadow-2xs"
+                            >
+                              {draftProd?.products?.map((v, vIdx) => (
+                                <option key={vIdx} value={vIdx}>
+                                  {v.unit} {v.parameter ? `(${v.parameter})` : ""}
+                                </option>
+                              ))}
+                              {!draftProd && <option value="0">pcs</option>}
+                            </select>
+                            <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-gray-400">
+                              <ChevronDown className="w-4 h-4" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Price per unit (Rate) */}
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">Rate / Unit (₹) *</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            disabled={!draftProductId}
+                            value={draftPrice}
+                            onChange={(e) => setDraftPrice(e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
+                            placeholder="0.00"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 disabled:bg-gray-50 disabled:text-gray-450 h-10 font-bold text-gray-850 transition-all text-right shadow-2xs"
+                          />
+                        </div>
+
+                        {/* Discount value/percent */}
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                            {draftDiscountType === "Percentage" ? "Discount (%)" : "Discount (₹)"}
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              max={draftDiscountType === "Percentage" ? "100" : undefined}
+                              step="any"
+                              disabled={!draftProductId}
+                              value={draftDiscountType === "Percentage" ? draftDiscountPercent : draftDiscountAmount}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (draftDiscountType === "Percentage") {
+                                  setDraftDiscountPercent(val === "" ? "" : parseFloat(val) || 0);
+                                } else {
+                                  setDraftDiscountAmount(val === "" ? "" : parseFloat(val) || 0);
+                                }
+                              }}
+                              placeholder="0"
+                              className="w-full border border-gray-200 rounded-xl pl-3 pr-7 py-2 text-xs focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 disabled:bg-gray-50 disabled:text-gray-450 h-10 font-bold text-gray-850 transition-all text-center shadow-2xs"
+                            />
+                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-450 font-bold text-xs">
+                              {draftDiscountType === "Percentage" ? "%" : "₹"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* GST % */}
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">GST (%) *</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              disabled={!draftProductId}
+                              value={draftTaxPercent}
+                              onChange={(e) => setDraftTaxPercent(e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
+                              placeholder="0"
+                              className="w-full border border-gray-200 rounded-xl pl-3 pr-7 py-2 text-xs focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 disabled:bg-gray-50 disabled:text-gray-455 h-10 font-bold text-gray-850 transition-all text-center shadow-2xs"
+                            />
+                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-455 font-bold text-xs">%</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Advanced Options Accordion */}
+                      <div className="pt-1">
                         <button
                           type="button"
-                          onClick={() => setShowProductModal(true)}
-                          className="px-4 border border-emerald-600 text-emerald-600 hover:bg-emerald-50 rounded-xl h-[42px] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shrink-0 active:scale-95 bg-white"
+                          onClick={() => setShowAdvancedProductOptions(!showAdvancedProductOptions)}
+                          className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1 bg-transparent border-0 p-0 focus:outline-none cursor-pointer"
                         >
-                          <Plus className="w-4 h-4 stroke-[2.5]" />
-                          New Product
+                          {showAdvancedProductOptions ? "Hide Advanced Options" : "Show Advanced Options"}
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAdvancedProductOptions ? 'rotate-180' : ''}`} />
                         </button>
+
+                        {showAdvancedProductOptions && (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 border border-gray-150 rounded-xl bg-gray-55/30 mt-2 text-xs font-semibold text-gray-700 animate-in fade-in duration-200">
+                            {/* Discount Type selection */}
+                            <div className="space-y-1">
+                              <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Discount Type</label>
+                              <select
+                                value={draftDiscountType}
+                                onChange={(e) => {
+                                  const newType = e.target.value;
+                                  setDraftDiscountType(newType);
+                                  setDraftDiscountPercent("");
+                                  setDraftDiscountAmount("");
+                                }}
+                                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-emerald-500 bg-white font-medium"
+                              >
+                                <option value="Percentage">Percentage (%)</option>
+                                <option value="Fixed Amount">Fixed Amount (₹)</option>
+                              </select>
+                            </div>
+
+                            {/* Tax Type selection */}
+                            <div className="space-y-1">
+                              <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Tax Type</label>
+                              <select
+                                value={draftTaxType}
+                                onChange={(e) => setDraftTaxType(e.target.value)}
+                                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-emerald-500 bg-white font-medium"
+                              >
+                                <option value="Without Tax">Without Tax</option>
+                                <option value="With Tax">With Tax</option>
+                              </select>
+                            </div>
+
+                            {/* Calculated rate details */}
+                            <div className="space-y-1">
+                              <span className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Base Rate (₹)</span>
+                              <div className="py-1.5 px-3 bg-gray-100 rounded-lg font-bold text-gray-700 text-center">
+                                ₹{draftProductId ? (computedDraftDetails.rate || "0.00") : "0.00"}
+                              </div>
+                            </div>
+
+                            {/* Calculated tax amount details */}
+                            <div className="space-y-1">
+                              <span className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Tax Amount (₹)</span>
+                              <div className="py-1.5 px-3 bg-gray-100 rounded-lg font-bold text-gray-700 text-center">
+                                ₹{draftProductId ? (computedDraftDetails.taxAmount || "0.00") : "0.00"}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
+
+                      {/* Add Product actions row */}
+                      <div className="flex justify-between items-center pt-2">
+                        <div>
+                          {draftProductId && (
+                            <div className="text-xs font-semibold text-gray-700">
+                              Estimated Line Total: <span className="font-black text-emerald-700 bg-emerald-50/50 px-2 py-0.5 rounded border border-emerald-100">₹{computedDraftDetails.amount || "0.00"}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDraftProductId("");
+                              setDraftVariantIndex(0);
+                              setDraftQty(1);
+                              setDraftUnit("pcs");
+                              setDraftPrice("");
+                              setDraftTaxType("Without Tax");
+                              setDraftDiscountType("Percentage");
+                              setDraftDiscountPercent("");
+                              setDraftDiscountAmount("");
+                              setDraftTaxPercent("");
+                            }}
+                            className="flex items-center gap-1.5 px-4 py-2 border border-gray-255 hover:bg-gray-50 text-gray-650 bg-white rounded-xl text-xs font-semibold transition-all active:scale-95 shadow-xs"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5 text-gray-400" />
+                            Clear
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAddDraftItem}
+                            disabled={!draftProductId}
+                            className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-150 disabled:text-gray-400 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add Product
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SECTION 2: ADDED PRODUCTS TABLE */}
+                    <hr className="border-gray-100" />
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-gray-800 text-xs uppercase tracking-wider">
+                          Current Bill ({checkoutItems.filter(i => i.productId).length} Items)
+                        </span>
+                        {errors.checkoutItems && (
+                          <p className="text-red-500 text-xs font-bold">{errors.checkoutItems}</p>
+                        )}
+                      </div>
+
+                      {checkoutItems.filter(i => i.productId).length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-10 border border-dashed border-gray-200 rounded-2xl bg-gray-55/10">
+                          <FileSpreadsheet className="w-10 h-10 text-gray-300 mb-2" />
+                          <p className="font-bold text-gray-600 text-xs">No products added yet</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">Type in the search field above to find and add products.</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto border border-gray-150 rounded-2xl shadow-2xs">
+                          <table className="w-full border-collapse text-left bg-white text-xs">
+                            <thead>
+                              <tr className="bg-gray-55/35 border-b border-gray-150 text-[10px] font-extrabold text-gray-455 uppercase tracking-wider">
+                                <th className="px-4 py-2.5">Item</th>
+                                <th className="px-4 py-2.5 text-center w-24">Qty</th>
+                                <th className="px-4 py-2.5 text-center">Unit</th>
+                                <th className="px-4 py-2.5 text-right w-28">Rate (₹)</th>
+                                <th className="px-4 py-2.5 text-center w-24">Discount</th>
+                                <th className="px-4 py-2.5 text-center">GST %</th>
+                                <th className="px-4 py-2.5 text-right">Amount</th>
+                                <th className="px-4 py-2.5 text-center">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 font-semibold">
+                              {checkoutItems.filter(i => i.productId).map((item, idx) => {
+                                const prod = products.find(p => p._id === item.productId);
+                                const variant = prod?.products?.[item.variantIndex];
+                                return (
+                                  <tr key={idx} className="hover:bg-gray-55/30 transition-colors">
+                                    {/* Product Name */}
+                                    <td className="px-4 py-2">
+                                      <p className="font-bold text-gray-900 text-xs">{prod?.productName}</p>
+                                      <p className="text-[9px] text-gray-400 font-semibold mt-0.5">
+                                        {variant?.itemCode ? `${variant.itemCode} • ` : ""}
+                                        {variant?.parameter ? `${variant.parameter} (${variant.unit})` : variant?.unit || "pcs"}
+                                      </p>
+                                    </td>
+
+                                    {/* Inline Quantity input */}
+                                    <td className="px-4 py-2 text-center">
+                                      <div className="flex items-center justify-center border border-gray-200 rounded-lg overflow-hidden bg-white h-7 shadow-2xs">
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          value={item.quantity}
+                                          onChange={(e) => handleUpdateItemInline(idx, "quantity", e.target.value)}
+                                          className="w-full text-center text-xs font-bold focus:outline-none border-0 p-0 text-gray-800 bg-transparent h-full"
+                                        />
+                                      </div>
+                                    </td>
+
+                                    {/* Unit */}
+                                    <td className="px-4 py-2 text-center text-gray-500 font-semibold text-[11px]">{item.unit || variant?.unit}</td>
+
+                                    {/* Inline Rate input */}
+                                    <td className="px-4 py-2 text-right">
+                                      <div className="flex items-center justify-end border border-gray-200 rounded-lg overflow-hidden bg-white h-7 shadow-2xs pr-1.5">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="any"
+                                          value={item.pricePerUnit}
+                                          onChange={(e) => handleUpdateItemInline(idx, "pricePerUnit", e.target.value)}
+                                          className="w-full text-right text-xs font-bold focus:outline-none border-0 p-0 text-gray-800 bg-transparent h-full pr-0.5"
+                                        />
+                                      </div>
+                                    </td>
+
+                                    {/* Inline Discount input */}
+                                    <td className="px-4 py-2 text-right">
+                                      <div className="flex items-center justify-center border border-gray-200 rounded-lg overflow-hidden bg-white h-7 shadow-2xs">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={item.discountType === "Fixed Amount" ? item.discountAmount : item.discountPercent}
+                                          onChange={(e) => handleUpdateItemInline(idx, "discount", e.target.value)}
+                                          className="w-full text-center text-xs font-bold focus:outline-none border-0 p-0 text-gray-800 bg-transparent h-full"
+                                        />
+                                        <span className="text-[10px] text-gray-400 font-bold px-1 select-none">
+                                          {item.discountType === "Fixed Amount" ? "₹" : "%"}
+                                        </span>
+                                      </div>
+                                    </td>
+
+                                    {/* GST % */}
+                                    <td className="px-4 py-2 text-center">
+                                      <p className="text-gray-800 font-bold text-xs">{item.taxPercent}%</p>
+                                      <p className="text-[8px] text-gray-450 font-semibold uppercase">{item.taxType === "With Tax" ? "Incl" : "Excl"}</p>
+                                    </td>
+
+                                    {/* Total Amount */}
+                                    <td className="px-4 py-2 text-right font-bold text-emerald-700 text-xs animate-in fade-in">
+                                      ₹{(parseFloat(item.amount) || 0).toFixed(2)}
+                                    </td>
+
+                                    {/* Actions */}
+                                    <td className="px-4 py-2 text-center">
+                                      <div className="flex items-center justify-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleEditItem(idx)}
+                                          className="text-gray-400 hover:text-emerald-600 transition p-1 hover:bg-gray-100 rounded-md"
+                                          title="Load back to search editor"
+                                        >
+                                          <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setCheckoutItems((prev) => prev.filter((_, i) => i !== idx));
+                                          }}
+                                          className="text-gray-400 hover:text-red-500 transition p-1 hover:bg-gray-100 rounded-md"
+                                          title="Remove item"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot className="bg-gray-55/20 border-t border-gray-150 text-xs font-bold text-gray-700">
+                              <tr>
+                                <td colSpan={6} className="px-4 py-2.5 text-right font-semibold text-gray-500">Sub Total:</td>
+                                <td className="px-4 py-2.5 text-right font-bold text-gray-850">₹{subTotal.toFixed(2)}</td>
+                                <td></td>
+                              </tr>
+                              <tr>
+                                <td colSpan={6} className="px-4 py-2.5 text-right font-semibold text-red-550">Discount Total:</td>
+                                <td className="px-4 py-2.5 text-right font-bold text-red-650">-₹{totalDiscounts.toFixed(2)}</td>
+                                <td></td>
+                              </tr>
+                              <tr>
+                                <td colSpan={6} className="px-4 py-2.5 text-right font-semibold text-gray-500">Tax Total:</td>
+                                <td className="px-4 py-2.5 text-right font-bold text-gray-850">+₹{totalTaxes.toFixed(2)}</td>
+                                <td></td>
+                              </tr>
+                              <tr className="bg-emerald-50/20">
+                                <td colSpan={6} className="px-4 py-3 text-right font-extrabold text-emerald-900">Grand Total:</td>
+                                <td className="px-4 py-3 text-right">
+                                  <span className="inline-block px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-black text-xs shadow-2xs">
+                                    ₹{grandTotal.toFixed(2)}
+                                  </span>
+                                </td>
+                                <td></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {draftProductId && (
-                    <div className="bg-gray-55/40 border border-gray-150 rounded-xl p-3 flex flex-wrap gap-x-6 gap-y-1.5 text-xs text-gray-500 font-semibold animate-in fade-in duration-200">
-                      <span>Pack Size: <b className="text-gray-700">{draftVariant?.parameter || draftVariant?.unit || "N/A"}</b></span>
-                      <span>Available Stock: <b className="text-gray-700">{availableQty} {draftUnit}</b></span>
-                    </div>
-                  )}
+                  {/* Collapsible Additional Details accordion */}
+                  <div className="bg-white border border-gray-150 rounded-2xl shadow-sm overflow-hidden transition-all">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdditionalDetails(!showAdditionalDetails)}
+                      className="w-full px-6 py-4 flex items-center justify-between font-bold text-gray-800 text-xs uppercase tracking-wider hover:bg-gray-50/50 transition-colors border-0 focus:outline-none"
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-emerald-600" />
+                        Additional Details (Description, Terms, Remarks)
+                      </span>
+                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showAdditionalDetails ? 'rotate-180' : ''}`} />
+                    </button>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Quantity *</label>
-                      <div className="flex border border-emerald-600 rounded-xl overflow-hidden bg-white h-[42px] w-full focus-within:ring-1 focus-within:ring-emerald-600 shadow-2xs">
-                        <button
-                          type="button"
-                          disabled={!draftProductId}
-                          onClick={() => setDraftQty(prev => Math.max(1, prev - 1))}
-                          className="px-4 bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-700 font-extrabold h-full border-r border-gray-200 disabled:opacity-50 transition-colors flex items-center justify-center"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <input
-                          type="number"
-                          min="1"
-                          disabled={!draftProductId}
-                          value={draftQty}
-                          onChange={(e) => setDraftQty(Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-full text-center text-xs font-bold focus:ring-0 focus:outline-none border-0 p-0 text-gray-850 bg-transparent h-full"
-                          style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
-                        />
-                        <button
-                          type="button"
-                          disabled={!draftProductId}
-                          onClick={() => setDraftQty(prev => prev + 1)}
-                          className="px-4 bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-700 font-extrabold h-full border-l border-gray-200 disabled:opacity-50 transition-colors flex items-center justify-center"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <span className="text-[10px] text-gray-450 mt-1.5 block">Available: {availableQty} {draftUnit}</span>
-                    </div>
+                    {showAdditionalDetails && (
+                      <div className="px-6 pb-6 pt-2 grid grid-cols-1 md:grid-cols-3 gap-5 border-t border-gray-100 animate-in fade-in duration-200">
+                        {/* Description */}
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">Sales Bill Description</label>
+                          <textarea
+                            rows={3}
+                            maxLength={200}
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="e.g. Standard seasonal sale, seeds and fertilizers..."
+                            className="w-full border border-gray-200 rounded-xl p-3 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-semibold text-gray-800"
+                          />
+                          <div className="text-right text-[10px] text-gray-400 font-bold">
+                            {description.length} / 200
+                          </div>
+                        </div>
 
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Unit *</label>
-                      <div className="relative">
-                        <select
-                          disabled={!draftProductId}
-                          value={draftVariantIndex}
-                          onChange={(e) => setDraftVariantIndex(parseInt(e.target.value) || 0)}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 bg-white h-[42px] disabled:bg-gray-50 disabled:text-gray-400 font-bold text-gray-800 appearance-none pr-8 transition-all cursor-pointer shadow-2xs"
-                        >
-                          {draftProd?.products?.map((v, vIdx) => (
-                            <option key={vIdx} value={vIdx}>
-                              {v.unit} {v.parameter ? `(${v.parameter})` : ""}
-                            </option>
-                          ))}
-                          {!draftProd && <option value="0">pcs</option>}
-                        </select>
-                        <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-gray-400">
-                          <ChevronDown className="w-4 h-4" />
+                        {/* Terms */}
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">Terms & Conditions</label>
+                          <textarea
+                            rows={3}
+                            maxLength={200}
+                            value={termsAndConditions}
+                            onChange={(e) => setTermsAndConditions(e.target.value)}
+                            placeholder="e.g. Goods once sold will not be taken back."
+                            className="w-full border border-gray-200 rounded-xl p-3 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-semibold text-gray-800"
+                          />
+                          <div className="text-right text-[10px] text-gray-400 font-bold">
+                            {termsAndConditions.length} / 200
+                          </div>
+                        </div>
+
+                        {/* Remarks */}
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">Sales Bill Notes / Remarks</label>
+                          <textarea
+                            rows={3}
+                            maxLength={200}
+                            value={remarks}
+                            onChange={(e) => setRemarks(e.target.value)}
+                            placeholder="e.g. Paid via digital UPI, credit details logged to ledger..."
+                            className="w-full border border-gray-200 rounded-xl p-3 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-semibold text-gray-800"
+                          />
+                          <div className="text-right text-[10px] text-gray-400 font-bold">
+                            {remarks.length} / 200
+                          </div>
                         </div>
                       </div>
-                      <span className="text-[10px] text-gray-450 mt-1.5 block">Unit: {draftUnit}</span>
-                    </div>
+                    )}
                   </div>
                 </div>
+              )}
 
-                {/* SECTION 2: PRICING & DISCOUNT */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                    <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center font-extrabold text-[10px]">
-                      2
-                    </div>
-                    <span className="font-bold text-gray-800 text-xs uppercase tracking-wider">Pricing & Discount</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Price Per Unit (₹) *</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        disabled={!draftProductId}
-                        value={draftPrice}
-                        onChange={(e) => setDraftPrice(e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 disabled:bg-gray-50 disabled:text-gray-400 h-[42px] font-bold text-gray-800 text-center shadow-2xs"
-                      />
-                      <span className="text-[10px] text-gray-400 mt-1.5 block">Price for 1 unit</span>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Discount Type *</label>
-                      <div className="relative">
-                        <select
-                          disabled={!draftProductId}
-                          value={draftDiscountType}
-                          onChange={(e) => {
-                            const newType = e.target.value;
-                            setDraftDiscountType(newType);
-                            if (newType === "Percentage") {
-                              setDraftDiscountPercent("");
-                              setDraftDiscountAmount("");
-                            } else {
-                              setDraftDiscountAmount("");
-                              setDraftDiscountPercent("");
-                            }
-                          }}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 bg-white h-[42px] disabled:bg-gray-50 disabled:text-gray-400 font-bold text-gray-800 appearance-none pr-8 transition-all cursor-pointer shadow-2xs"
-                        >
-                          <option value="Percentage">Percentage (%)</option>
-                          <option value="Fixed Amount">Flat (₹)</option>
-                        </select>
-                        <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-gray-400">
-                          <ChevronDown className="w-4 h-4" />
-                        </div>
+              {/* STEP 3 CONTENT: REVIEW & SUBMIT */}
+              {activeStep === 3 && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-200">
+                  
+                  {/* Invoice Summary Card */}
+                  <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-5">
+                    <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                      <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600 border border-emerald-100">
+                        <Info className="w-5 h-5" />
                       </div>
-                      <span className="text-[10px] text-gray-455 mt-1.5 block">Select discount type</span>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">
-                        {draftDiscountType === "Percentage" ? "Discount Percent (%) *" : "Discount Value (₹) *"}
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="0"
-                          max={draftDiscountType === "Percentage" ? "100" : undefined}
-                          step="any"
-                          disabled={!draftProductId}
-                          value={draftDiscountType === "Percentage" ? draftDiscountPercent : draftDiscountAmount}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (draftDiscountType === "Percentage") {
-                              setDraftDiscountPercent(val === "" ? "" : parseFloat(val) || 0);
-                            } else {
-                              setDraftDiscountAmount(val === "" ? "" : parseFloat(val) || 0);
-                            }
-                          }}
-                          placeholder="0"
-                          className="w-full border border-gray-200 rounded-xl pl-3 pr-7 py-2 text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 disabled:bg-gray-50 disabled:text-gray-400 h-[42px] font-bold text-gray-800 text-center shadow-2xs"
-                        />
-                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-450 font-bold text-xs">
-                          {draftDiscountType === "Percentage" ? "%" : "₹"}
+                      <div className="flex flex-col">
+                        <h3 className="font-extrabold text-gray-800 text-sm">Invoice Summary Details</h3>
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                          Review customer and billing metadata
                         </span>
                       </div>
-                      <span className="text-[10px] text-gray-455 mt-1.5 block">
-                        {draftDiscountType === "Percentage" ? "Discount percentage" : "Discount value"}
-                      </span>
                     </div>
 
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Discount Amount (₹)</label>
-                      <input
-                        type="text"
-                        readOnly
-                        disabled
-                        value={draftProductId ? (computedDraftDetails.discountAmount || "0.00") : "0.00"}
-                        className="w-full border border-dashed border-gray-200 bg-slate-50 text-gray-400 rounded-xl px-3 py-2 text-xs h-[42px] font-bold text-center shadow-2xs cursor-not-allowed"
-                      />
-                      <span className="text-[10px] text-slate-500 mt-1.5 block">Auto calculated</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* SECTION 3: TAX & CALCULATIONS */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                    <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center font-extrabold text-[10px]">
-                      3
-                    </div>
-                    <span className="font-bold text-gray-800 text-xs uppercase tracking-wider">Tax & Calculations</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-5 items-end">
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Tax Type *</label>
-                      <div className="relative">
-                        <select
-                          disabled={!draftProductId}
-                          value={draftTaxType}
-                          onChange={(e) => setDraftTaxType(e.target.value)}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 bg-white h-[42px] disabled:bg-gray-50 disabled:text-gray-400 font-bold text-gray-800 appearance-none pr-8 transition-all cursor-pointer shadow-2xs"
-                        >
-                          <option value="Without Tax">Without Tax</option>
-                          <option value="With Tax">With Tax</option>
-                        </select>
-                        <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-gray-400">
-                          <ChevronDown className="w-4 h-4" />
-                        </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-xs leading-relaxed font-semibold">
+                      <div>
+                        <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Customer Type</span>
+                        <span className="text-xs font-extrabold text-gray-800 uppercase tracking-wide">
+                          {customerType === "registered" ? "Registered Party" : "Walk-in Customer"}
+                        </span>
                       </div>
-                      <span className="text-[10px] text-gray-455 mt-1.5 block">Select tax type</span>
-                    </div>
 
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">GST % *</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          disabled={!draftProductId}
-                          value={draftTaxPercent}
-                          onChange={(e) => setDraftTaxPercent(e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
-                          placeholder="0"
-                          className="w-full border border-gray-200 rounded-xl pl-3 pr-7 py-2 text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 disabled:bg-gray-50 disabled:text-gray-400 h-[42px] font-bold text-gray-800 text-center shadow-2xs"
-                        />
-                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-455 font-bold text-xs">%</span>
-                      </div>
-                      <span className="text-[10px] text-gray-455 mt-1.5 block">GST percentage</span>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Rate (₹)</label>
-                      <input
-                        type="text"
-                        readOnly
-                        disabled
-                        value={draftProductId ? (computedDraftDetails.rate || "0.00") : "0.00"}
-                        className="w-full border border-dashed border-gray-200 bg-slate-50 text-gray-400 rounded-xl px-3 py-2 text-xs h-[42px] font-bold text-center shadow-2xs cursor-not-allowed"
-                      />
-                      <span className="text-[10px] text-slate-500 mt-1.5 block">Calculated rate</span>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Tax Amount (₹)</label>
-                      <input
-                        type="text"
-                        readOnly
-                        disabled
-                        value={draftProductId ? (computedDraftDetails.taxAmount || "0.00") : "0.00"}
-                        className="w-full border border-dashed border-gray-200 bg-slate-50 text-gray-400 rounded-xl px-3 py-2 text-xs h-[42px] font-bold text-center shadow-2xs cursor-not-allowed"
-                      />
-                      <span className="text-[10px] text-slate-500 mt-1.5 block">Auto calculated</span>
-                    </div>
-
-                    {/* Estimated Total Card */}
-                    <div className="bg-emerald-50/20 border border-emerald-200 rounded-xl p-3 flex flex-col justify-between min-h-[42px] h-[62px]">
-                      <span className="block text-[9px] font-extrabold text-emerald-800 uppercase tracking-wider text-center">Total Amount (₹)</span>
-                      <span className="block text-emerald-700 font-extrabold text-lg text-center leading-none mt-0.5">
-                        ₹{draftProductId ? (computedDraftDetails.amount || "0.00") : "0.00"}
-                      </span>
-                      <span className="block text-[9px] text-emerald-600/85 font-semibold text-center mt-0.5">Final amount</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Form Buttons */}
-                <div className="flex justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDraftProductId("");
-                      setDraftVariantIndex(0);
-                      setDraftQty(1);
-                      setDraftUnit("pcs");
-                      setDraftPrice("");
-                      setDraftTaxType("Without Tax");
-                      setDraftDiscountType("Percentage");
-                      setDraftDiscountPercent("");
-                      setDraftDiscountAmount("");
-                      setDraftTaxPercent("");
-                    }}
-                    className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 bg-white"
-                  >
-                    <RefreshCw className="w-4 h-4 text-gray-500" />
-                    Clear
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleAddDraftItem}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Item
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Added Items List Table */}
-            <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-5">
-              <div className="flex items-center justify-between pb-3.5 border-b border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600 border border-emerald-100">
-                    <ShoppingCart className="w-5 h-5" />
-                  </div>
-                  <div className="flex flex-col">
-                    <h3 className="font-extrabold text-gray-800 text-sm">Added Items</h3>
-                  </div>
-                </div>
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                  {checkoutItems.filter((i) => i.productId).length}
-                </span>
-              </div>
-
-              {checkoutItems.filter((i) => i.productId).length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 border border-dashed border-gray-200 rounded-2xl bg-gray-55/10">
-                  <FileSpreadsheet className="w-12 h-12 text-gray-300 mb-3" />
-                  <p className="font-bold text-gray-700 text-sm">No items added yet</p>
-                  <p className="text-xs text-gray-450 mt-1">Search and add products above to get started.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto border border-gray-150 rounded-2xl shadow-2xs">
-                  <table className="w-full border-collapse text-left bg-white text-xs">
-                    <thead>
-                      <tr className="bg-gray-55/40 border-b border-gray-150 text-[10px] font-extrabold text-gray-455 uppercase tracking-wider">
-                        <th className="px-4 py-3">Item</th>
-                        <th className="px-4 py-3 text-center">Qty</th>
-                        <th className="px-4 py-3 text-center">Unit</th>
-                        <th className="px-4 py-3 text-right">Price / Unit</th>
-                        <th className="px-4 py-3 text-right">Rate</th>
-                        <th className="px-4 py-3 text-right">Discount %</th>
-                        <th className="px-4 py-3 text-right">Discount Amt.</th>
-                        <th className="px-4 py-3 text-center">Tax %</th>
-                        <th className="px-4 py-3 text-right">Tax Amt.</th>
-                        <th className="px-4 py-3 text-right">Amount</th>
-                        <th className="px-4 py-3 text-center">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 font-semibold">
-                      {checkoutItems.filter((i) => i.productId).map((item, idx) => {
-                        const prod = products.find((p) => p._id === item.productId);
-                        const variant = prod?.products?.[item.variantIndex];
-                        return (
-                          <tr key={idx} className="hover:bg-gray-55/30 transition-colors">
-                            <td className="px-4 py-3">
-                              <p className="font-extrabold text-gray-900">{prod?.productName}</p>
-                              <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
-                                {variant?.itemCode ? `${variant.itemCode} • ` : ""}
-                                {variant?.parameter ? `${variant.parameter} (${variant.unit})` : variant?.unit || "pcs"}
-                              </p>
-                            </td>
-                            <td className="px-4 py-3 text-center text-gray-800 font-bold">{item.quantity}</td>
-                            <td className="px-4 py-3 text-center text-gray-500 font-semibold">{item.unit || variant?.unit}</td>
-                            <td className="px-4 py-3 text-right text-gray-700">₹{(parseFloat(item.pricePerUnit) || 0).toFixed(2)}</td>
-                            <td className="px-4 py-3 text-right text-gray-700">₹{(parseFloat(item.rate) || parseFloat(item.pricePerUnit) || 0).toFixed(2)}</td>
-                            <td className="px-4 py-3 text-right text-gray-600">
-                              {item.discountPercent > 0 ? `${item.discountPercent}%` : "—"}
-                            </td>
-                            <td className="px-4 py-3 text-right text-red-600">
-                              {item.discountAmount > 0 ? `-₹${(parseFloat(item.discountAmount) || 0).toFixed(2)}` : "—"}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <p className="text-gray-800 font-bold">{item.taxPercent}%</p>
-                              <p className="text-[9px] text-gray-450 font-semibold">{item.taxType || "Without Tax"}</p>
-                            </td>
-                            <td className="px-4 py-3 text-right text-gray-700">₹{(parseFloat(item.taxAmount) || 0).toFixed(2)}</td>
-                            <td className="px-4 py-3 text-right font-extrabold text-emerald-700">₹{(parseFloat(item.amount) || 0).toFixed(2)}</td>
-                            <td className="px-4 py-3 text-center">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditItem(idx)}
-                                  className="text-gray-400 hover:text-emerald-600 transition p-1.5 hover:bg-gray-100 rounded-lg"
-                                  title="Edit row item"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setCheckoutItems((prev) => prev.filter((_, i) => i !== idx));
-                                  }}
-                                  className="text-gray-400 hover:text-red-500 transition p-1.5 hover:bg-gray-100 rounded-lg"
-                                  title="Delete row item"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot className="bg-gray-50/50 border-t border-gray-150 text-xs font-bold text-gray-700">
-                      <tr>
-                        <td colSpan={9} className="px-4 py-2.5 text-right font-semibold text-gray-500">Sub Total:</td>
-                        <td className="px-4 py-2.5 text-right font-bold text-gray-800">₹{subTotal.toFixed(2)}</td>
-                        <td></td>
-                      </tr>
-                      <tr>
-                        <td colSpan={9} className="px-4 py-2.5 text-right font-semibold text-red-500">Discount Total:</td>
-                        <td className="px-4 py-2.5 text-right font-bold text-red-650">-₹{totalDiscounts.toFixed(2)}</td>
-                        <td></td>
-                      </tr>
-                      <tr>
-                        <td colSpan={9} className="px-4 py-2.5 text-right font-semibold text-gray-500">Tax Total:</td>
-                        <td className="px-4 py-2.5 text-right font-bold text-gray-800">+₹{totalTaxes.toFixed(2)}</td>
-                        <td></td>
-                      </tr>
-                      <tr className="bg-emerald-50/30">
-                        <td colSpan={9} className="px-4 py-3.5 text-right font-extrabold text-emerald-900">Grand Total:</td>
-                        <td className="px-4 py-3.5 text-right">
-                          <span className="inline-block px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-black text-sm shadow-xs">
-                            ₹{grandTotal.toFixed(2)}
+                      {customerType === "registered" ? (
+                        <div>
+                          <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Selected Party</span>
+                          <span className="text-xs font-extrabold text-gray-805">
+                            {parties.find((p) => p._id === selectedPartyId)?.name || "—"}
                           </span>
-                        </td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  </table>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Customer Name</span>
+                            <span className="text-xs font-extrabold text-gray-805">{buyerName}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Mobile Number</span>
+                            <span className="text-xs font-extrabold text-gray-805">{buyerPhone || "—"}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">GSTIN</span>
+                            <span className="text-xs font-extrabold text-gray-805 uppercase">{buyerGstin || "—"}</span>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Address</span>
+                            <span className="text-xs font-semibold text-gray-700">{buyerAddress || "—"}</span>
+                          </div>
+                        </>
+                      )}
+
+                      <div>
+                        <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Bill Number</span>
+                        <span className="text-xs font-extrabold text-gray-850">{invoiceNo || "Draft (Auto-generated)"}</span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Bill Date</span>
+                        <span className="text-xs font-extrabold text-gray-850">{billDate}</span>
+                      </div>
+
+                      {billingType === "Credit" && (
+                        <div>
+                          <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Due Date</span>
+                          <span className="text-xs font-extrabold text-gray-850">{dueDate}</span>
+                        </div>
+                      )}
+
+                      <div>
+                        <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Sale Type</span>
+                        <span className="text-xs font-extrabold text-gray-850 uppercase tracking-wider">
+                          {saleType}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Billing Type</span>
+                        <span className="text-xs font-extrabold text-emerald-750">
+                          {billingType === "Cash" ? "Money Received" : "Udhar (Credit)"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">State of Supply</span>
+                        <span className="text-xs font-extrabold text-gray-850">{stateOfSupply}</span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Supply Type</span>
+                        <span className="text-xs font-extrabold text-gray-850">{supplyType}</span>
+                      </div>
+
+                      {(billingType === "Cash" || (billingType === "Credit" && receivedAmount > 0)) && (
+                        <>
+                          <div>
+                            <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Payment Method</span>
+                            <span className="text-xs font-extrabold text-gray-850">{paymentType}</span>
+                          </div>
+                          {referenceNo && (
+                            <div>
+                              <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Reference No</span>
+                              <span className="text-xs font-extrabold text-gray-850">{referenceNo}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Read-Only Added Items Table Card */}
+                  <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-4">
+                    <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                      <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600 border border-emerald-100">
+                        <FileSpreadsheet className="w-5 h-5" />
+                      </div>
+                      <h3 className="font-extrabold text-gray-800 text-sm">Review Product Line Items</h3>
+                    </div>
+
+                    <div className="overflow-x-auto border border-gray-150 rounded-2xl">
+                      <table className="w-full border-collapse text-left bg-white text-xs">
+                        <thead>
+                          <tr className="bg-gray-55/40 border-b border-gray-150 text-[10px] font-extrabold text-gray-455 uppercase tracking-wider">
+                            <th className="px-4 py-3">Item</th>
+                            <th className="px-4 py-3 text-center">Qty</th>
+                            <th className="px-4 py-3 text-center">Unit</th>
+                            <th className="px-4 py-3 text-right">Price / Unit</th>
+                            <th className="px-4 py-3 text-right">Discount</th>
+                            <th className="px-4 py-3 text-center">GST %</th>
+                            <th className="px-4 py-3 text-right">Tax Amt.</th>
+                            <th className="px-4 py-3 text-right">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 font-semibold">
+                          {checkoutItems.filter((i) => i.productId).map((item, idx) => {
+                            const prod = products.find((p) => p._id === item.productId);
+                            const variant = prod?.products?.[item.variantIndex];
+                            return (
+                              <tr key={idx} className="hover:bg-gray-55/20 transition-colors">
+                                <td className="px-4 py-3">
+                                  <p className="font-extrabold text-gray-900">{prod?.productName}</p>
+                                  <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
+                                    {variant?.parameter ? `${variant.parameter} (${variant.unit})` : variant?.unit || "pcs"}
+                                  </p>
+                                </td>
+                                <td className="px-4 py-3 text-center text-gray-800 font-bold">{item.quantity}</td>
+                                <td className="px-4 py-3 text-center text-gray-500 font-semibold">{item.unit || variant?.unit}</td>
+                                <td className="px-4 py-3 text-right text-gray-700">₹{(parseFloat(item.pricePerUnit) || 0).toFixed(2)}</td>
+                                <td className="px-4 py-3 text-right text-red-650">
+                                  {item.discountAmount > 0 ? `-₹${(parseFloat(item.discountAmount) || 0).toFixed(2)}` : "—"}
+                                </td>
+                                <td className="px-4 py-3 text-center font-bold">{item.taxPercent}%</td>
+                                <td className="px-4 py-3 text-right text-gray-700">₹{(parseFloat(item.taxAmount) || 0).toFixed(2)}</td>
+                                <td className="px-4 py-3 text-right font-extrabold text-emerald-700">₹{(parseFloat(item.amount) || 0).toFixed(2)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {(description.trim() || termsAndConditions.trim() || remarks.trim()) && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-4 border-t border-gray-100">
+                        {description.trim() && (
+                          <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl text-xs font-semibold text-gray-700">
+                            <span className="text-[9px] uppercase tracking-wider block font-bold text-gray-400 mb-1">Description</span>
+                            <p className="whitespace-pre-line leading-relaxed">{description}</p>
+                          </div>
+                        )}
+                        {termsAndConditions.trim() && (
+                          <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl text-xs font-semibold text-gray-700">
+                            <span className="text-[9px] uppercase tracking-wider block font-bold text-gray-400 mb-1">Terms & Conditions</span>
+                            <p className="whitespace-pre-line leading-relaxed">{termsAndConditions}</p>
+                          </div>
+                        )}
+                        {remarks.trim() && (
+                          <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl text-xs font-semibold text-gray-700">
+                            <span className="text-[9px] uppercase tracking-wider block font-bold text-gray-400 mb-1">Remarks / Notes</span>
+                            <p className="whitespace-pre-line leading-relaxed">{remarks}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-
-            {/* Three-Column Description / Terms / Notes Textareas */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div className="bg-white border border-gray-150 rounded-2xl p-5 shadow-sm space-y-2">
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Sales Bill Description</label>
-                <textarea
-                  rows={3}
-                  maxLength={200}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. Standard seasonal sale, seeds and fertilizers..."
-                  className="w-full border border-gray-200 rounded-xl p-3 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-semibold text-gray-800"
-                />
-                <div className="text-right text-[10px] text-gray-400 font-bold">
-                  {description.length} / 200
-                </div>
-              </div>
-
-              <div className="bg-white border border-gray-150 rounded-2xl p-5 shadow-sm space-y-2">
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Terms & Conditions</label>
-                <textarea
-                  rows={3}
-                  maxLength={200}
-                  value={termsAndConditions}
-                  onChange={(e) => setTermsAndConditions(e.target.value)}
-                  placeholder="e.g. Goods once sold will not be taken back."
-                  className="w-full border border-gray-200 rounded-xl p-3 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-semibold text-gray-800"
-                />
-                <div className="text-right text-[10px] text-gray-400 font-bold">
-                  {termsAndConditions.length} / 200
-                </div>
-              </div>
-
-              <div className="bg-white border border-gray-150 rounded-2xl p-5 shadow-sm space-y-2">
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Sales Bill Notes / Remarks</label>
-                <textarea
-                  rows={3}
-                  maxLength={200}
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  placeholder="e.g. Paid via digital UPI, credit details logged to ledger..."
-                  className="w-full border border-gray-200 rounded-xl p-3 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-semibold text-gray-800"
-                />
-                <div className="text-right text-[10px] text-gray-400 font-bold">
-                  {remarks.length} / 200
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column (spans 1 column) */}
-          <div className="lg:col-span-1">
-            <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-5 sticky top-6">
-              <div className="flex items-center gap-2 pb-3.5 border-b border-gray-100">
-                <div className="bg-emerald-50 p-1.5 rounded-lg text-emerald-600 border border-emerald-100">
-                  <FileText className="w-4 h-4" />
-                </div>
-                <h3 className="font-extrabold text-gray-800 text-sm">Sales Bill Summary</h3>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex justify-between text-xs font-semibold text-gray-500">
-                  <span>Subtotal (Base Bill)</span>
-                  <span className="text-gray-800 font-bold">₹{subTotal.toLocaleString("en-IN")}</span>
-                </div>
-                
-                <div className="flex justify-between text-xs font-semibold text-red-650">
-                  <span>Discounts Applied</span>
-                  <span className="font-bold">-₹{totalDiscounts.toLocaleString("en-IN")}</span>
-                </div>
-                
-                <div className="flex justify-between text-xs font-semibold text-gray-500">
-                  <span>Taxes & GST</span>
-                  <span className="text-gray-800 font-bold">+₹{totalTaxes.toLocaleString("en-IN")}</span>
+            {/* Right Column (spans 1 column) - visible on Step 2 and Step 3 */}
+            <div className="lg:col-span-1">
+              <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-5 sticky top-6">
+                <div className="flex items-center gap-2 pb-3.5 border-b border-gray-100">
+                  <div className="bg-emerald-50 p-1.5 rounded-lg text-emerald-600 border border-emerald-100">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-extrabold text-gray-800 text-sm">Sales Bill Summary</h3>
                 </div>
 
-                {/* Round Off Checkbox and Value */}
-                <div className="flex items-center justify-between border-t border-gray-100 pt-4">
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-gray-550 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={roundOff}
-                      onChange={(e) => setRoundOff(e.target.checked)}
-                      className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
-                    />
-                    <span>Round Off</span>
-                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help" title="Round bill amount to the nearest rupee" />
-                  </label>
-                  <span className="text-xs font-bold text-gray-800">
-                    {roundOffAmount >= 0 ? "+" : ""}₹{roundOffAmount.toFixed(2)}
-                  </span>
-                </div>
+                <div className="space-y-4">
+                  <div className="flex justify-between text-xs font-semibold text-gray-500">
+                    <span>Total Items</span>
+                    <span className="text-gray-800 font-bold">{checkoutItems.filter((i) => i.productId).length} items</span>
+                  </div>
 
-                {/* Grand Total box */}
-                <div className="bg-emerald-50/40 rounded-xl p-4 flex items-center justify-between border border-emerald-100">
-                  <span className="text-xs font-black text-emerald-900 uppercase tracking-wider">Grand Total</span>
-                  <span className="text-xl font-black text-emerald-950">₹{finalTotal.toLocaleString("en-IN")}</span>
-                </div>
+                  <div className="flex justify-between text-xs font-semibold text-gray-500">
+                    <span>Subtotal (Base Bill)</span>
+                    <span className="text-gray-800 font-bold">₹{subTotal.toLocaleString("en-IN")}</span>
+                  </div>
+                  
+                  <div className="flex justify-between text-xs font-semibold text-red-655">
+                    <span>Discounts Applied</span>
+                    <span className="font-bold text-red-650">-₹{totalDiscounts.toLocaleString("en-IN")}</span>
+                  </div>
+                  
+                  <div className="flex justify-between text-xs font-semibold text-gray-500">
+                    <span>Taxes & GST</span>
+                    <span className="text-gray-800 font-bold">+₹{totalTaxes.toLocaleString("en-IN")}</span>
+                  </div>
 
+                  {/* Round Off Checkbox and Value */}
+                  <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-550 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={roundOff}
+                        onChange={(e) => setRoundOff(e.target.checked)}
+                        className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+                      />
+                      <span>Round Off</span>
+                      <Info className="w-3.5 h-3.5 text-gray-400 cursor-help" title="Round bill amount to the nearest rupee" />
+                    </label>
+                    <span className="text-xs font-bold text-gray-850">
+                      {roundOffAmount >= 0 ? "+" : ""}₹{roundOffAmount.toFixed(2)}
+                    </span>
+                  </div>
 
-                {/* Unpaid Amount */}
-                <div className="flex justify-between border-t border-gray-100 pt-4 font-bold text-sm text-gray-800">
-                  <span>Unpaid Amount</span>
-                  <span className={`font-black ${unpaidAmount > 0 ? "text-amber-600" : "text-emerald-700"}`}>
-                    ₹{unpaidAmount.toLocaleString("en-IN")}
-                  </span>
+                  {/* Grand Total box */}
+                  <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-4 flex items-center justify-between">
+                    <span className="text-xs font-black text-emerald-900 uppercase tracking-wider">Grand Total</span>
+                    <span className="text-xl font-black text-emerald-950">₹{finalTotal.toLocaleString("en-IN")}</span>
+                  </div>
+
+                  {/* Unpaid Amount */}
+                  <div className="flex justify-between border-t border-gray-100 pt-4 font-bold text-sm text-gray-805">
+                    <span>Unpaid Amount</span>
+                    <span className={`font-black ${unpaidAmount > 0 ? "text-amber-600" : "text-emerald-700"}`}>
+                      ₹{unpaidAmount.toLocaleString("en-IN")}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Form Actions Footer */}
-        <div className="flex justify-end gap-3 p-4 bg-white border border-gray-150 rounded-2xl shadow-sm items-center">
-          <button
-            type="button"
-            onClick={() => navigate("/sell")}
-            disabled={sellLoading}
-            className="px-5 py-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-650 hover:bg-gray-50 bg-white disabled:opacity-50 transition-all"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={sellLoading}
-            className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
-          >
-            {sellLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {editRecord
-              ? (sellLoading ? "Saving..." : "Save Changes")
-              : (sellLoading ? "Creating..." : `Create Sales Bill`)}
-          </button>
+        <div className="sticky bottom-4 z-[90] flex justify-between items-center p-4 bg-white border border-gray-150 rounded-2xl shadow-lg mt-6">
+          <div>
+            {(activeStep === 2 || activeStep === 3) ? (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Grand Total:</span>
+                <span className="text-base font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-100/50">
+                  ₹{finalTotal.toLocaleString("en-IN")}
+                </span>
+              </div>
+            ) : (
+              <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                Step 1 of 3: Customer & Invoice Details
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 items-center">
+            {activeStep === 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate("/sell")}
+                  disabled={sellLoading}
+                  className="px-5 py-2.5 border border-gray-250 rounded-xl text-xs font-bold text-gray-650 hover:bg-gray-50 bg-white disabled:opacity-50 transition-all active:scale-95 shadow-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextStep}
+                  className="flex items-center gap-1.5 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all active:scale-95"
+                >
+                  Next Step →
+                </button>
+              </>
+            )}
+
+            {activeStep === 2 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handlePrevStep}
+                  disabled={sellLoading}
+                  className="px-5 py-2.5 border border-gray-250 rounded-xl text-xs font-bold text-gray-650 hover:bg-gray-50 bg-white disabled:opacity-50 transition-all active:scale-95 shadow-xs"
+                >
+                  ← Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextStep}
+                  className="flex items-center gap-1.5 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all active:scale-95"
+                >
+                  Next Step →
+                </button>
+              </>
+            )}
+
+            {activeStep === 3 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handlePrevStep}
+                  disabled={sellLoading}
+                  className="px-5 py-2.5 border border-gray-250 rounded-xl text-xs font-bold text-gray-650 hover:bg-gray-50 bg-white disabled:opacity-50 transition-all active:scale-95 shadow-xs"
+                >
+                  ← Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={sellLoading}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-xl text-xs font-bold shadow-sm transition-all active:scale-95"
+                >
+                  {sellLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {editRecord
+                    ? (sellLoading ? "Saving..." : "Save Changes")
+                    : (sellLoading ? "Creating..." : `Create Sales Bill`)}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </form>
 
@@ -1908,6 +2460,14 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
     const trimmedGstin = (form.gstin || "").replace(/\s+/g, "").toUpperCase();
     if (trimmedGstin.length !== 15) {
       toast.error("Please enter a valid 15-character GSTIN");
+      return;
+    }
+
+    const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+    if (!gstinRegex.test(trimmedGstin)) {
+      setGstinError("Invalid GSTIN format. The 14th character must be 'Z' (e.g. 29AAACQ3770E1Z5).");
+      setVerifiedGstinDetails(null);
+      setHasAttemptedGstin(true);
       return;
     }
 
@@ -2783,7 +3343,7 @@ function QuickAddProductModal({ onClose, onSuccess }) {
   );
 }
 
-function SearchableProductSelect({ value, onChange, products, stockSummary = [], placeholder = "Search product by name or category...", disabled = false, onCreateProduct, hideLabel = false }) {
+function SearchableProductSelect({ value, onChange, products, stockSummary = [], placeholder = "Search product by name or category...", disabled = false, onCreateProduct, hideLabel = false, inputRef }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [dropdownOpen, setProductDropdownOpen] = useState(false);
   const containerRef = useRef(null);
@@ -2824,14 +3384,15 @@ function SearchableProductSelect({ value, onChange, products, stockSummary = [],
     }, 0);
   };
 
-  // Filter products based on search query
+  // Filter products based on search query (support name, brand, category, SKU, itemCode, barcode)
   const filteredProducts = useMemo(() => {
     if (!searchQuery.trim()) return products;
     const q = searchQuery.toLowerCase();
     return products.filter(p =>
       p.productName?.toLowerCase().includes(q) ||
       (p.brand && p.brand.toLowerCase().includes(q)) ||
-      (p.productCategory && p.productCategory.toLowerCase().includes(q))
+      (p.productCategory && p.productCategory.toLowerCase().includes(q)) ||
+      (p.products && p.products.some(v => v.itemCode && v.itemCode.toLowerCase().includes(q)))
     );
   }, [products, searchQuery]);
 
@@ -2840,6 +3401,7 @@ function SearchableProductSelect({ value, onChange, products, stockSummary = [],
       {!hideLabel && <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Product *</label>}
       <div className="relative">
         <input
+          ref={inputRef}
           type="text"
           disabled={disabled}
           value={searchQuery}
