@@ -32,6 +32,7 @@ const Advertisement = lazy(() => import('./pages/Advertisement'));
 const CreateTenant = lazy(() => import('./pages/CreateTenant'));
 const TierFeatures = lazy(() => import('./pages/TierFeatures'));
 const Party = lazy(() => import('./pages/Party'));
+const PartyForm = lazy(() => import('./pages/PartyForm'));
 
 
 const PageLoader = () => (
@@ -131,6 +132,8 @@ function App() {
               <Route path="create-tenant" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/create-tenant']}><Suspense fallback={<PageLoader />}><CreateTenant /></Suspense></ProtectedRoute>} />
               <Route path="tier-features" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/tier-features']}><Suspense fallback={<PageLoader />}><TierFeatures /></Suspense></ProtectedRoute>} />
               <Route path="party" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/party']}><Suspense fallback={<PageLoader />}><Party /></Suspense></ProtectedRoute>} />
+              <Route path="party/new" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/party']}><Suspense fallback={<PageLoader />}><PartyForm /></Suspense></ProtectedRoute>} />
+              <Route path="party/edit/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/party']}><Suspense fallback={<PageLoader />}><PartyForm /></Suspense></ProtectedRoute>} />
             </Route>
           </Routes>
         </BrowserRouter>
