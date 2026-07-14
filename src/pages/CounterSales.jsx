@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   fetchSales,
@@ -137,7 +137,13 @@ export default function CounterSales() {
   const dispatch = useDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const activeTab = searchParams.get("tab") || "sales";
+  const { pathname } = useLocation();
+  const getTabFromPath = (path) => {
+    if (path.includes("/sell/receipts")) return "payments";
+    if (path.includes("/sell/returns")) return "returns";
+    return "sales";
+  };
+  const activeTab = getTabFromPath(pathname);
 
   const { isReadOnly } = usePermissions();
 
@@ -414,7 +420,11 @@ export default function CounterSales() {
           return (
             <button
               key={t.key}
-              onClick={() => setSearchParams({ tab: t.key })}
+              onClick={() => {
+                if (t.key === "sales") navigate("/sell/invoices");
+                else if (t.key === "payments") navigate("/sell/receipts");
+                else if (t.key === "returns") navigate("/sell/returns");
+              }}
               className={`flex items-center gap-2 px-5 py-3 border-b-2 font-semibold text-sm transition-all duration-150 ${
                 isSelected
                   ? "border-brand-650 text-brand-700"

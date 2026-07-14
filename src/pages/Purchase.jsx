@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef, Fragment } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   FileText,
@@ -289,8 +289,18 @@ const getProductIcon = (category) => {
 
 export default function Purchases() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "purchases";
+
+  const getTabFromPath = (path) => {
+    if (path.includes("/purchase/payments")) return "payments";
+    if (path.includes("/purchase/debit-notes")) return "returns";
+    if (path.includes("/purchase/expenses")) return "expenses";
+    return "purchases";
+  };
+
+  const activeTab = getTabFromPath(pathname);
 
   const { isReadOnly } = usePermissions();
 
@@ -385,7 +395,23 @@ export default function Purchases() {
   const [partyFilter, setPartyFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [purchaseTypeFilter, setPurchaseTypeFilter] = useState("");
+  const [purchaseTypeFilter, setPurchaseTypeFilter] = useState(() => {
+    const path = window.location.pathname;
+    if (path.includes("/purchase/orders")) return "ORDER";
+    if (path.includes("/purchase/bills")) return "BILL";
+    return "";
+  });
+
+  // Synchronize purchaseTypeFilter from URL pathname transitions
+  useEffect(() => {
+    if (pathname.includes("/purchase/orders")) {
+      setPurchaseTypeFilter("ORDER");
+    } else if (pathname.includes("/purchase/bills")) {
+      setPurchaseTypeFilter("BILL");
+    } else {
+      setPurchaseTypeFilter("");
+    }
+  }, [pathname]);
   const [billingTypeFilter, setBillingTypeFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 8;
@@ -620,17 +646,17 @@ export default function Purchases() {
   };
 
   const handleConvertOrderToBill = async (id) => {
-    if (!window.confirm("Are you sure you want to mark these goods as received and update your inventory?")) {
+    if (!window.confirm("Are you sure you want to convert this Purchase Order into a Purchase Bill?")) {
       return;
     }
-    const loadingToast = toast.loading("Marking goods as received...");
+    const loadingToast = toast.loading("Converting to Purchase Bill...");
     try {
       await dispatch(convertToPurchaseBill(id)).unwrap();
-      toast.success("Goods marked as received successfully!", { id: loadingToast });
+      toast.success("Converted to Purchase Bill successfully!", { id: loadingToast });
       loadListData();
       dispatch(fetchPaymentsOut({ page: 1, limit: ITEMS_PER_PAGE }));
     } catch (err) {
-      toast.error(typeof err === "string" ? err : err?.message || "Failed to mark goods as received", { id: loadingToast });
+      toast.error(typeof err === "string" ? err : err?.message || "Failed to convert to Purchase Bill", { id: loadingToast });
     }
   };
 
@@ -718,13 +744,13 @@ export default function Purchases() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           {
-            label: "Total Received Value",
+            label: "Total Purchase Bills",
             val: `₹${purchaseMetrics.totalBills.toLocaleString("en-IN")}`,
             icon: FileText,
             bg: "bg-blue-50 text-blue-700 border-blue-100"
           },
           {
-            label: "Total Ordered Value",
+            label: "Total Purchase Orders",
             val: `₹${purchaseMetrics.totalOrders.toLocaleString("en-IN")}`,
             icon: Coins,
             bg: "bg-purple-50 text-purple-700 border-purple-100"
@@ -769,7 +795,10 @@ export default function Purchases() {
             <button
               key={t.key}
               onClick={() => {
-                setSearchParams({ tab: t.key });
+                if (t.key === "purchases") navigate("/purchase/bills");
+                else if (t.key === "payments") navigate("/purchase/payments");
+                else if (t.key === "returns") navigate("/purchase/debit-notes");
+                else if (t.key === "expenses") navigate("/purchase/expenses");
                 setCurrentPage(1);
               }}
               className={`flex items-center gap-2 px-5 py-3 border-b-2 font-semibold text-sm transition-all duration-150 ${isSelected
@@ -862,9 +891,9 @@ export default function Purchases() {
                     }}
                     className="w-full pl-3.5 pr-8 h-[42px] text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white cursor-pointer font-semibold text-slate-700 appearance-none"
                   >
-                    <option value="">All Bills</option>
-                    <option value="BILL">Received (Bill)</option>
-                    <option value="ORDER">Ordered (Order)</option>
+                    <option value="">All Documents</option>
+                    <option value="BILL">Purchase Bill</option>
+                    <option value="ORDER">Purchase Order</option>
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-450 pointer-events-none" />
                 </div>
@@ -930,17 +959,17 @@ export default function Purchases() {
           <div className="overflow-x-auto">
             {activeTab === "purchases" && (
               <table className="w-full border-collapse text-left text-sm table-fixed">
-                <thead className="bg-gray-50 border-b border-gray-100 text-xs text-gray-650 uppercase font-semibold">
+                <thead className="bg-gray-50 border-b border-gray-100 text-xs text-gray-655 uppercase font-semibold">
                   <tr>
-                    <th className="px-6 py-3 w-[12%]">Bill Number</th>
-                    <th className="px-6 py-3 w-[26%]">Vendor</th>
-                    <th className="px-6 py-3 w-[11%]">Date</th>
-                    <th className="px-6 py-3 w-[12%]">Goods Status</th>
-                    <th className="px-6 py-3 w-[11%] text-right">Total Amount</th>
-                    <th className="px-6 py-3 w-[11%] text-right">Paid Amount</th>
-                    <th className="px-6 py-3 w-[11%] text-right">Due Amount</th>
-                    <th className="px-6 py-3 w-[10%]">Status</th>
-                    <th className="px-6 py-3 w-[6%] text-right">Actions</th>
+                    <th className="px-3 py-3 w-[11%]">Bill Number</th>
+                    <th className="px-3 py-3 w-[24%]">Vendor</th>
+                    <th className="px-3 py-3 w-[10%]">Date</th>
+                    <th className="px-3 py-3 w-[11%]">Type</th>
+                    <th className="px-3 py-3 w-[10%] text-right">Total Amount</th>
+                    <th className="px-3 py-3 w-[10%] text-right">Paid Amount</th>
+                    <th className="px-3 py-3 w-[10%] text-right">Due Amount</th>
+                    <th className="px-3 py-3 w-[8%]">Status</th>
+                    <th className="px-3 py-3 w-[6%] text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -959,27 +988,27 @@ export default function Purchases() {
                       const unpaid = item.unpaidAmount || 0;
                       return (
                         <tr key={item._id} className="hover:bg-gray-50 transition">
-                          <td className="px-6 py-2.5 font-bold text-gray-900 truncate" title={item.billNumber || item._id.substring(0, 8).toUpperCase()}>
+                          <td className="px-3 py-2.5 font-bold text-gray-900 truncate" title={item.billNumber || item._id.substring(0, 8).toUpperCase()}>
                             {item.billNumber || item._id.substring(0, 8).toUpperCase()}
                           </td>
-                          <td className="px-6 py-2.5 font-semibold text-gray-805 truncate" title={item.party?.name || "Unknown Vendor"}>
+                          <td className="px-3 py-2.5 font-semibold text-gray-805 truncate" title={item.party?.name || "Unknown Vendor"}>
                             {item.party?.name || "Unknown Vendor"}
                           </td>
-                          <td className="px-6 py-2.5 text-gray-500 whitespace-nowrap">
+                          <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">
                             {formatDate(item.billDate)}
                           </td>
-                          <td className="px-6 py-2.5">
+                          <td className="px-3 py-2.5">
                             <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border transition ${item.purchaseType === "BILL"
                               ? "bg-emerald-50 text-emerald-700 border-emerald-250"
                               : "bg-amber-50 text-amber-700 border-amber-250"
                               }`}>
-                              {item.purchaseType === "BILL" ? "Received" : "Ordered"}
+                              {item.purchaseType === "BILL" ? "Purchase Bill" : "Purchase Order"}
                             </span>
                           </td>
-                          <td className="px-6 py-2.5 text-right font-bold text-gray-955 whitespace-nowrap">₹{(item.totalAmount || 0).toLocaleString("en-IN")}</td>
-                          <td className="px-6 py-2.5 text-right text-slate-700 whitespace-nowrap">₹{paid.toLocaleString("en-IN")}</td>
-                          <td className="px-6 py-2.5 text-right text-rose-600 font-semibold whitespace-nowrap">₹{unpaid.toLocaleString("en-IN")}</td>
-                          <td className="px-6 py-2.5">
+                          <td className="px-3 py-2.5 text-right font-bold text-gray-955 whitespace-nowrap">₹{(item.totalAmount || 0).toLocaleString("en-IN")}</td>
+                          <td className="px-3 py-2.5 text-right text-slate-700 whitespace-nowrap">₹{paid.toLocaleString("en-IN")}</td>
+                          <td className="px-3 py-2.5 text-right text-rose-600 font-semibold whitespace-nowrap">₹{unpaid.toLocaleString("en-IN")}</td>
+                          <td className="px-3 py-2.5">
                             {unpaid === 0 ? (
                               <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200">
                                 Paid
@@ -994,7 +1023,7 @@ export default function Purchases() {
                               </span>
                             )}
                           </td>
-                          <td className="px-6 py-2.5 text-right">
+                          <td className="px-3 py-2.5 text-right">
                             <div className="relative inline-block text-left purchase-action-menu-container">
                               <button
                                 onClick={(e) => handleToggleMenu(e, item._id)}
@@ -1055,7 +1084,7 @@ export default function Purchases() {
                                         }}
                                         className="w-full py-2 text-center text-[13px] font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
                                       >
-                                        Receive Goods
+                                        Convert to Bill
                                       </button>
                                     )}
 
@@ -1662,6 +1691,9 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
   const [filePreview, setFilePreview] = useState(editRecord ? editRecord.invoiceFile || editRecord.image || null : null);
   const [loading, setLoading] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
+  const [editingRowIndex, setEditingRowIndex] = useState(null);
+  const [inlineRowData, setInlineRowData] = useState(null);
+  const [selectedRowIndex, setSelectedRowIndex] = useState(null);
 
   // Quick modals triggers
   const [addVendorOpen, setAddVendorOpen] = useState(false);
@@ -2045,6 +2077,96 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
         setFormTaxType(matchingVar.purchasePriceTaxType || "Without Tax");
       }
     }
+  };
+
+  // Keyboard navigation and editing logic for Items Added table
+  useEffect(() => {
+    const handleTableKeys = (e) => {
+      if (activeStep !== 2 || items.length === 0) return;
+      const isEditing = editingRowIndex !== null;
+      if (e.key === "ArrowDown" && !isEditing) {
+        e.preventDefault();
+        setSelectedRowIndex((prev) => {
+          if (prev === null) return 0;
+          return Math.min(items.length - 1, prev + 1);
+        });
+      } else if (e.key === "ArrowUp" && !isEditing) {
+        e.preventDefault();
+        setSelectedRowIndex((prev) => {
+          if (prev === null) return 0;
+          return Math.max(0, prev - 1);
+        });
+      } else if (e.key === "Escape" && isEditing) {
+        e.preventDefault();
+        setEditingRowIndex(null);
+        setInlineRowData(null);
+      } else if (e.key === "Delete" && !isEditing && selectedRowIndex !== null) {
+        e.preventDefault();
+        if (window.confirm("Are you sure you want to delete the selected item?")) {
+          handleDeleteProductFromList(selectedRowIndex);
+          setSelectedRowIndex(null);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleTableKeys);
+    return () => window.removeEventListener("keydown", handleTableKeys);
+  }, [activeStep, items, editingRowIndex, selectedRowIndex]);
+
+  const recalculateRowData = (updatedRow) => {
+    const qty = parseFloat(updatedRow.quantity) || 0;
+    const price = parseFloat(updatedRow.pricePerUnit) || 0;
+    const base = qty * price;
+
+    // Discount calculations
+    const discPct = parseFloat(updatedRow.discountPercent) || 0;
+    const discountAmount = parseFloat((base * (discPct / 100)).toFixed(2));
+    const afterDiscount = Math.max(0, base - discountAmount);
+
+    // GST calculations
+    const taxPct = parseFloat(updatedRow.taxPercent) || 0;
+    let taxAmount = 0;
+    let amount = 0;
+
+    if (updatedRow.taxType === "With Tax") {
+      amount = parseFloat(afterDiscount.toFixed(2));
+      const taxable = amount / (1 + taxPct / 100);
+      taxAmount = parseFloat((amount - taxable).toFixed(2));
+    } else {
+      const taxable = afterDiscount;
+      taxAmount = parseFloat((taxable * (taxPct / 100)).toFixed(2));
+      amount = parseFloat((taxable + taxAmount).toFixed(2));
+    }
+
+    return {
+      ...updatedRow,
+      quantity: qty,
+      pricePerUnit: price,
+      discountPercent: discPct,
+      discountAmount,
+      taxPercent: taxPct,
+      taxAmount,
+      amount
+    };
+  };
+
+  const handleInlineChange = (field, value) => {
+    setInlineRowData((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, [field]: value };
+      return recalculateRowData(updated);
+    });
+  };
+
+  const handleSaveInlineRow = (idx) => {
+    if (!inlineRowData) return;
+    const finalRow = recalculateRowData(inlineRowData);
+    setItems((prev) => {
+      const copy = [...prev];
+      copy[idx] = finalRow;
+      return copy;
+    });
+    setEditingRowIndex(null);
+    setInlineRowData(null);
   };
 
   const handleAddProductToList = () => {
@@ -2851,9 +2973,9 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                       </div>
                     </div>
 
-                    {/* Goods Status */}
+                    {/* Purchase Type */}
                     <div className="group">
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Goods Status</label>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Purchase Type</label>
                       <div className="flex gap-2.5 h-[40px]">
                         <button
                           type="button"
@@ -2864,7 +2986,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                             }`}
                         >
                           <CalendarCheck className={`w-4 h-4 ${purchaseType === "ORDER" ? "text-emerald-600" : "text-slate-400"}`} />
-                          Ordered
+                          Purchase Order
                         </button>
                         <button
                           type="button"
@@ -2875,7 +2997,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                             }`}
                         >
                           <FileText className={`w-4 h-4 ${purchaseType === "BILL" ? "text-emerald-600" : "text-slate-400"}`} />
-                          Received
+                          Purchase Bill
                         </button>
                       </div>
                     </div>
@@ -3696,7 +3818,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
               </div>
 
               {/* Sticky Summary Bar & Items Added Checkout List */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-6 shadow-xs space-y-4">
                 {errors.items && (
                   <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl flex items-center gap-2 text-xs font-semibold select-none animate-in fade-in duration-200">
                     <span className="text-sm">⚠</span>
@@ -3704,57 +3826,62 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                   </div>
                 )}
                 
-                {/* Persistent Summary Bar right above the table */}
-                <div className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl p-4 grid grid-cols-2 md:grid-cols-5 gap-4 divide-y md:divide-y-0 md:divide-x divide-emerald-100/60 select-none">
-                  <div className="flex flex-col items-center md:items-start justify-center px-2">
-                    <span className="text-[9px] text-emerald-800 font-extrabold uppercase tracking-widest mb-0.5">Line Items</span>
-                    <span className="text-base font-black text-slate-800 leading-none">{items.length}</span>
+                {/* Compact summary bar */}
+                <div className="sticky top-0 z-15 bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between text-xs text-emerald-800 font-bold select-none shadow-xs">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <span>Items: <span className="text-slate-800 font-extrabold">{items.length}</span></span>
+                    <span className="h-3 w-px bg-emerald-200" />
+                    <span>Qty: <span className="text-slate-800 font-extrabold">{totalQty}</span></span>
+                    <span className="h-3 w-px bg-emerald-200" />
+                    <span>Subtotal: <span className="text-slate-800 font-extrabold">₹{subTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></span>
+                    <span className="h-3 w-px bg-emerald-200" />
+                    <span>GST: <span className="text-slate-800 font-extrabold">₹{totalTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></span>
                   </div>
-                  <div className="flex flex-col items-center md:items-start justify-center px-4 pt-2 md:pt-0">
-                    <span className="text-[9px] text-emerald-800 font-extrabold uppercase tracking-widest mb-0.5">Total Qty</span>
-                    <span className="text-base font-black text-slate-800 leading-none">{totalQty}</span>
-                  </div>
-                  <div className="flex flex-col items-center md:items-start justify-center px-4 pt-2 md:pt-0">
-                    <span className="text-[9px] text-emerald-800 font-extrabold uppercase tracking-widest mb-0.5">Subtotal</span>
-                    <span className="text-base font-black text-slate-800 leading-none">₹{subTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex flex-col items-center md:items-start justify-center px-4 pt-2 md:pt-0">
-                    <span className="text-[9px] text-emerald-800 font-extrabold uppercase tracking-widest mb-0.5">GST Tax</span>
-                    <span className="text-base font-black text-[#16A34A] leading-none">+₹{totalTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex flex-col items-center md:items-start justify-center px-4 pt-2 md:pt-0">
-                    <span className="text-[9px] text-emerald-800 font-extrabold uppercase tracking-widest mb-0.5">Grand Total</span>
-                    <span className="text-lg font-black text-[#16A34A] leading-none">₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                  <div className="text-sm font-black text-[#16A34A] bg-[#DCFCE7] px-3 py-1 rounded-md shrink-0">
+                    Total: ₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                   </div>
                 </div>
 
-                <div className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2">
-                  Items Added
+                <div className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1.5 flex items-center justify-between">
+                  <span>Items Added</span>
+                  <span className="text-[9px] text-gray-400 font-normal uppercase tracking-normal hidden md:inline">Double-click a row to edit inline • Tab/Enter to navigate</span>
                 </div>
 
                 {/* Checkout items table */}
-                <div className="hidden md:block overflow-auto border border-slate-150 rounded-xl max-h-[300px]">
-                  <table className="w-full text-xs text-left border-collapse min-w-[700px]">
+                <div className="hidden md:block overflow-auto border border-slate-200 rounded-xl max-h-[350px]">
+                  <table className="w-full text-xs text-left border-collapse min-w-[700px] table-fixed">
                     <thead className="sticky top-0 bg-slate-50 z-10 border-b border-slate-200 shadow-3xs">
-                      <tr className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                        <th className="py-2.5 px-4 bg-slate-50">Product Details</th>
-                        <th className="py-2.5 px-3 bg-slate-50">Pack Size</th>
-                        <th className="py-2.5 px-3 text-right bg-slate-50">Qty</th>
-                        <th className="py-2.5 px-3 text-right bg-slate-50">Rate</th>
-                        <th className="py-2.5 px-4 text-right bg-slate-50">Total</th>
-                        <th className="py-2.5 px-4 text-center bg-slate-50">Actions</th>
+                      <tr className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                        <th className="py-2.5 px-3 bg-slate-50 w-[24%]">Product</th>
+                        <th className="py-2.5 px-3 bg-slate-50 w-[10%]">Pack</th>
+                        <th className="py-2.5 px-3 text-right bg-slate-50 w-[10%]">Qty</th>
+                        <th className="py-2.5 px-3 text-right bg-slate-50 w-[12%]">Rate</th>
+                        <th className="py-2.5 px-3 text-right bg-slate-50 w-[10%]">GST</th>
+                        <th className="py-2.5 px-3 text-right bg-slate-50 w-[10%]">Discount</th>
+                        <th className="py-2.5 px-3 text-right bg-slate-50 w-[11%]">Total</th>
+                        <th className="py-2.5 px-3 text-center bg-slate-50 w-[10%]">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {items.length === 0 ? (
                         <tr>
-                          <td colSpan="6" className="py-12 text-center bg-slate-50/20">
+                          <td colSpan="8" className="py-12 text-center bg-slate-50/20">
                             <div className="flex flex-col items-center justify-center space-y-3 max-w-sm mx-auto p-4 text-slate-400">
-                              <ShoppingBag className="w-8 h-8 text-slate-300" />
+                              <span className="text-3xl">📦</span>
                               <div className="space-y-1">
-                                <h4 className="font-bold text-slate-800 text-xs">No products added yet</h4>
-                                <p className="text-[10px] text-slate-400 font-semibold">Select and configure a product above to add items to your bill.</p>
+                                <h4 className="font-bold text-slate-800 text-xs">No products added yet.</h4>
+                                <p className="text-[10px] text-slate-400 font-semibold">Search and add a product to begin creating the purchase invoice.</p>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  searchInputRef.current?.focus();
+                                  searchInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                }}
+                                className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold transition shadow-xs"
+                              >
+                                Add Product
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -3764,70 +3891,195 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                           const productName = prod ? prod.productName : "Unknown Product";
                           const packLabel = formatPackSize(line.variantParameter, line.unit);
                           const isExpanded = expandedRows.has(idx);
+                          const isEditing = editingRowIndex === idx;
+                          const isSelected = selectedRowIndex === idx;
 
                           return (
                             <Fragment key={idx}>
-                              <tr className="transition-colors group hover:bg-slate-50/30">
+                              <tr 
+                                onDoubleClick={() => {
+                                  if (!isReadOnly) {
+                                    setEditingRowIndex(idx);
+                                    setInlineRowData({ ...line });
+                                  }
+                                }}
+                                onClick={() => setSelectedRowIndex(idx)}
+                                className={`transition-colors group hover:bg-slate-50/70 select-none animate-in fade-in slide-in-from-left-2 duration-150 ${
+                                  isEditing ? "bg-emerald-50/10" : isSelected ? "bg-slate-50/50" : ""
+                                }`}
+                              >
                                 {/* Product info */}
-                                <td className="py-1.5 px-4">
-                                  <div className="flex flex-col">
-                                    <span className="font-bold text-slate-800 leading-tight">{productName}</span>
-                                    <span className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                                      {prod?.productCategory ? prod.productCategory.charAt(0).toUpperCase() + prod.productCategory.slice(1) : "General"}
-                                      {" • "}
-                                      {packLabel}
-                                    </span>
+                                <td className="py-2 px-3">
+                                  <div className="flex items-center gap-1.5">
                                     <button
                                       type="button"
-                                      onClick={() => toggleRow(idx)}
-                                      className="text-[9px] text-[#16A34A] hover:text-emerald-700 font-bold mt-1 text-left flex items-center gap-0.5 w-fit"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleRow(idx);
+                                      }}
+                                      className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-gray-900 transition shrink-0"
+                                      title={isExpanded ? "Collapse Details" : "Expand Details"}
                                     >
-                                      {isExpanded ? "▲ Hide Details" : "▼ View Details"}
+                                      <span className={`inline-block transition-transform text-[10px] ${isExpanded ? "rotate-90" : ""}`}>▶</span>
                                     </button>
+                                    <div className="flex flex-col min-w-0">
+                                      <span className="font-bold text-slate-800 leading-tight truncate" title={productName}>{productName}</span>
+                                      <span className="text-[9px] text-slate-400 font-semibold mt-0.5 truncate">
+                                        {prod?.productCategory ? prod.productCategory.charAt(0).toUpperCase() + prod.productCategory.slice(1) : "General"}
+                                        {" • "}
+                                        {packLabel}
+                                      </span>
+                                    </div>
                                   </div>
                                 </td>
 
                                 {/* Pack size badge */}
-                                <td className="py-1.5 px-3">
-                                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-0.5 rounded-full font-bold text-[10px]">
-                                    {packLabel}
+                                <td className="py-2 px-3">
+                                  <span className="bg-emerald-50/80 text-emerald-700 border border-emerald-100/50 px-2 py-0.5 rounded text-[10px] font-bold inline-block">
+                                    {line.variantParameter} {line.unit}
                                   </span>
                                 </td>
 
                                 {/* Qty */}
-                                <td className="py-1.5 px-3 text-right text-slate-855 font-bold">
-                                  {line.quantity}
+                                <td className="py-2 px-3 text-right">
+                                  {isEditing ? (
+                                    <input
+                                      type="number"
+                                      min="0.01"
+                                      step="any"
+                                      value={inlineRowData.quantity}
+                                      onChange={(e) => handleInlineChange("quantity", e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          handleSaveInlineRow(idx);
+                                        }
+                                      }}
+                                      className="w-16 h-8 text-right border border-gray-300 rounded px-1.5 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/10 font-bold bg-white"
+                                    />
+                                  ) : (
+                                    <span className="font-bold text-slate-805 text-xs">{line.quantity}</span>
+                                  )}
                                 </td>
 
                                 {/* Rate */}
-                                <td className="py-1.5 px-3 text-right text-slate-700 font-semibold">
-                                  ₹{parseFloat(line.pricePerUnit || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                <td className="py-2 px-3 text-right">
+                                  {isEditing ? (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="any"
+                                      value={inlineRowData.pricePerUnit}
+                                      onChange={(e) => handleInlineChange("pricePerUnit", e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          handleSaveInlineRow(idx);
+                                        }
+                                      }}
+                                      className="w-20 h-8 text-right border border-gray-300 rounded px-1.5 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/10 font-bold bg-white"
+                                    />
+                                  ) : (
+                                    <span className="text-slate-700 font-semibold">₹{parseFloat(line.pricePerUnit || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                                  )}
+                                </td>
+
+                                {/* GST */}
+                                <td className="py-2 px-3 text-right">
+                                  {isEditing ? (
+                                    <select
+                                      value={inlineRowData.taxPercent}
+                                      onChange={(e) => handleInlineChange("taxPercent", e.target.value)}
+                                      className="w-16 h-8 border border-gray-300 rounded px-1 focus:border-brand-600 focus:outline-none bg-white font-semibold text-slate-700 text-xs"
+                                    >
+                                      {[0, 5, 12, 18, 28].map(pct => (
+                                        <option key={pct} value={pct}>{pct}%</option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <span className="text-slate-600 font-semibold">{line.taxPercent}%</span>
+                                  )}
+                                </td>
+
+                                {/* Discount */}
+                                <td className="py-2 px-3 text-right">
+                                  {isEditing ? (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      value={inlineRowData.discountPercent}
+                                      onChange={(e) => handleInlineChange("discountPercent", e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          handleSaveInlineRow(idx);
+                                        }
+                                      }}
+                                      className="w-16 h-8 text-right border border-gray-300 rounded px-1.5 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/10 font-semibold bg-white"
+                                    />
+                                  ) : (
+                                    <span className="text-slate-600 font-semibold">{line.discountPercent || 0}%</span>
+                                  )}
                                 </td>
 
                                 {/* Total */}
-                                <td className="py-1.5 px-4 text-right font-extrabold text-slate-900 text-xs">
+                                <td className="py-2 px-3 text-right font-extrabold text-slate-900 text-xs">
                                   ₹{(line.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                                 </td>
 
                                 {/* Actions */}
-                                <td className="py-1.5 px-4 text-center">
-                                  <div className="flex items-center justify-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleEditProductInList(idx)}
-                                      className="p-1.5 border border-emerald-250 text-emerald-600 hover:bg-emerald-50 rounded-lg transition shrink-0"
-                                      title="Edit Item"
-                                    >
-                                      <Pencil className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteProductFromList(idx)}
-                                      className="p-1.5 border border-red-250 text-red-655 hover:bg-red-50 rounded-lg transition shrink-0"
-                                      title="Delete Item"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                <td className="py-2 px-3 text-center">
+                                  <div className="flex items-center justify-center gap-1">
+                                    {isEditing ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSaveInlineRow(idx)}
+                                          className="p-1 hover:bg-emerald-50 text-emerald-650 rounded border border-emerald-200 transition"
+                                          title="Save Row"
+                                        >
+                                          ✓
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingRowIndex(null);
+                                            setInlineRowData(null);
+                                          }}
+                                          className="p-1 hover:bg-red-50 text-red-650 rounded border border-red-200 transition"
+                                          title="Cancel"
+                                        >
+                                          ✕
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingRowIndex(idx);
+                                            setInlineRowData({ ...line });
+                                          }}
+                                          className="p-1.5 hover:bg-slate-100 text-gray-500 hover:text-brand-600 rounded transition shrink-0"
+                                          title="Edit Item Inline"
+                                        >
+                                          <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteProductFromList(idx);
+                                          }}
+                                          className="p-1.5 hover:bg-slate-100 text-gray-500 hover:text-red-600 rounded transition shrink-0"
+                                          title="Delete Item"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -3835,7 +4087,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                               {/* Expandable details */}
                               {isExpanded && (
                                 <tr className="bg-slate-50/50">
-                                  <td colSpan="6" className="px-6 py-2 border-y border-slate-150">
+                                  <td colSpan="8" className="px-6 py-2 border-y border-slate-150">
                                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                                       <div>
                                         <span className="block text-slate-400 text-[9px]">HSN Code</span>
@@ -3850,8 +4102,8 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                                         <span className="text-slate-805">{line.taxType}</span>
                                       </div>
                                       <div>
-                                        <span className="block text-slate-400 text-[9px]">Discount Rate</span>
-                                        <span className="text-slate-850">{line.discountPercent}%</span>
+                                        <span className="block text-slate-400 text-[9px]">Discount Amount</span>
+                                        <span className="text-slate-850">₹{line.discountAmount}</span>
                                       </div>
                                       <div>
                                         <span className="block text-slate-400 text-[9px]">Tax Amount</span>
@@ -3881,40 +4133,113 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                       const prod = products.find((p) => p._id === line.productId);
                       const productName = prod ? prod.productName : "Unknown Product";
                       const packLabel = formatPackSize(line.variantParameter, line.unit);
+                      const isEditing = editingRowIndex === idx;
 
                       return (
                         <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-3xs space-y-3">
                           <div className="flex justify-between items-start">
-                            <div className="flex flex-col">
-                              <h4 className="font-bold text-slate-855 text-xs leading-tight">{productName}</h4>
-                              <span className="inline-block bg-slate-50 border border-slate-155 text-slate-600 font-bold text-[9px] px-2 py-0.5 rounded-md mt-1 w-fit">
+                            <div className="flex flex-col min-w-0">
+                              <h4 className="font-bold text-slate-855 text-xs leading-tight truncate">{productName}</h4>
+                              <span className="inline-block bg-slate-50 border border-slate-155 text-slate-650 font-bold text-[9px] px-2 py-0.5 rounded-md mt-1 w-fit">
                                 {packLabel}
                               </span>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => handleEditProductInList(idx)}
-                                className="p-1.5 border border-emerald-250 text-emerald-600 rounded-lg hover:bg-emerald-50 transition"
-                                title="Edit Item"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteProductFromList(idx)}
-                                className="p-1.5 border border-red-250 text-red-655 hover:bg-red-50 rounded-lg transition"
-                                title="Delete Item"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {isEditing ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveInlineRow(idx)}
+                                    className="p-1 hover:bg-emerald-50 text-emerald-650 rounded border border-emerald-200 transition text-[10px] font-bold"
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingRowIndex(null);
+                                      setInlineRowData(null);
+                                    }}
+                                    className="p-1 hover:bg-red-50 text-red-655 rounded border border-red-200 transition text-[10px] font-bold"
+                                  >
+                                    ✕
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingRowIndex(idx);
+                                      setInlineRowData({ ...line });
+                                    }}
+                                    className="p-1.5 border border-emerald-250 text-emerald-600 rounded-lg hover:bg-emerald-50 transition"
+                                    title="Edit Item"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteProductFromList(idx)}
+                                    className="p-1.5 border border-red-250 text-red-655 rounded-lg hover:bg-red-50 transition"
+                                    title="Delete Item"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
-                          <div className="flex justify-between text-[11px] font-bold border-t border-slate-100 pt-2 text-slate-500">
-                            <span>Qty: <b className="text-slate-800">{line.quantity}</b></span>
-                            <span>Rate: <b className="text-slate-800">₹{line.pricePerUnit}</b></span>
-                            <span>Total: <b className="text-slate-800">₹{line.amount}</b></span>
-                          </div>
+                          
+                          {isEditing ? (
+                            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[9px] text-gray-400 font-extrabold uppercase">Qty</label>
+                                <input
+                                  type="number"
+                                  value={inlineRowData.quantity}
+                                  onChange={(e) => handleInlineChange("quantity", e.target.value)}
+                                  className="w-full h-8 border border-gray-350 rounded px-1.5 focus:border-brand-600 focus:outline-none text-xs"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[9px] text-gray-400 font-extrabold uppercase">Rate</label>
+                                <input
+                                  type="number"
+                                  value={inlineRowData.pricePerUnit}
+                                  onChange={(e) => handleInlineChange("pricePerUnit", e.target.value)}
+                                  className="w-full h-8 border border-gray-350 rounded px-1.5 focus:border-brand-600 focus:outline-none text-xs"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[9px] text-gray-400 font-extrabold uppercase">GST</label>
+                                <select
+                                  value={inlineRowData.taxPercent}
+                                  onChange={(e) => handleInlineChange("taxPercent", e.target.value)}
+                                  className="w-full h-8 border border-gray-350 rounded px-1 focus:border-brand-600 focus:outline-none text-xs bg-white"
+                                >
+                                  {[0, 5, 12, 18, 28].map(pct => (
+                                    <option key={pct} value={pct}>{pct}%</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[9px] text-gray-400 font-extrabold uppercase">Discount %</label>
+                                <input
+                                  type="number"
+                                  value={inlineRowData.discountPercent}
+                                  onChange={(e) => handleInlineChange("discountPercent", e.target.value)}
+                                  className="w-full h-8 border border-gray-350 rounded px-1.5 focus:border-brand-600 focus:outline-none text-xs"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex justify-between text-[11px] font-bold border-t border-slate-100 pt-2 text-slate-500">
+                              <span>Qty: <b className="text-slate-800">{line.quantity}</b></span>
+                              <span>Rate: <b className="text-slate-800">₹{line.pricePerUnit}</b></span>
+                              <span>Total: <b className="text-slate-800">₹{line.amount}</b></span>
+                            </div>
+                          )}
                         </div>
                       );
                     })
@@ -3968,8 +4293,8 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                       <div className="text-slate-800 font-bold">{formatDate(billDate)}</div>
                       <div>Supply State:</div>
                       <div className="text-slate-800">{stateOfSupply}</div>
-                      <div>Goods Status:</div>
-                      <div className="text-slate-800">{purchaseType === "BILL" ? "Received" : "Ordered"}</div>
+                      <div>Purchase Type:</div>
+                      <div className="text-slate-800">{purchaseType === "BILL" ? "Purchase Bill" : "Purchase Order"}</div>
                       {billingType === "Credit" && (
                         <>
                           <div>Due Date:</div>
@@ -4433,7 +4758,7 @@ function RecordPaymentModal({ editRecord = null, parties, onClose, onSuccess }) 
                     <option value="">-- Select Bill invoice --</option>
                     {unpaidBills.map((b) => (
                       <option key={b._id} value={b._id}>
-                        [{b.purchaseType === "ORDER" ? "Ordered" : "Received"}] {b.billNumber || "Ref #" + b._id.substring(b._id.length - 8)} (Date: {new Date(b.billDate).toLocaleDateString("en-IN")} - Outstanding: ₹{b.unpaidAmount + (editRecord && (editRecord.linkedBill?._id || editRecord.linkedBill || editRecord.linkedPurchaseBill?._id || editRecord.linkedPurchaseBill || editRecord.purchase?._id || editRecord.purchase) === b._id ? allowance : 0)})
+                        [{b.purchaseType === "ORDER" ? "Purchase Order" : "Purchase Bill"}] {b.billNumber || "Ref #" + b._id.substring(b._id.length - 8)} (Date: {new Date(b.billDate).toLocaleDateString("en-IN")} - Outstanding: ₹{b.unpaidAmount + (editRecord && (editRecord.linkedBill?._id || editRecord.linkedBill || editRecord.linkedPurchaseBill?._id || editRecord.linkedPurchaseBill || editRecord.purchase?._id || editRecord.purchase) === b._id ? allowance : 0)})
                       </option>
                     ))}
                   </>
@@ -6328,12 +6653,12 @@ function DetailsModal({ item, type, onClose, handleDownloadPurchaseReceipt, hand
                     {item.purchaseType === "BILL" ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-150">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        Received
+                        Purchase Bill
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-150">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                        Ordered
+                        Purchase Order
                       </span>
                     )}
                   </div>

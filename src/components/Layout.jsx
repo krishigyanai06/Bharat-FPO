@@ -32,6 +32,11 @@ import {
   Receipt,
   RefreshCw,
   CreditCard,
+  ClipboardList,
+  RotateCcw,
+  ReceiptIndianRupee,
+  Wallet,
+  Zap,
 } from "lucide-react";
 import { fetchMe, fetchTenants } from "../store/thunks/layoutThunk";
 import { setSelectedTenant } from "../store/slices/layoutSlice";
@@ -46,37 +51,81 @@ import InstallPWA from "./InstallPWA";
 import "./google-lang-picker/google-translate.css";
 import { useNetwork } from "../context/NetworkProvider";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-  { icon: Archive, label: "Inventory", path: "/inventory" },
-  { icon: Users, label: "Parties", path: "/party" },
-  { icon: CreditCard, label: "Purchases", path: "/purchase" },
-  { icon: Receipt, label: "Sales", path: "/sell" },
-  { icon: BarChart3, label: "Reports", path: "/reports" },
-  { icon: FileText, label: "GST Reports", path: "/gst-reports" },
-  { icon: Package, label: "Listing Approvals", path: "/listing" },
-  { icon: ShoppingCart, label: "Procurement", path: "/procurement" },
-  { icon: ShoppingBag, label: "Order Book", path: "/buy" },
-
-  { icon: Megaphone, label: "Broadcast", path: "/broadcast" },
-  { icon: Users, label: "Members", path: "/members" },
-  { icon: BookOpen, label: "Ledger", path: "/ledger" },
-  { icon: ImagePlus, label: "Advertisement", path: "/advertisement" },
-
-  { icon: Settings, label: "Settings", path: "/settings" },
-
+const menuSections = [
   {
-    icon: Building2,
-    label: "Create Tenant",
-    path: "/create-tenant",
-    roles: ["superadmin"],
+    title: "MAIN",
+    items: [
+      { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+      { icon: ShoppingCart, label: "Procurement", path: "/procurement" },
+      { icon: Users, label: "Parties", path: "/party" },
+      { icon: Archive, label: "Inventory", path: "/inventory" },
+    ]
   },
   {
-    icon: Layers,
-    label: "Tier & Features",
-    path: "/tier-features",
-    roles: ["superadmin"],
+    title: "BUSINESS",
+    items: [
+      {
+        icon: ShoppingCart,
+        label: "Purchase",
+        path: "/purchase",
+        isParent: true,
+        children: [
+          { label: "Bills", path: "/purchase/bills", icon: Receipt },
+          { label: "Orders", path: "/purchase/orders", icon: ClipboardList },
+          { label: "Payments", path: "/purchase/payments", icon: Wallet },
+          { label: "Debit Notes", path: "/purchase/debit-notes", icon: RotateCcw },
+          { label: "Expenses", path: "/purchase/expenses", icon: ReceiptIndianRupee },
+        ]
+      },
+      {
+        icon: IndianRupee,
+        label: "Sales",
+        path: "/sell",
+        isParent: true,
+        children: [
+          { label: "Sale Inventory", path: "/sell/invoices", icon: Receipt },
+          { label: "Customer Orders", path: "/sell/orders", icon: ClipboardList },
+          { label: "Payment", path: "/sell/receipts", icon: Wallet },
+          { label: "Returns", path: "/sell/returns", icon: RotateCcw },
+        ]
+      }
+    ]
   },
+  {
+    title: "FINANCE",
+    items: [
+      { icon: BarChart3, label: "Reports", path: "/reports" },
+      { icon: FileText, label: "GST Reports", path: "/gst-reports" },
+      { icon: BookOpen, label: "Ledger", path: "/ledger" },
+      { icon: Package, label: "Listing Approvals", path: "/listing" },
+    ]
+  },
+  {
+    title: "COMMUNITY",
+    items: [
+      { icon: Users, label: "Members", path: "/members" },
+      { icon: Megaphone, label: "Broadcast", path: "/broadcast" },
+      { icon: ImagePlus, label: "Advertisement", path: "/advertisement" },
+    ]
+  },
+  {
+    title: "SYSTEM",
+    items: [
+      { icon: Settings, label: "Settings", path: "/settings" },
+      {
+        icon: Building2,
+        label: "Create Tenant",
+        path: "/create-tenant",
+        roles: ["superadmin"],
+      },
+      {
+        icon: Layers,
+        label: "Tier & Features",
+        path: "/tier-features",
+        roles: ["superadmin"],
+      },
+    ]
+  }
 ];
 
 const timeAgo = (date) => {
@@ -90,22 +139,51 @@ const timeAgo = (date) => {
 
 export default function Layout() {
   const { isOffline } = useNetwork();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [tenantLoadTimeout, setTenantLoadTimeout] = useState(false);
+  const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
+  const [expandedMenus, setExpandedMenus] = useState(() => {
+    const path = window.location.pathname;
+    return {
+      purchase: path.startsWith("/purchase"),
+      sales: path.startsWith("/sell")
+    };
+  });
+
+  const toggleMenu = (menuKey) => {
+    setExpandedMenus((prev) => ({
+      ...prev,
+      [menuKey]: !prev[menuKey]
+    }));
+  };
+
+  useEffect(() => {
+    if (location.pathname.startsWith("/purchase")) {
+      setExpandedMenus((prev) => ({
+        ...prev,
+        purchase: true
+      }));
+    }
+    if (location.pathname.startsWith("/sell")) {
+      setExpandedMenus((prev) => ({
+        ...prev,
+        sales: true
+      }));
+    }
+  }, [location.pathname]);
 
   const searchRef = useRef(null);
   const notifRef = useRef(null);
   const userRef = useRef(null);
 
   const searchFetchedRef = useRef(false);
-
-  const location = useLocation();
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
 
 
   const { me, tenants, selectedTenantId } = useSelector((s) => s.layout);
@@ -128,11 +206,14 @@ export default function Layout() {
     isSuperAdmin,
   );
 
-  const visibleMenuItems = menuItems.filter(({ path, roles }) => {
-    if (roles && !roles.includes(userRole)) return false;
-    const allowed = ROUTE_ROLES[path];
-    return !allowed || allowed.includes(userRole);
-  });
+  const visibleMenuSections = menuSections.map(section => ({
+    ...section,
+    items: section.items.filter(({ path, roles }) => {
+      if (roles && !roles.includes(userRole)) return false;
+      const allowed = ROUTE_ROLES[path];
+      return !allowed || allowed.includes(userRole);
+    })
+  })).filter(section => section.items.length > 0);
   const { members } = useSelector((s) => s.members);
   const { orders } = useSelector((s) => s.procurement);
   const broadcasts = useSelector((s) =>
@@ -282,9 +363,25 @@ export default function Layout() {
   };
 
   /* CURRENT PAGE LABEL */
-  const currentPage = location.pathname.startsWith("/gst-reports")
-    ? (location.pathname.includes("/gstr-1") ? "GSTR-1 Report" : location.pathname.includes("/gstr-3b") ? "GSTR-3B Report" : "GST Reports")
-    : menuItems.find((m) => m.path === location.pathname)?.label || "Dashboard";
+  /* CURRENT PAGE LABEL */
+  const getCurrentPageLabel = (path) => {
+    if (path.startsWith("/gst-reports")) {
+      if (path.includes("/gstr-1")) return "GSTR-1 Report";
+      if (path.includes("/gstr-3b")) return "GSTR-3B Report";
+      return "GST Reports";
+    }
+    for (const section of menuSections) {
+      for (const item of section.items) {
+        if (item.path === path) return item.label;
+        if (item.isParent && item.children) {
+          const matchedChild = item.children.find(child => child.path === path);
+          if (matchedChild) return matchedChild.label;
+        }
+      }
+    }
+    return "Dashboard";
+  };
+  const currentPage = getCurrentPageLabel(location.pathname);
 
   /* GLOBAL SEARCH — lazy-load search data on first keystroke */
   const handleSearchChange = (e) => {
@@ -373,134 +470,260 @@ export default function Layout() {
       )}
 
       <aside
-        className={`fixed lg:static z-40 h-full w-64 flex flex-col transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-          }`}
-        style={{ background: "#0a1f0f" }}
+        className={`fixed lg:static z-40 h-full ${
+          isSidebarMinimized ? "w-[72px]" : "w-[260px]"
+        } flex flex-col transition-all duration-300 bg-white border-r border-[#E5E7EB] ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
       >
         {/* BRAND CARD */}
-        <div
-          className="mx-3 mt-4 mb-3 rounded-2xl p-4 relative overflow-hidden"
-          style={{
-            background:
-              "linear-gradient(135deg, #0d2b14 0%, #1a4a24 50%, #0d2b14 100%)",
-            border: "1px solid rgba(212,175,55,0.35)",
-            boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
-          }}
-        >
-          {/* decorative lines */}
-          <div
-            className="absolute inset-0 opacity-10 pointer-events-none"
-            style={{
-              backgroundImage:
-                "repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(212,175,55,0.3) 20px, rgba(212,175,55,0.3) 21px)",
-            }}
-          />
-          <div className="flex items-center gap-3 relative z-10">
-            <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden bg-white"
-              style={{ border: "1px solid rgba(212,175,55,0.4)" }}
-            >
+        <div className="h-[72px] px-4 border-b border-[#E5E7EB] flex items-center justify-between">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden bg-[#EAF7EE] border border-[#18864B]/10">
               <img
                 src={theme.logo}
                 alt={theme.brand}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain p-1"
               />
             </div>
-            <div>
-              <h1 className="text-sm font-bold" style={{ color: "#d4af37" }}>
-                {me?.tenant?.businessName ||
-                  me?.businessName ||
-                  user?.tenant?.businessName ||
-                  user?.businessName ||
-                  theme.brand}
-              </h1>
-              <p className="text-xs mt-0.5" style={{ color: "#6dbf7e" }}>
-                {user?.role || me?.role || "admin"}
-              </p>
-            </div>
+            {!isSidebarMinimized && (
+              <div className="transition-opacity duration-200">
+                <h1 className="text-sm font-bold text-[#1F2937] truncate max-w-[140px]">
+                  {me?.tenant?.businessName ||
+                    me?.businessName ||
+                    user?.tenant?.businessName ||
+                    user?.businessName ||
+                    theme.brand}
+                </h1>
+                <p className="text-xs text-[#6B7280] font-medium capitalize mt-0.5">
+                  {user?.role || me?.role || "admin"}
+                </p>
+              </div>
+            )}
           </div>
+          <button
+            type="button"
+            onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}
+            className="hidden lg:flex w-6 h-6 items-center justify-center rounded-lg border border-[#E5E7EB] hover:bg-[#F5FBF6] hover:text-[#18864B] transition-colors text-gray-400 cursor-pointer"
+          >
+            <svg
+              className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                isSidebarMinimized ? "rotate-180" : ""
+              }`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.5}
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
         </div>
 
+        {/* SEARCH MENU FIELD BELOW LOGO */}
+        {!isSidebarMinimized && (
+          <div className="px-3 pt-3 pb-2">
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400" />
+              </span>
+              <input
+                type="text"
+                placeholder="Search menu..."
+                value={globalSearch}
+                onChange={(e) => setGlobalSearch(e.target.value)}
+                className="block w-full pl-9 pr-3 py-1.5 text-xs text-[#1F2937] placeholder-gray-400 bg-[#F5FBF6]/50 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#18864B] focus:border-[#18864B] transition-all"
+              />
+            </div>
+          </div>
+        )}
+
         {/* NAV */}
-        <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-0.5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          {visibleMenuItems.map((item) => {
-            const Icon = item.icon;
-            const active = item.path === "/gst-reports"
-              ? location.pathname.startsWith("/gst-reports")
-              : location.pathname === item.path;
+        <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          {visibleMenuSections.map((section) => {
+            // Apply menu search filter
+            const term = globalSearch.toLowerCase().trim();
+            const filteredItems = section.items.filter(item => {
+              if (!term) return true;
+              const matchesParent = item.label.toLowerCase().includes(term);
+              if (matchesParent) return true;
+              if (item.isParent && item.children) {
+                return item.children.some(child => child.label.toLowerCase().includes(term));
+              }
+              return false;
+            });
+
+            if (filteredItems.length === 0) return null;
 
             return (
-              <button
-                key={item.path}
-                onClick={() => {
-                  navigate(item.path);
-                  setSidebarOpen(false);
-                }}
-                className="relative w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group"
-                style={
-                  active
-                    ? {
-                      background:
-                        "linear-gradient(135deg, #1a5c2a 0%, #0f3d1a 100%)",
-                      boxShadow:
-                        "0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(109,191,126,0.2)",
-                      color: "#ffffff",
-                    }
-                    : {
-                      background: "transparent",
-                      border: "1px solid transparent",
-                      color: "rgba(109,191,126,0.85)",
-                    }
-                }
-              >
-                {/* left accent bar for active */}
-                {active && (
-                  <span
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full"
-                    style={{ background: "#d4af37" }}
-                  />
-                )}
-                <Icon
-                  className="w-5 h-5 flex-shrink-0"
-                  style={{ color: active ? "#6dbf7e" : "#4a9e5c" }}
-                />
-                <span className="flex-1 text-left">{item.label}</span>
-                {active ? (
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{
-                      background: "#4ade80",
-                      boxShadow: "0 0 6px #4ade80",
-                    }}
-                  />
+              <div key={section.title} className="space-y-1">
+                {!isSidebarMinimized ? (
+                  <span className="text-[11px] font-bold text-gray-400 tracking-wider px-3 pt-2 pb-1 block uppercase">
+                    {section.title}
+                  </span>
                 ) : (
-                  <svg
-                    className="w-3.5 h-3.5 opacity-40"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
+                  <div className="border-t border-[#E5E7EB] my-2" />
                 )}
-              </button>
+
+                <div className="space-y-1">
+                  {filteredItems.map((item) => {
+                    if (item.isParent) {
+                      const Icon = item.icon;
+                      const parentActive = item.children.some(child => location.pathname === child.path);
+                      const isExpanded = expandedMenus[item.label.toLowerCase()] || false;
+
+                      if (isSidebarMinimized) {
+                        return (
+                          <button
+                            key={item.label}
+                            type="button"
+                            onClick={() => {
+                              if (item.children && item.children.length > 0) {
+                                navigate(item.children[0].path);
+                              }
+                            }}
+                            title={item.label}
+                            className={`w-10 h-10 flex items-center justify-center mx-auto rounded-xl transition-all duration-200 ${
+                              parentActive
+                                ? "bg-[#EAF7EE] text-[#18864B]"
+                                : "text-gray-400 hover:bg-[#F5FBF6] hover:text-[#18864B]"
+                            }`}
+                          >
+                            <Icon className="w-5 h-5" strokeWidth={1.8} />
+                          </button>
+                        );
+                      }
+
+                      return (
+                        <div key={item.label} className="space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleMenu(item.label.toLowerCase())}
+                            className={`relative w-full h-10 flex items-center gap-3 px-3 rounded-xl text-[15px] transition-all duration-200 border-l-4 ${
+                              isExpanded || parentActive
+                                ? "bg-[#EAF7EE] border-[#16A34A] text-[#18864B] font-semibold shadow-[0_4px_12px_rgba(22,163,74,0.08)]"
+                                : "bg-transparent border-transparent text-[#1F2937] hover:bg-[#F5FBF6] hover:text-[#18864B] font-medium"
+                            }`}
+                          >
+                            <Icon
+                              className="w-5 h-5 flex-shrink-0 transition-colors duration-200"
+                              strokeWidth={1.8}
+                              style={{ color: isExpanded || parentActive ? "#18864B" : "#6B7280" }}
+                            />
+                            <span className="flex-1 text-left">{item.label}</span>
+                            <ChevronDown
+                              className={`w-4 h-4 transition-transform duration-200 ${
+                                isExpanded ? "text-[#18864B] rotate-180" : "text-gray-400 -rotate-90"
+                              }`}
+                            />
+                          </button>
+
+                          {/* Collapsible Children Container with vertical connector line */}
+                          <div
+                            className="transition-all duration-200 ease-in-out overflow-hidden"
+                            style={{
+                              maxHeight: isExpanded ? `${item.children.length * 40 + 8}px` : "0px",
+                              opacity: isExpanded ? 1 : 0
+                            }}
+                          >
+                            <div className="border-l border-[#E5E7EB] ml-[20px] pl-[20px] flex flex-col gap-1 py-1">
+                              {item.children.map((child) => {
+                                const childActive = location.pathname === child.path;
+
+                                return (
+                                  <button
+                                    key={child.path}
+                                    onClick={() => {
+                                      navigate(child.path);
+                                      setSidebarOpen(false);
+                                    }}
+                                    className={`relative w-full h-9 flex items-center gap-2 px-3 rounded-lg text-[14px] transition-all duration-200 ${
+                                      childActive
+                                        ? "bg-[#F4FBF6] text-[#18864B] font-medium"
+                                        : "bg-transparent text-[#6B7280] hover:bg-[#F5FBF6] hover:text-[#1F2937] font-normal cursor-pointer"
+                                    }`}
+                                  >
+                                    {childActive ? (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-[#18864B] mr-2 flex-shrink-0 animate-pulse" />
+                                    ) : (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-transparent mr-2 flex-shrink-0" />
+                                    )}
+                                    <span className="flex-1 text-left">{child.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    const Icon = item.icon;
+                    const active = item.path === "/gst-reports"
+                      ? location.pathname.startsWith("/gst-reports")
+                      : (item.path === "#" ? false : location.pathname === item.path);
+
+                    if (isSidebarMinimized) {
+                      return (
+                        <button
+                          key={item.label}
+                          onClick={() => {
+                            if (item.label === "Logout") {
+                              setShowLogoutConfirm(true);
+                            } else {
+                              navigate(item.path);
+                              setSidebarOpen(false);
+                            }
+                          }}
+                          title={item.label}
+                          className={`w-10 h-10 flex items-center justify-center mx-auto rounded-xl transition-all duration-150 ${
+                            active
+                              ? "bg-[#EAF7EE] text-[#18864B]"
+                              : "text-gray-400 hover:bg-[#F5FBF6] hover:text-[#18864B]"
+                          }`}
+                        >
+                          <Icon className="w-5 h-5" strokeWidth={1.8} />
+                        </button>
+                      );
+                    }
+
+                    return (
+                      <button
+                        key={item.label}
+                        onClick={() => {
+                          if (item.label === "Logout") {
+                            setShowLogoutConfirm(true);
+                          } else {
+                            navigate(item.path);
+                            setSidebarOpen(false);
+                          }
+                        }}
+                        className={`relative w-full h-10 flex items-center gap-3 px-3 rounded-xl text-[15px] transition-all duration-200 border-l-4 ${
+                          active
+                            ? "bg-[#EAF7EE] border-[#16A34A] text-[#18864B] font-semibold shadow-[0_4px_12px_rgba(22,163,74,0.08)]"
+                            : "bg-transparent border-transparent text-[#1F2937] hover:bg-[#F5FBF6] hover:text-[#18864B] font-medium"
+                        }`}
+                      >
+                        <Icon
+                          className="w-5 h-5 flex-shrink-0 transition-colors duration-200"
+                          strokeWidth={1.8}
+                          style={{ color: active ? "#18864B" : "#6B7280" }}
+                        />
+                        <span className="flex-1 text-left">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </nav>
-
-        {/* WEATHER WIDGET */}
       </aside>
 
       {/* ===================== MAIN ===================== */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* ===== HEADER ===== */}
-        <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-4 shadow-sm">
+        <header className="h-[72px] bg-white border-b border-gray-200 px-6 flex items-center gap-4 shadow-sm">
           {/* Mobile hamburger */}
           <button
             onClick={() => setSidebarOpen(true)}
