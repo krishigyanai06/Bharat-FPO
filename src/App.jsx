@@ -33,6 +33,7 @@ const CreateTenant = lazy(() => import('./pages/CreateTenant'));
 const TierFeatures = lazy(() => import('./pages/TierFeatures'));
 const Party = lazy(() => import('./pages/Party'));
 const PartyForm = lazy(() => import('./pages/PartyForm'));
+const ProcurementSales = lazy(() => import('./pages/ProcurementSales/ProcurementSales'));
 
 
 const PageLoader = () => (
@@ -132,6 +133,7 @@ function App() {
               <Route path="sell/orders" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/buy']}><Suspense fallback={<PageLoader />}><Buy /></Suspense></ProtectedRoute>} />
               <Route path="sell/invoice/new" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterInvoiceForm /></Suspense></ProtectedRoute>} />
               <Route path="sell/invoice/edit/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterInvoiceForm /></Suspense></ProtectedRoute>} />
+              <Route path="sales/procurement" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><ProcurementSales /></Suspense></ProtectedRoute>} />
               <Route path="purchase" element={<Navigate to="/purchase/bills" replace />} />
               <Route path="purchase/bills" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
               <Route path="purchase/orders" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />

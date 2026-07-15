@@ -5,6 +5,7 @@ import { fetchParties } from '../../store/thunks/partyThunk';
 import { fetchProducts } from '../../store/thunks/inventoryThunk';
 import { downloadSalesReport } from '../../store/thunks/reportsThunk';
 import { generateClientSalesReportPDF, generateIndividualSalePDF } from '../../utils/clientPdfGenerator';
+import { fetchProcurementSales } from '../../redux/procurementSaleThunk';
 import api from '../../lib/api';
 import ErrorState from '../../components/ErrorState';
 
@@ -40,7 +41,9 @@ const SalesReport = () => {
   const rowMenuRef = useRef(null);
 
   // Redux Selectors
-  const { sales, loading: salesLoading } = useSelector((state) => state.sell);
+  const { sales: inventorySales, loading: inventoryLoading } = useSelector((state) => state.sell);
+  const { sales: procurementSales, loading: procurementLoading } = useSelector((state) => state.procurementSales || { sales: [] });
+  const salesLoading = inventoryLoading || procurementLoading;
   const { parties } = useSelector((state) => state.party);
   const { products = [] } = useSelector((state) => state.inventory || {});
   const { salesDownloadLoading, error } = useSelector((state) => state.reports);
@@ -53,6 +56,14 @@ const SalesReport = () => {
   const [partyId, setPartyId] = useState('');
   const [itemId, setItemId] = useState('');
   const [search, setSearch] = useState('');
+
+  const combinedSales = useMemo(() => {
+    const inv = (saleType === 'PROCUREMENT') ? [] : (inventorySales || []).map(s => ({ ...s, sourceType: 'Inventory', saleType: s.saleType || 'SALE' }));
+    const proc = (saleType === 'INVENTORY') ? [] : (procurementSales || []).map(s => ({ ...s, sourceType: 'Procurement', saleType: 'PROCUREMENT' }));
+    return [...inv, ...proc];
+  }, [inventorySales, procurementSales, saleType]);
+
+  const sales = combinedSales;
 
   // UI Dropdowns State
   const [exportOpen, setExportOpen] = useState(false);
@@ -130,7 +141,6 @@ const SalesReport = () => {
     const filters = {};
     if (rawFilters.startDate) filters.startDate = rawFilters.startDate;
     if (rawFilters.endDate) filters.endDate = rawFilters.endDate;
-    if (rawFilters.saleType) filters.saleType = rawFilters.saleType;
     if (rawFilters.billingType) filters.billingType = rawFilters.billingType;
     if (rawFilters.party) filters.party = rawFilters.party;
     if (rawFilters.search) filters.search = rawFilters.search;
@@ -142,8 +152,14 @@ const SalesReport = () => {
 
     lastFetchedFilters.current = rawFilters;
 
-    const promise = dispatch(fetchSales(filters));
-    activeRequestRef.current = promise;
+    const selectedType = rawFilters.saleType; // "INVENTORY", "PROCUREMENT", or ""
+
+    if (selectedType === 'INVENTORY' || !selectedType) {
+      dispatch(fetchSales(filters));
+    }
+    if (selectedType === 'PROCUREMENT' || !selectedType) {
+      dispatch(fetchProcurementSales(filters));
+    }
 
     setCurrentPage(1);
     setOpenRowActionId(null);
@@ -195,7 +211,14 @@ const SalesReport = () => {
     try {
       const invoiceNo = item.invoiceNo || item.invoiceNumber || item.refNo || item._id;
       const supplyTypeParam = item.supplyType ? `?supplyType=${encodeURIComponent(item.supplyType)}` : "";
-      const res = await api.get(`/sell/receipt/${item._id}${supplyTypeParam}`, { responseType: 'blob' });
+      
+      let res;
+      if (item.sourceType === 'Procurement') {
+        res = await api.get(`/procurement-sale/receipt/${item._id}`, { responseType: 'blob' });
+      } else {
+        res = await api.get(`/sell/receipt/${item._id}${supplyTypeParam}`, { responseType: 'blob' });
+      }
+
       const blob = new Blob([res.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -627,9 +650,9 @@ const SalesReport = () => {
               onChange={(e) => setSaleType(e.target.value)}
               className="w-full bg-white border border-gray-200 px-3 py-1.5 h-[38px] rounded-lg text-xs font-bold focus:outline-none focus:border-[#15803D] focus:ring-1 focus:ring-[#15803D] text-gray-750 shadow-sm cursor-pointer"
             >
-              <option value="">All Types</option>
-              <option value="SALE">SALE</option>
-              <option value="ESTIMATE">ESTIMATE</option>
+              <option value="">Both</option>
+              <option value="INVENTORY">Inventory</option>
+              <option value="PROCUREMENT">Procurement</option>
             </select>
           </div>
 

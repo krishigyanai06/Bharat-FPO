@@ -77,8 +77,17 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: process.env.VITE_API_PROXY_TARGET || "https://master-app-h957.onrender.com",
+        target: process.env.VITE_API_PROXY_TARGET || "https://bharat-fpo.krishigyanai.com",
         changeOrigin: true,
+        configure: (proxy, _options) => {
+          proxy.on("error", (err, _req, _res) => {
+            console.warn(
+              `\n[Vite Proxy Warning]: Connection failed to target backend "${
+                process.env.VITE_API_PROXY_TARGET || "https://bharat-fpo.krishigyanai.com"
+              }".\nDetail: ${err.message}\n`
+            );
+          });
+        },
       },
     },
   },

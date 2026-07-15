@@ -84,6 +84,7 @@ const menuSections = [
         isParent: true,
         children: [
           { label: "Sale Inventory", path: "/sell/invoices", icon: Receipt },
+          { label: "Procurement Sales", path: "/sales/procurement", icon: Receipt },
           { label: "Customer Orders", path: "/sell/orders", icon: ClipboardList },
           { label: "Payment", path: "/sell/receipts", icon: Wallet },
           { label: "Returns", path: "/sell/returns", icon: RotateCcw },
