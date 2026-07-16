@@ -105,7 +105,7 @@ export default function ProcurementSaleForm({ id, onBack }) {
 
   // Mount effects
   useEffect(() => {
-    dispatch(fetchParties());
+    dispatch(fetchParties({ partyType: "BUYER" }));
     dispatch(fetchProcurementStock());
   }, [dispatch]);
 

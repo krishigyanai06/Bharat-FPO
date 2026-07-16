@@ -8,6 +8,7 @@ import {
 } from "../store/thunks/sellThunk";
 import { fetchParties, addParty } from "../store/thunks/partyThunk";
 import { fetchProducts, fetchStockSummary, addProduct } from "../store/thunks/inventoryThunk";
+import { fetchMembers } from "../store/thunks/membersThunk";
 import { clearSellStatus } from "../store/slices/sellSlice";
 import { usePermissions } from "../hooks/usePermissions";
 import api from "../lib/api";
@@ -15,7 +16,6 @@ import SearchableStateSelect from "../components/SearchableStateSelect";
 import ProductModal from "../components/ProductModal";
 import { searchGstin } from "../store/thunks/eInvoiceThunk";
 import { normalizeGstinData } from "../utils/gstinNormalizer";
-import GovernmentComplianceModal from "../components/GovernmentComplianceModal";
 import {
   Plus,
   Trash2,
@@ -59,15 +59,17 @@ export default function CounterInvoiceForm() {
   const { parties, loading: partiesLoading } = useSelector((state) => state.party);
   const { products, stockSummary, loading: inventoryLoading } = useSelector((state) => state.inventory);
   const { loading: sellLoading } = useSelector((state) => state.sell);
+  const { members } = useSelector((state) => state.members);
 
   const [editRecord, setEditRecord] = useState(null);
   const [recordLoading, setRecordLoading] = useState(false);
 
   useEffect(() => {
     dispatch(clearSellStatus());
-    dispatch(fetchParties());
+    dispatch(fetchParties({ partyType: "BUYER" }));
     dispatch(fetchProducts());
     dispatch(fetchStockSummary());
+    dispatch(fetchMembers());
   }, [dispatch]);
 
   useEffect(() => {
@@ -119,6 +121,7 @@ export default function CounterInvoiceForm() {
       products={products}
       stockSummary={stockSummary}
       sellLoading={sellLoading}
+      members={members || []}
     />
   );
 }
@@ -131,11 +134,136 @@ const getProductIcon = (category) => {
   return Package;
 };
 
-function InvoiceFormInner({ editRecord = null, parties, products, stockSummary = [], sellLoading }) {
+function SearchableMemberSelect({
+  value,
+  onChange,
+  members,
+  error = null,
+  disabled = false
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearch("");
+    }
+  }, [isOpen]);
+
+  const filteredMembers = members.filter((m) => {
+    const fullName = `${m.firstName || ""} ${m.lastName || ""}`.toLowerCase();
+    const phone = (m.phone || "").toLowerCase();
+    const role = (m.role || "").toLowerCase();
+    const term = search.toLowerCase();
+    return fullName.includes(term) || phone.includes(term) || role.includes(term);
+  });
+
+  const selectedMember = members.find((m) => m._id === value);
+  const selectedName = selectedMember
+    ? `${selectedMember.firstName} ${selectedMember.lastName}`
+    : "";
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <div
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={`relative flex items-center justify-between border rounded-xl px-3 text-xs focus:outline-none transition-all cursor-pointer font-bold h-[42px] ${
+          disabled
+            ? "bg-slate-100/60 text-slate-400 border-slate-200 cursor-not-allowed"
+            : isOpen
+            ? "border-emerald-500 bg-white ring-4 ring-emerald-500/10 text-slate-800"
+            : "border-slate-200 hover:border-slate-350 bg-white text-slate-800"
+        } ${error ? "border-red-400 focus:ring-red-400" : ""}`}
+      >
+        <div className="flex items-center gap-2.5 truncate">
+          <User className={`w-4.5 h-4.5 shrink-0 ${disabled ? "text-slate-350" : isOpen ? "text-emerald-600" : "text-slate-400"}`} />
+          {selectedMember ? (
+            <div className="flex flex-col text-left">
+              <span className="font-extrabold text-gray-800 leading-tight">{selectedName}</span>
+              <span className="text-[9px] text-gray-400 font-bold tracking-wide mt-0.5">+91 {selectedMember.phone} ({selectedMember.role})</span>
+            </div>
+          ) : (
+            <span className="text-gray-450 font-semibold">Select FPO Member...</span>
+          )}
+        </div>
+        <ChevronDown className={`w-4 h-4 shrink-0 transition-transform duration-200 text-slate-450 ${isOpen ? "rotate-180 text-emerald-600" : ""}`} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-[100] mt-1.5 w-full bg-white border border-slate-200 rounded-xl shadow-lg animate-in fade-in slide-in-from-top-1 duration-150 overflow-hidden">
+          {/* Search Box */}
+          <div className="p-2 border-b border-slate-100 flex items-center gap-2 bg-slate-50/50">
+            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, phone or role..."
+              className="w-full bg-transparent border-none text-xs focus:outline-none focus:ring-0 font-medium text-slate-850 placeholder-slate-400 p-0"
+              onClick={(e) => e.stopPropagation()}
+              autoFocus
+            />
+          </div>
+
+          {/* List items */}
+          <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
+            {filteredMembers.length === 0 ? (
+              <div className="px-3.5 py-4 text-xs text-slate-400 text-center font-medium">
+                No FPO member matches search criteria
+              </div>
+            ) : (
+              filteredMembers.map((m) => {
+                const isSelected = value === m._id;
+                const mName = `${m.firstName || ""} ${m.lastName || ""}`.trim();
+                const initials = `${m.firstName?.[0] || ""}${m.lastName?.[0] || ""}`.toUpperCase();
+                return (
+                  <div
+                    key={m._id}
+                    onClick={() => {
+                      onChange(m._id);
+                      setIsOpen(false);
+                    }}
+                    className={`px-3.5 py-2.5 text-xs font-semibold cursor-pointer transition-colors flex items-center justify-between hover:bg-slate-50 ${
+                      isSelected ? "bg-emerald-50/40 text-emerald-800 hover:bg-emerald-50/50" : "text-slate-700 hover:text-slate-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* Avatar initials badge */}
+                      <div className="w-7 h-7 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-[10px] shrink-0">
+                        {initials}
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <span className="font-extrabold text-gray-950 text-xs leading-none">{mName}</span>
+                        <span className="text-[10px] text-gray-400 font-bold tracking-wide mt-1">+91 {m.phone || "—"} • {m.role || "Farmer"}</span>
+                      </div>
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InvoiceFormInner({ editRecord = null, parties, products, stockSummary = [], sellLoading, members }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [savedSaleForCompliance, setSavedSaleForCompliance] = useState(null);
-  const [isComplianceModalOpen, setIsComplianceModalOpen] = useState(false);
+
 
   const [addVendorOpen, setAddVendorOpen] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -143,6 +271,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
   const [saleType, setSaleType] = useState(editRecord ? editRecord.saleType : "SALE");
   const [billingType, setBillingType] = useState(editRecord ? editRecord.billingType : "Credit");
   const [selectedPartyId, setSelectedPartyId] = useState(editRecord ? (editRecord.party?._id || editRecord.party || "") : "");
+  const [selectedMemberId, setSelectedMemberId] = useState("");
 
   const [invoiceNo, setInvoiceNo] = useState(editRecord ? (editRecord.billNumber || editRecord.invoiceNo || "") : "");
   const [billDate, setBillDate] = useState(editRecord ? (editRecord.billDate || (editRecord.createdAt ? new Date(editRecord.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0])) : new Date().toISOString().split("T")[0]);
@@ -176,8 +305,20 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
   const [errors, setErrors] = useState({});
 
   const partySelectRef = useRef(null);
+  const memberSelectRef = useRef(null);
   const buyerNameInputRef = useRef(null);
   const dueDateInputRef = useRef(null);
+
+  // Auto-detect member if editing and matching member found
+  useEffect(() => {
+    if (editRecord && !editRecord.party && editRecord.buyerPhone && members?.length > 0) {
+      const found = members.find((m) => m.phone === editRecord.buyerPhone);
+      if (found) {
+        setSelectedMemberId(found._id);
+        setCustomerType("member");
+      }
+    }
+  }, [editRecord, members]);
 
   const handleCustomerTypeChange = (type) => {
     setCustomerType(type);
@@ -188,14 +329,49 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
       setBuyerAddress("");
       setBuyerGstin("");
       setBuyerType("FARMER");
+      setSelectedMemberId("");
       setTimeout(() => {
         partySelectRef.current?.focus();
       }, 50);
+    } else if (type === "member") {
+      setSelectedPartyId("");
+      setBuyerName("");
+      setBuyerPhone("");
+      setBuyerAddress("");
+      setBuyerGstin("");
+      setBuyerType("FARMER");
+      setTimeout(() => {
+        memberSelectRef.current?.focus();
+      }, 50);
     } else {
       setSelectedPartyId("");
+      setSelectedMemberId("");
+      setBuyerName("");
+      setBuyerPhone("");
+      setBuyerAddress("");
+      setBuyerGstin("");
+      setBuyerType("FARMER");
       setTimeout(() => {
         buyerNameInputRef.current?.focus();
       }, 50);
+    }
+  };
+
+  const handleMemberChange = (memberId) => {
+    setSelectedMemberId(memberId);
+    if (memberId) {
+      const m = members.find((x) => x._id === memberId);
+      if (m) {
+        setBuyerName(`${m.firstName || ""} ${m.lastName || ""}`.trim());
+        setBuyerPhone(m.phone || "");
+        setBuyerAddress(`${m.district || ""}, ${m.state || ""}`.trim().replace(/^,\s*/, ""));
+        setBuyerType(m.role?.toUpperCase() === "STAFF" ? "STAFF" : "FARMER");
+      }
+    } else {
+      setBuyerName("");
+      setBuyerPhone("");
+      setBuyerAddress("");
+      setBuyerType("FARMER");
     }
   };
 
@@ -205,6 +381,9 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
       const newErrors = {};
       if (customerType === "registered" && !selectedPartyId) {
         newErrors.selectedPartyId = "Party Profile is required.";
+      }
+      if (customerType === "member" && !selectedMemberId) {
+        newErrors.selectedMemberId = "Member Profile is required.";
       }
       if (customerType === "walkin" && !buyerName.trim()) {
         newErrors.buyerName = "Buyer Name is required.";
@@ -675,6 +854,9 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     if (customerType === "registered" && !selectedPartyId) {
       newErrors.selectedPartyId = "Party Profile is required.";
     }
+    if (customerType === "member" && !selectedMemberId) {
+      newErrors.selectedMemberId = "Member Profile is required.";
+    }
     if (customerType === "walkin" && !buyerName.trim()) {
       newErrors.buyerName = "Buyer Name is required.";
     }
@@ -825,8 +1007,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
       if (isComplianceDone) {
         navigate("/sell?tab=sales");
       } else {
-        setSavedSaleForCompliance(savedSale);
-        setIsComplianceModalOpen(true);
+        navigate(`/sell/compliance/${savedSale._id || savedSale.id}`);
       }
     } catch (err) {
       toast.error(err || "Failed to submit transaction");
@@ -966,7 +1147,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
             <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-4">
               <div>
                 <label className="block text-[10px] font-extrabold text-gray-500 mb-3 uppercase tracking-wider">Customer Type Selector</label>
-                <div role="radiogroup" aria-label="Customer Type" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div role="radiogroup" aria-label="Customer Type" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {/* Registered Party Card */}
                   <div
                     role="radio"
@@ -1014,7 +1195,59 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                     <div className="flex flex-col pr-6">
                       <span className="text-base font-semibold text-gray-900 leading-tight">Registered Party</span>
                       <span className="text-[13px] text-gray-500 mt-1 leading-snug">
-                        Registered customers, farmers and B2B buyers.
+                        Registered suppliers, buyers and accounts.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* FPO Member (Farmer) Card */}
+                  <div
+                    role="radio"
+                    aria-checked={customerType === "member"}
+                    tabIndex={0}
+                    onClick={() => handleCustomerTypeChange("member")}
+                    onKeyDown={(e) => {
+                      if (e.key === " " || e.key === "Enter") {
+                        e.preventDefault();
+                        handleCustomerTypeChange("member");
+                      }
+                    }}
+                    className={`relative flex items-start gap-3 p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+                      customerType === "member"
+                        ? "border-emerald-600 bg-emerald-50/10 shadow-md scale-[1.01]"
+                        : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                    }`}
+                  >
+                    {/* Hidden Native Input */}
+                    <input
+                      type="radio"
+                      name="customerType"
+                      value="member"
+                      checked={customerType === "member"}
+                      onChange={() => handleCustomerTypeChange("member")}
+                      className="sr-only"
+                      tabIndex={-1}
+                    />
+
+                    {/* Selection Checkmark */}
+                    {customerType === "member" && (
+                      <div className="absolute top-4 right-4 bg-emerald-600 text-white rounded-full p-0.5 shadow-xs animate-in fade-in zoom-in-75 duration-150">
+                        <Check className="w-3 h-3 stroke-[3.5]" />
+                      </div>
+                    )}
+
+                    {/* Icon */}
+                    <div className={`flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
+                      customerType === "member" ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-500"
+                    }`}>
+                      <User className="w-[26px] h-[26px]" />
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex flex-col pr-6">
+                      <span className="text-base font-semibold text-gray-900 leading-tight">FPO Member (Farmer)</span>
+                      <span className="text-[13px] text-gray-500 mt-1 leading-snug">
+                        Shareholding FPO farmers and staff.
                       </span>
                     </div>
                   </div>
@@ -1082,7 +1315,11 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                 </div>
                 <div className="flex flex-col">
                   <h3 className="font-extrabold text-gray-800 text-sm">
-                    {customerType === "registered" ? "Registered Party Details" : "Walk-in Customer Details"}
+                    {customerType === "registered"
+                      ? "Registered Party Details"
+                      : customerType === "member"
+                      ? "FPO Member Details"
+                      : "Walk-in Customer Details"}
                   </h3>
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
                     Provide client billing profile information
@@ -1169,6 +1406,47 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                               </div>
                             );
                           }
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : customerType === "member" ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-in fade-in duration-200">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-500 mb-2 uppercase tracking-wider">FPO Member Profile *</label>
+                    <SearchableMemberSelect
+                      value={selectedMemberId}
+                      onChange={handleMemberChange}
+                      members={members}
+                      error={errors.selectedMemberId}
+                    />
+                    {errors.selectedMemberId && (
+                      <p className="text-red-500 text-[10px] font-bold mt-1.5">{errors.selectedMemberId}</p>
+                    )}
+
+                    {selectedMemberId && (
+                      <div className="mt-3.5">
+                        {(() => {
+                          const m = members.find((x) => x._id === selectedMemberId);
+                          return (
+                            <div className="bg-emerald-50/50 border border-emerald-200/60 rounded-xl p-3.5 flex flex-col gap-1 shadow-2xs">
+                              <div className="flex items-center gap-1.5">
+                                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">👤</span>
+                                <span className="font-extrabold text-[10px] text-emerald-800 uppercase tracking-wider">FPO {m?.role || "Member"} Registered</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-[10px] text-gray-500 font-medium pt-1.5 border-t border-emerald-100/30 mt-1">
+                                <div>
+                                  <span className="text-gray-400 font-semibold block text-[8px] uppercase tracking-wider">Phone</span>
+                                  <span className="font-bold text-gray-700">+91 {m?.phone || "—"}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-400 font-semibold block text-[8px] uppercase tracking-wider">Location</span>
+                                  <span className="font-bold text-gray-700 truncate block max-w-[120px]">{m?.district || m?.state || "—"}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
                         })()}
                       </div>
                     )}
@@ -1676,67 +1954,56 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                         </div>
                       </div>
 
-                      {/* Advanced Options Accordion */}
-                      <div className="pt-1">
-                        <button
-                          type="button"
-                          onClick={() => setShowAdvancedProductOptions(!showAdvancedProductOptions)}
-                          className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1 bg-transparent border-0 p-0 focus:outline-none cursor-pointer"
-                        >
-                          {showAdvancedProductOptions ? "Hide Advanced Options" : "Show Advanced Options"}
-                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAdvancedProductOptions ? 'rotate-180' : ''}`} />
-                        </button>
+                      {/* Advanced Options Grid (Always Visible) */}
+                      <div className="pt-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 border border-gray-150 rounded-xl bg-gray-50/30 mt-1 text-xs font-semibold text-gray-700">
+                          {/* Discount Type selection */}
+                          <div className="space-y-1">
+                            <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Discount Type</label>
+                            <select
+                              value={draftDiscountType}
+                              onChange={(e) => {
+                                const newType = e.target.value;
+                                setDraftDiscountType(newType);
+                                setDraftDiscountPercent("");
+                                setDraftDiscountAmount("");
+                              }}
+                              className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-emerald-500 bg-white font-medium"
+                            >
+                              <option value="Percentage">Percentage (%)</option>
+                              <option value="Fixed Amount">Fixed Amount (₹)</option>
+                            </select>
+                          </div>
 
-                        {showAdvancedProductOptions && (
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 border border-gray-150 rounded-xl bg-gray-55/30 mt-2 text-xs font-semibold text-gray-700 animate-in fade-in duration-200">
-                            {/* Discount Type selection */}
-                            <div className="space-y-1">
-                              <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Discount Type</label>
-                              <select
-                                value={draftDiscountType}
-                                onChange={(e) => {
-                                  const newType = e.target.value;
-                                  setDraftDiscountType(newType);
-                                  setDraftDiscountPercent("");
-                                  setDraftDiscountAmount("");
-                                }}
-                                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-emerald-500 bg-white font-medium"
-                              >
-                                <option value="Percentage">Percentage (%)</option>
-                                <option value="Fixed Amount">Fixed Amount (₹)</option>
-                              </select>
-                            </div>
+                          {/* Tax Type selection */}
+                          <div className="space-y-1">
+                            <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Tax Type</label>
+                            <select
+                              value={draftTaxType}
+                              onChange={(e) => setDraftTaxType(e.target.value)}
+                              className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-emerald-500 bg-white font-medium"
+                            >
+                              <option value="Without Tax">Without Tax</option>
+                              <option value="With Tax">With Tax</option>
+                            </select>
+                          </div>
 
-                            {/* Tax Type selection */}
-                            <div className="space-y-1">
-                              <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Tax Type</label>
-                              <select
-                                value={draftTaxType}
-                                onChange={(e) => setDraftTaxType(e.target.value)}
-                                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-emerald-500 bg-white font-medium"
-                              >
-                                <option value="Without Tax">Without Tax</option>
-                                <option value="With Tax">With Tax</option>
-                              </select>
-                            </div>
-
-                            {/* Calculated rate details */}
-                            <div className="space-y-1">
-                              <span className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Base Rate (₹)</span>
-                              <div className="py-1.5 px-3 bg-gray-100 rounded-lg font-bold text-gray-700 text-center">
-                                ₹{draftProductId ? (computedDraftDetails.rate || "0.00") : "0.00"}
-                              </div>
-                            </div>
-
-                            {/* Calculated tax amount details */}
-                            <div className="space-y-1">
-                              <span className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Tax Amount (₹)</span>
-                              <div className="py-1.5 px-3 bg-gray-100 rounded-lg font-bold text-gray-700 text-center">
-                                ₹{draftProductId ? (computedDraftDetails.taxAmount || "0.00") : "0.00"}
-                              </div>
+                          {/* Calculated rate details */}
+                          <div className="space-y-1">
+                            <span className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Base Rate (₹)</span>
+                            <div className="py-1.5 px-3 bg-gray-100 rounded-lg font-bold text-gray-700 text-center">
+                              ₹{draftProductId ? (computedDraftDetails.rate || "0.00") : "0.00"}
                             </div>
                           </div>
-                        )}
+
+                          {/* Calculated tax amount details */}
+                          <div className="space-y-1">
+                            <span className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider">Tax Amount (₹)</span>
+                            <div className="py-1.5 px-3 bg-gray-100 rounded-lg font-bold text-gray-700 text-center">
+                              ₹{draftProductId ? (computedDraftDetails.taxAmount || "0.00") : "0.00"}
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Add Product actions row */}
@@ -2378,14 +2645,6 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
         />
       )}
 
-      <GovernmentComplianceModal
-        isOpen={isComplianceModalOpen}
-        sale={savedSaleForCompliance}
-        onClose={() => {
-          setIsComplianceModalOpen(false);
-          navigate("/sell?tab=sales");
-        }}
-      />
     </div>
   );
 }
@@ -2532,7 +2791,7 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
       toast.success("Party added successfully");
 
       // Reload overall lists in Redux
-      const refreshedParties = await dispatch(fetchParties()).unwrap();
+      const refreshedParties = await dispatch(fetchParties({ partyType: "BUYER" })).unwrap();
       const match = refreshedParties.find(
         p => p.name === payload.name || p._id === res._id || p._id === res.data?._id
       );

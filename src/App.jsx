@@ -16,7 +16,6 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Listing = lazy(() => import('./pages/Listing'));
 const Inventory = lazy(() => import('./pages/Inventory'));
 const Buy = lazy(() => import('./pages/Buy'));
-const Members = lazy(() => import('./pages/Members'));
 const Documents = lazy(() => import('./pages/Documents'));
 const Reports = lazy(() => import('./pages/Reports'));
 const GstReportsDashboard = lazy(() => import('./pages/gst-reports/GstReportsWorkspace'));
@@ -34,6 +33,8 @@ const TierFeatures = lazy(() => import('./pages/TierFeatures'));
 const Party = lazy(() => import('./pages/Party'));
 const PartyForm = lazy(() => import('./pages/PartyForm'));
 const ProcurementSales = lazy(() => import('./pages/ProcurementSales/ProcurementSales'));
+const GovernmentCompliancePage = lazy(() => import('./pages/GovernmentCompliancePage'));
+const PurchaseCrop = lazy(() => import('./pages/PurchaseCrop'));
 
 
 const PageLoader = () => (
@@ -115,7 +116,7 @@ function App() {
               <Route path="inventory" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/inventory']}><Suspense fallback={<PageLoader />}><Inventory /></Suspense></ProtectedRoute>} />
               <Route path="buy" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/buy']}><Suspense fallback={<PageLoader />}><Buy /></Suspense></ProtectedRoute>} />
               <Route path="broadcast" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/broadcast']}><Suspense fallback={<PageLoader />}><Broadcast /></Suspense></ProtectedRoute>} />
-              <Route path="members" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/members']}><Suspense fallback={<PageLoader />}><Members /></Suspense></ProtectedRoute>} />
+              <Route path="members" element={<Navigate to="/party?tab=customers" replace />} />
               <Route path="documents" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/documents']}><Suspense fallback={<PageLoader />}><Documents /></Suspense></ProtectedRoute>} />
               <Route path="ledger" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/ledger']}><Suspense fallback={<PageLoader />}><ErrorBoundary><Ledger /></ErrorBoundary></Suspense></ProtectedRoute>} />
               <Route path="advertisement" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/advertisement']}><Suspense fallback={<PageLoader />}><Advertisement /></Suspense></ProtectedRoute>} />
@@ -133,12 +134,15 @@ function App() {
               <Route path="sell/orders" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/buy']}><Suspense fallback={<PageLoader />}><Buy /></Suspense></ProtectedRoute>} />
               <Route path="sell/invoice/new" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterInvoiceForm /></Suspense></ProtectedRoute>} />
               <Route path="sell/invoice/edit/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterInvoiceForm /></Suspense></ProtectedRoute>} />
+              <Route path="sell/compliance/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><GovernmentCompliancePage /></Suspense></ProtectedRoute>} />
               <Route path="sales/procurement" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><ProcurementSales /></Suspense></ProtectedRoute>} />
               <Route path="purchase" element={<Navigate to="/purchase/bills" replace />} />
               <Route path="purchase/bills" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
               <Route path="purchase/orders" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
               <Route path="purchase/payments" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
               <Route path="purchase/debit-notes" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
+              <Route path="purchase/crop" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><PurchaseCrop /></Suspense></ProtectedRoute>} />
+              <Route path="purchase/crop/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><PurchaseCrop /></Suspense></ProtectedRoute>} />
               <Route path="purchase/expenses" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
               <Route path="create-tenant" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/create-tenant']}><Suspense fallback={<PageLoader />}><CreateTenant /></Suspense></ProtectedRoute>} />
               <Route path="tier-features" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/tier-features']}><Suspense fallback={<PageLoader />}><TierFeatures /></Suspense></ProtectedRoute>} />

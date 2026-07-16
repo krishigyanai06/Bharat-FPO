@@ -92,7 +92,7 @@ export default function GenerateEWayBillModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs font-sans">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-xs font-sans">
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col mx-4 animate-in zoom-in duration-200">
         
         {/* Header */}

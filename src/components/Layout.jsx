@@ -37,6 +37,7 @@ import {
   ReceiptIndianRupee,
   Wallet,
   Zap,
+  Sprout,
 } from "lucide-react";
 import { fetchMe, fetchTenants } from "../store/thunks/layoutThunk";
 import { setSelectedTenant } from "../store/slices/layoutSlice";
@@ -57,7 +58,17 @@ const menuSections = [
     items: [
       { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
       { icon: ShoppingCart, label: "Procurement", path: "/procurement" },
-      { icon: Users, label: "Parties", path: "/party" },
+      {
+        icon: Users,
+        label: "Parties",
+        path: "/party",
+        isParent: true,
+        children: [
+          { label: "Suppliers", path: "/party?tab=suppliers", icon: Package },
+          { label: "Buyers", path: "/party?tab=buyers", icon: ShoppingCart },
+          { label: "Customers (Members)", path: "/party?tab=customers", icon: Users },
+        ]
+      },
       { icon: Archive, label: "Inventory", path: "/inventory" },
     ]
   },
@@ -75,6 +86,7 @@ const menuSections = [
           { label: "Payments", path: "/purchase/payments", icon: Wallet },
           { label: "Debit Notes", path: "/purchase/debit-notes", icon: RotateCcw },
           { label: "Expenses", path: "/purchase/expenses", icon: ReceiptIndianRupee },
+          { label: "Purchase Crop", path: "/purchase/crop", icon: Sprout },
         ]
       },
       {
@@ -104,7 +116,6 @@ const menuSections = [
   {
     title: "COMMUNITY",
     items: [
-      { icon: Users, label: "Members", path: "/members" },
       { icon: Megaphone, label: "Broadcast", path: "/broadcast" },
       { icon: ImagePlus, label: "Advertisement", path: "/advertisement" },
     ]
@@ -570,7 +581,12 @@ export default function Layout() {
                   {filteredItems.map((item) => {
                     if (item.isParent) {
                       const Icon = item.icon;
-                      const parentActive = item.children.some(child => location.pathname === child.path);
+                      const parentActive = item.children.some(child => {
+                        const currentFullPath = location.pathname + location.search;
+                        return child.path.includes("?")
+                          ? currentFullPath === child.path
+                          : location.pathname === child.path;
+                      });
                       const isExpanded = expandedMenus[item.label.toLowerCase()] || false;
 
                       if (isSidebarMinimized) {
@@ -629,7 +645,10 @@ export default function Layout() {
                           >
                             <div className="border-l border-[#E5E7EB] ml-[20px] pl-[20px] flex flex-col gap-1 py-1">
                               {item.children.map((child) => {
-                                const childActive = location.pathname === child.path;
+                                const currentFullPath = location.pathname + location.search;
+                                const childActive = child.path.includes("?")
+                                  ? currentFullPath === child.path
+                                  : location.pathname === child.path;
 
                                 return (
                                   <button

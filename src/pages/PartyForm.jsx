@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { fetchParties, addParty, updateParty } from "../store/thunks/partyThunk";
 import { clearPartyStatus } from "../store/slices/partySlice";
 import { usePermissions } from "../hooks/usePermissions";
@@ -20,7 +20,9 @@ import {
     Loader2,
     Info,
     FileText,
-    FileSpreadsheet
+    FileSpreadsheet,
+    Package,
+    RefreshCw
 } from "lucide-react";
 
 // State Options for Dropdowns
@@ -44,6 +46,9 @@ export default function PartyForm() {
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const { id } = useParams();
+    const [searchParams] = useSearchParams();
+    const queryRole = searchParams.get("role")?.toUpperCase();
+    const initialRole = queryRole === "BUYER" || queryRole === "SUPPLIER" || queryRole === "BOTH" ? queryRole : "SUPPLIER";
 
     const { parties, loading, error, success } = useSelector((s) => s.party);
     const { isReadOnly } = usePermissions();
@@ -67,6 +72,7 @@ export default function PartyForm() {
         shippingAddress: "",
         openingBalance: "",
         openingBalanceType: "CREDIT",
+        partyType: initialRole,
     });
     const [errors, setErrors] = useState({});
 
@@ -91,6 +97,7 @@ export default function PartyForm() {
                     shippingAddress: party.shippingAddress || "",
                     openingBalance: party.openingBalance ?? "",
                     openingBalanceType: party.openingBalanceType || "CREDIT",
+                    partyType: party.partyType || "SUPPLIER",
                 });
                 setShippingSameAsBilling(!party.shippingAddress || party.shippingAddress === party.billingAddress);
             } else {
@@ -156,6 +163,10 @@ export default function PartyForm() {
             } else if (form.gstin.length !== 15) {
                 tempErrors.gstin = "GSTIN must be exactly 15 alphanumeric characters";
             }
+        }
+
+        if (!form.partyType) {
+            tempErrors.partyType = "Business role is required";
         }
 
         setErrors(tempErrors);
@@ -292,6 +303,48 @@ export default function PartyForm() {
                     {/* ================= SECTION 1: BUSINESS INFORMATION ================= */}
                     <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-4 pb-2 border-b border-gray-200">
                         <h2 className="text-[16px] font-bold text-brand-700 tracking-wider uppercase">Business Information</h2>
+                    </div>
+
+                    {/* Partner Role */}
+                    <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wide md:pt-3">
+                        Partner Role <span className="text-red-500">*</span>
+                    </label>
+                    <div className="col-span-1 md:col-span-1 lg:col-span-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            {[
+                                { id: "SUPPLIER", label: "Supplier", icon: <Package className="w-5 h-5 shrink-0" />, desc: "Buy crops/supplies from this party" },
+                                { id: "BUYER", label: "Buyer", icon: <Building className="w-5 h-5 shrink-0" />, desc: "Sell crops/supplies to this party" },
+                                { id: "BOTH", label: "Both Roles", icon: <RefreshCw className="w-5 h-5 shrink-0" />, desc: "Act as both supplier & buyer" },
+                            ].map((role) => {
+                                const isSelected = form.partyType === role.id;
+                                return (
+                                    <button
+                                        key={role.id}
+                                        type="button"
+                                        disabled={isReadOnly}
+                                        onClick={() => setForm({ ...form, partyType: role.id })}
+                                        className={`flex items-start gap-3 p-4 rounded-xl border text-left transition select-none cursor-pointer ${
+                                            isSelected
+                                                ? "border-emerald-600 bg-emerald-50/40 ring-1 ring-emerald-600 text-emerald-950"
+                                                : "border-gray-200 hover:bg-gray-50 text-gray-700"
+                                        } disabled:opacity-50`}
+                                    >
+                                        <div className={`p-2 rounded-lg transition ${
+                                            isSelected ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"
+                                        }`}>
+                                            {role.icon}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold uppercase tracking-wider">{role.label}</p>
+                                            <p className="text-[10px] text-gray-405 mt-0.5 leading-normal">{role.desc}</p>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {errors.partyType && (
+                            <p className="text-[11px] text-red-500 mt-1 font-medium">{errors.partyType}</p>
+                        )}
                     </div>
 
                     {/* GST Type */}

@@ -429,7 +429,7 @@ export default function Purchases() {
   // Load static data
   useEffect(() => {
     dispatch(clearPurchaseStatus());
-    dispatch(fetchParties());
+    dispatch(fetchParties({ partyType: "SUPPLIER" }));
     dispatch(fetchProducts());
     dispatch(fetchStockSummary());
   }, [dispatch]);
@@ -4525,7 +4525,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
         <QuickAddVendorModal
           onClose={() => setAddVendorOpen(false)}
           onSuccess={async (newVendorId) => {
-            await dispatch(fetchParties()).unwrap();
+            await dispatch(fetchParties({ partyType: "SUPPLIER" })).unwrap();
             setAddVendorOpen(false);
             setSelectedParty(newVendorId);
           }}
@@ -5039,7 +5039,7 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
       toast.success("Party added successfully");
 
       // Reload overall lists in Redux
-      const refreshedParties = await dispatch(fetchParties()).unwrap();
+      const refreshedParties = await dispatch(fetchParties({ partyType: "SUPPLIER" })).unwrap();
       const match = refreshedParties.find(
         p => p.name === payload.name || p._id === res._id || p._id === res.data?._id
       );

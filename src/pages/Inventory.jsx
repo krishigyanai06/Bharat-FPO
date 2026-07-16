@@ -1514,7 +1514,7 @@ function Inventory() {
       {/* PAGINATION BAR */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-5 py-3.5 bg-white rounded-2xl border border-gray-150 shadow-xs mt-4">
-          <p className="text-xs font-medium text-gray-550">
+          <p className="text-xs font-medium text-gray-555">
             Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–
             {Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} of{" "}
             {filteredData.length} products
@@ -1523,7 +1523,7 @@ function Inventory() {
             <button
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((p) => p - 1)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30 hover:bg-gray-50 transition"
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 disabled:opacity-30 hover:border-gray-300 hover:bg-gray-50 transition cursor-pointer"
               title="Prev"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1562,7 +1562,7 @@ function Inventory() {
               return pages.map((p, idx) => {
                 if (p === "...") {
                   return (
-                    <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-xs text-gray-400 font-semibold select-none">
+                    <span key={`ellipsis-${idx}`} className="w-9 h-9 flex items-center justify-center text-xs text-gray-400 font-semibold select-none">
                       ...
                     </span>
                   );
@@ -1571,10 +1571,10 @@ function Inventory() {
                   <button
                     key={p}
                     onClick={() => setCurrentPage(p)}
-                    className={`w-8 h-8 rounded-lg text-xs font-bold transition duration-150 ${
+                    className={`w-9 h-9 flex items-center justify-center rounded-xl text-xs font-bold transition-all duration-150 border cursor-pointer ${
                       p === currentPage
-                        ? "bg-[#14532d] text-white shadow-sm"
-                        : "border border-gray-200 hover:bg-gray-50 text-gray-700 bg-white"
+                        ? "bg-brand-700 border-brand-700 !text-white shadow-md shadow-brand-100 scale-105"
+                        : "border-gray-250 hover:border-gray-350 hover:bg-gray-50 text-gray-700 bg-white"
                     }`}
                   >
                     {p}
@@ -1586,7 +1586,7 @@ function Inventory() {
             <button
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage((p) => p - 1 + 2)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30 hover:bg-gray-50 transition"
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 disabled:opacity-30 hover:border-gray-300 hover:bg-gray-50 transition cursor-pointer"
               title="Next"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -24,7 +24,6 @@ import { usePermissions } from "../hooks/usePermissions";
 import api, { isEInvoiceSessionValid, addAuditLog } from "../lib/api";
 import { generateEInvoice, generateEInvoicePdf } from "../store/thunks/eInvoiceThunk";
 import { clearEInvoiceStatus } from "../store/slices/eInvoiceSlice";
-import GovernmentComplianceModal from "../components/GovernmentComplianceModal";
 import {
   Receipt,
   Plus,
@@ -56,6 +55,7 @@ import {
   Layers,
   Clock,
   Shield,
+  MoreVertical,
 } from "lucide-react";
 
 const TABS = [
@@ -176,8 +176,6 @@ export default function CounterSales() {
   // Compliance drawer state
   const [complianceDrawerOpen, setComplianceDrawerOpen] = useState(false);
   const [complianceItem, setComplianceItem] = useState(null);
-  const [complianceModalOpen, setComplianceModalOpen] = useState(false);
-  const [selectedComplianceSale, setSelectedComplianceSale] = useState(null);
   
   // Local list filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -189,10 +187,19 @@ export default function CounterSales() {
   // Viewing detail state
   const [detailItem, setDetailItem] = useState(null);
   const [detailType, setDetailType] = useState("sale"); // 'sale', 'payment', 'return'
+  const [activeDropdownId, setActiveDropdownId] = useState(null);
+
+  useEffect(() => {
+    const handleOutsideClick = () => {
+      setActiveDropdownId(null);
+    };
+    window.addEventListener("click", handleOutsideClick);
+    return () => window.removeEventListener("click", handleOutsideClick);
+  }, []);
 
   useEffect(() => {
     dispatch(clearSellStatus());
-    dispatch(fetchParties());
+    dispatch(fetchParties({ partyType: "BUYER" }));
     dispatch(fetchProducts());
     dispatch(fetchStockSummary());
   }, [dispatch]);
@@ -573,10 +580,7 @@ export default function CounterSales() {
                             if (irnVal) {
                               return (
                                 <button
-                                  onClick={() => {
-                                    setSelectedComplianceSale(sale);
-                                    setComplianceModalOpen(true);
-                                  }}
+                                  onClick={() => navigate(`/sell/compliance/${sale._id}`)}
                                   className="border border-emerald-500 bg-emerald-50/10 hover:bg-emerald-50 text-emerald-800 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
                                 >
                                   ✓ Generated
@@ -588,10 +592,7 @@ export default function CounterSales() {
                             if (isFailed) {
                               return (
                                 <button
-                                  onClick={() => {
-                                    setSelectedComplianceSale(sale);
-                                    setComplianceModalOpen(true);
-                                  }}
+                                  onClick={() => navigate(`/sell/compliance/${sale._id}`)}
                                   className="border border-rose-500 bg-rose-50/10 hover:bg-rose-50 text-rose-750 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
                                 >
                                   ❌ Failed
@@ -601,10 +602,7 @@ export default function CounterSales() {
 
                             return (
                               <button
-                                onClick={() => {
-                                  setSelectedComplianceSale(sale);
-                                  setComplianceModalOpen(true);
-                                }}
+                                onClick={() => navigate(`/sell/compliance/${sale._id}`)}
                                 className="border border-gray-205 bg-white hover:bg-gray-50 text-gray-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer font-sans text-xs"
                               >
                                 ⚡ Generate
@@ -629,10 +627,7 @@ export default function CounterSales() {
                             if (hasEwb) {
                               return (
                                 <button
-                                  onClick={() => {
-                                    setSelectedComplianceSale(sale);
-                                    setComplianceModalOpen(true);
-                                  }}
+                                  onClick={() => navigate(`/sell/compliance/${sale._id}`)}
                                   className={`font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs border ${
                                     ewbStatus === "CANCELLED"
                                       ? "border-rose-300 bg-rose-50/10 text-rose-700"
@@ -661,10 +656,7 @@ export default function CounterSales() {
 
                             return (
                               <button
-                                onClick={() => {
-                                  setSelectedComplianceSale(sale);
-                                  setComplianceModalOpen(true);
-                                }}
+                                onClick={() => navigate(`/sell/compliance/${sale._id}`)}
                                 className="border border-amber-500 bg-amber-50/5 hover:bg-amber-50 text-amber-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
                               >
                                 ⚡ Generate
@@ -673,71 +665,88 @@ export default function CounterSales() {
                           })()}
                         </td>
                         <td className="px-3 py-2.5 text-right">
-                          <div className="flex justify-end gap-1">
+                          <div className="relative inline-block text-left">
                             <button
-                              onClick={() => handleViewDetails(sale, "sale")}
-                              className="p-2 text-gray-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition"
-                              title="View Details"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveDropdownId(activeDropdownId === sale._id ? null : sale._id);
+                              }}
+                              className="p-1.5 hover:bg-gray-100 rounded-lg transition border-0 bg-transparent cursor-pointer text-gray-500 hover:text-gray-900"
                             >
-                              <Eye className="w-4 h-4" />
+                              <MoreVertical className="w-4 h-4" />
                             </button>
-                            {sale.saleType === "SALE" && (
-                              <button
-                                onClick={() => {
-                                  setSelectedComplianceSale(sale);
-                                  setComplianceModalOpen(true);
-                                }}
-                                className="p-2 text-gray-650 hover:text-brand-750 hover:bg-brand-50 rounded-lg transition"
-                                title="Government Compliance (E-Invoice / E-Way Bill)"
-                              >
-                                <Shield className="w-4 h-4" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleDownloadReceipt(sale._id, sale.invoiceNo || "Receipt", sale.supplyType)}
-                              className="p-2 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
-                              title="Download Sales Bill PDF"
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
-                            {sale.billingType === "Credit" && sale.saleType === "SALE" && sale.unpaidAmount > 0 && !isReadOnly && (
-                              <button
-                                onClick={() => {
-                                  setLinkedSellForPayment(sale);
-                                  setPaymentModalOpen(true);
-                                }}
-                                className="p-2 text-gray-650 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition animate-pulse"
-                                title="Receive Payment"
-                              >
-                                <IndianRupee className="w-4 h-4 text-emerald-650" />
-                              </button>
-                            )}
-                            {!isReadOnly && (
-                              <button
-                                onClick={() => navigate(`/sell/invoice/edit/${sale._id}`)}
-                                className="p-2 text-gray-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition"
-                                title="Edit Sales Bill/Estimate"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                            )}
-                            {sale.saleType === "ESTIMATE" && !isReadOnly && (
-                              <button
-                                onClick={() => handleConvertEstimate(sale._id)}
-                                className="px-2.5 py-1 bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-bold rounded-lg transition"
-                                title="Convert to Sale"
-                              >
-                                Convert to Sale
-                              </button>
-                            )}
-                            {!isReadOnly && (
-                              <button
-                                onClick={() => handleDeleteSale(sale._id)}
-                                className="p-2 text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
-                                title="Delete Sales Bill"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                            
+                            {activeDropdownId === sale._id && (
+                              <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                                <button
+                                  onClick={() => handleViewDetails(sale, "sale")}
+                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                >
+                                  <Eye className="w-3.5 h-3.5 text-gray-400" />
+                                  View Details
+                                </button>
+                                
+                                {sale.saleType === "SALE" && (
+                                  <button
+                                    onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                                    className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                  >
+                                    <Shield className="w-3.5 h-3.5 text-gray-400" />
+                                    Government Compliance
+                                  </button>
+                                )}
+                                
+                                <button
+                                  onClick={() => handleDownloadReceipt(sale._id, sale.invoiceNo || "Receipt", sale.supplyType)}
+                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                >
+                                  <Download className="w-3.5 h-3.5 text-gray-400" />
+                                  Download PDF
+                                </button>
+                                
+                                {sale.billingType === "Credit" && sale.saleType === "SALE" && sale.unpaidAmount > 0 && !isReadOnly && (
+                                  <button
+                                    onClick={() => {
+                                      setLinkedSellForPayment(sale);
+                                      setPaymentModalOpen(true);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-xs text-emerald-705 hover:bg-emerald-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                  >
+                                    <IndianRupee className="w-3.5 h-3.5 text-emerald-500" />
+                                    Receive Payment
+                                  </button>
+                                )}
+                                
+                                {sale.saleType === "ESTIMATE" && !isReadOnly && (
+                                  <button
+                                    onClick={() => handleConvertEstimate(sale._id)}
+                                    className="w-full text-left px-4 py-2 text-xs text-brand-700 hover:bg-brand-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                  >
+                                    <RefreshCw className="w-3.5 h-3.5 text-brand-500" />
+                                    Convert to Sale
+                                  </button>
+                                )}
+                                
+                                {!isReadOnly && (
+                                  <>
+                                    <div className="h-px bg-gray-100 my-1"></div>
+                                    <button
+                                      onClick={() => navigate(`/sell/invoice/edit/${sale._id}`)}
+                                      className="w-full text-left px-4 py-2 text-xs text-amber-700 hover:bg-amber-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5 text-amber-500" />
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteSale(sale._id)}
+                                      className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                      Delete
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             )}
                           </div>
                         </td>
@@ -798,41 +807,58 @@ export default function CounterSales() {
                         </td>
                         <td className="px-6 py-4 text-right font-extrabold text-green-700">₹{(p.receivedAmount || 0).toLocaleString("en-IN")}</td>
                         <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
+                          <div className="relative inline-block text-left">
                             <button
-                              onClick={() => handleViewDetails(p, "payment")}
-                              className="p-2 text-gray-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition"
-                              title="View Details"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveDropdownId(activeDropdownId === p._id ? null : p._id);
+                              }}
+                              className="p-1.5 hover:bg-gray-100 rounded-lg transition border-0 bg-transparent cursor-pointer text-gray-500 hover:text-gray-900"
                             >
-                              <Eye className="w-4 h-4" />
+                              <MoreVertical className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => handleDownloadPaymentReceipt(p._id)}
-                              className="p-2 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
-                              title="Download Payment Receipt PDF"
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
-                            {!isReadOnly && !p.isAutoGenerated && (
-                              <button
-                                onClick={() => {
-                                  setEditPaymentRecord(p);
-                                  setPaymentModalOpen(true);
-                                }}
-                                className="p-2 text-gray-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition"
-                                title="Edit Payment Receipt"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                            )}
-                            {!isReadOnly && !p.isAutoGenerated && (
-                              <button
-                                onClick={() => handleDeletePayment(p._id)}
-                                className="p-2 text-gray-600 hover:text-red-750 hover:bg-red-50 rounded-lg transition"
-                                title="Delete Payment Receipt"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                            
+                            {activeDropdownId === p._id && (
+                              <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                                <button
+                                  onClick={() => handleViewDetails(p, "payment")}
+                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                >
+                                  <Eye className="w-3.5 h-3.5 text-gray-400" />
+                                  View Details
+                                </button>
+                                
+                                <button
+                                  onClick={() => handleDownloadPaymentReceipt(p._id)}
+                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                >
+                                  <Download className="w-3.5 h-3.5 text-gray-400" />
+                                  Download PDF
+                                </button>
+                                
+                                {!isReadOnly && !p.isAutoGenerated && (
+                                  <>
+                                    <div className="h-px bg-gray-100 my-1"></div>
+                                    <button
+                                      onClick={() => {
+                                        setEditPaymentRecord(p);
+                                        setPaymentModalOpen(true);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-xs text-amber-700 hover:bg-amber-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5 text-amber-500" />
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeletePayment(p._id)}
+                                      className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                      Delete
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             )}
                           </div>
                         </td>
@@ -872,34 +898,50 @@ export default function CounterSales() {
                         <td className="px-6 py-4 text-gray-500 font-mono">{r.sale?.invoiceNo || "Sales Bill ID"}</td>
                         <td className="px-6 py-4 text-right font-extrabold text-red-650">₹{(r.totalAmount || 0).toLocaleString("en-IN")}</td>
                         <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
+                          <div className="relative inline-block text-left">
                             <button
-                              onClick={() => handleViewDetails(r, "return")}
-                              className="p-2 text-gray-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition"
-                              title="View Details"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveDropdownId(activeDropdownId === r._id ? null : r._id);
+                              }}
+                              className="p-1.5 hover:bg-gray-100 rounded-lg transition border-0 bg-transparent cursor-pointer text-gray-500 hover:text-gray-900"
                             >
-                              <Eye className="w-4 h-4" />
+                              <MoreVertical className="w-4 h-4" />
                             </button>
-                            {!isReadOnly && (
-                              <button
-                                onClick={() => {
-                                  setEditReturnRecord(r);
-                                  setReturnModalOpen(true);
-                                }}
-                                className="p-2 text-gray-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition"
-                                title="Edit Sales Return"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                            )}
-                            {!isReadOnly && (
-                              <button
-                                onClick={() => handleDeleteReturn(r._id)}
-                                className="p-2 text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
-                                title="Delete Return"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                            
+                            {activeDropdownId === r._id && (
+                              <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                                <button
+                                  onClick={() => handleViewDetails(r, "return")}
+                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                >
+                                  <Eye className="w-3.5 h-3.5 text-gray-400" />
+                                  View Details
+                                </button>
+                                
+                                {!isReadOnly && (
+                                  <>
+                                    <div className="h-px bg-gray-100 my-1"></div>
+                                    <button
+                                      onClick={() => {
+                                        setEditReturnRecord(r);
+                                        setReturnModalOpen(true);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-xs text-amber-700 hover:bg-amber-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5 text-amber-500" />
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteReturn(r._id)}
+                                      className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                      Delete
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             )}
                           </div>
                         </td>
@@ -998,16 +1040,7 @@ export default function CounterSales() {
         />
       )}
 
-      {/* 5. GOVERNMENT COMPLIANCE MODAL */}
-      <GovernmentComplianceModal
-        isOpen={complianceModalOpen}
-        sale={selectedComplianceSale}
-        onClose={() => {
-          setComplianceModalOpen(false);
-          setSelectedComplianceSale(null);
-        }}
-        onSuccess={loadListData}
-      />
+
     </div>
   );
 }
@@ -1604,11 +1637,11 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
 
     const payload = {
       sale: selectedSaleId,
-      party: sale?.party?._id || sale?.party || null,
+      party: sale?.party?._id || sale?.party || undefined,
       items: validReturns,
       subTotal,
       totalAmount,
-      description,
+      description: description.trim() || undefined,
     };
 
     try {
