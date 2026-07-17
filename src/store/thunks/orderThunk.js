@@ -1,6 +1,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../lib/api';
 
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export const fetchAllOrders = createAsyncThunk('orders/fetchAll', async (_, { rejectWithValue }) => {
   try {
     const res = await api.get('order/allOrders');
@@ -8,6 +10,16 @@ export const fetchAllOrders = createAsyncThunk('orders/fetchAll', async (_, { re
     return Array.isArray(payload) ? payload : [];
   } catch (err) {
     return rejectWithValue(err.response?.data?.message || 'Failed to fetch orders');
+  }
+},
+{
+  condition: (arg, { getState }) => {
+    const { orders, loading, lastFetched } = getState().orders;
+    if (loading) return false;
+    if (arg?.force !== true && orders && orders.length > 0 && lastFetched && (Date.now() - lastFetched < CACHE_TTL)) {
+      console.log('[fetchAllOrders/orders] Returning cached sales orders');
+      return false;
+    }
   }
 });
 

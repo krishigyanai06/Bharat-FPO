@@ -8,6 +8,8 @@ const initialState = {
   selectedTenantId: localStorage.getItem('selectedTenantId') || null, // Try to restore from localStorage
   loading: false,
   error: null,
+  lastFetchedMe: null,
+  lastFetchedTenants: null,
 };
 
 const layoutSlice = createSlice({
@@ -18,6 +20,8 @@ const layoutSlice = createSlice({
       state.me = null;
       state.tenants = [];
       state.selectedTenantId = null;
+      state.lastFetchedMe = null;
+      state.lastFetchedTenants = null;
       localStorage.removeItem('selectedTenantId');
     },
     setSelectedTenant: (state, action) => {
@@ -44,6 +48,7 @@ const layoutSlice = createSlice({
       .addCase(fetchMe.fulfilled, (state, action) => {
         state.loading = false;
         state.me = action.payload;
+        state.lastFetchedMe = Date.now();
         console.log('[layoutSlice] fetchMe fulfilled, payload:', action.payload);
       })
       .addCase(fetchMe.rejected, (state, action) => {
@@ -52,6 +57,7 @@ const layoutSlice = createSlice({
       })
       .addCase(fetchTenants.fulfilled, (state, action) => {
         state.tenants = action.payload || [];
+        state.lastFetchedTenants = Date.now();
         console.log('[layoutSlice] fetchTenants fulfilled, tenants count:', state.tenants.length);
         console.log('[layoutSlice] Tenants data:', state.tenants);
         

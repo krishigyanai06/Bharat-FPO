@@ -5,6 +5,7 @@ const initialState = {
   orders: [],
   loading: false,
   error: null,
+  lastFetched: null,
 };
 
 const procurementSlice = createSlice({
@@ -19,6 +20,7 @@ const procurementSlice = createSlice({
       .addCase(fetchOrders.fulfilled, (s, a) => {
         s.loading = false;
         s.orders = a.payload;
+        s.lastFetched = Date.now();
       })
       .addCase(fetchOrders.rejected, (s, a) => {
         s.loading = false;
@@ -26,13 +28,16 @@ const procurementSlice = createSlice({
       })
       .addCase(createOrder.fulfilled, (s, a) => {
         s.orders.unshift(a.payload);
+        s.lastFetched = null; // Invalidate cache
       })
       .addCase(deleteOrder.fulfilled, (s, a) => {
         s.orders = s.orders.filter((o) => o._id !== a.payload);
+        s.lastFetched = null; // Invalidate cache
       })
       .addCase(updateOrder.fulfilled, (s, a) => {
         const idx = s.orders.findIndex((o) => o._id === a.payload._id);
         if (idx !== -1) s.orders[idx] = a.payload;
+        s.lastFetched = null; // Invalidate cache
       });
   },
 });

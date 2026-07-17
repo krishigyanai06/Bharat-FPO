@@ -77,3 +77,60 @@ export const SkeletonHeader = () => (
     <SkeletonBox className="h-4 w-80" />
   </div>
 );
+
+// Charts layout skeleton for dashboard
+export const SkeletonCharts = () => (
+  <div className="space-y-6">
+    <div className="grid grid-cols-1 gap-6">
+      {/* ── Procurement Chart Skeleton ── */}
+      <div className="bg-white p-6 rounded-2xl border border-gray-150 shadow-sm space-y-4">
+        <div className="flex justify-between items-start">
+          <div className="space-y-2">
+            <SkeletonBox className="h-5 w-48" />
+            <SkeletonBox className="h-3 w-64" />
+          </div>
+          <div className="flex gap-2">
+            <SkeletonBox className="h-10 w-24" />
+            <SkeletonBox className="h-10 w-24" />
+          </div>
+        </div>
+        <SkeletonBox className="h-[200px] w-full" />
+      </div>
+
+      {/* ── Sales Trend Chart Skeleton ── */}
+      <div className="bg-white p-6 rounded-2xl border border-gray-150 shadow-sm space-y-4">
+        <div className="flex justify-between items-start">
+          <div className="space-y-2">
+            <SkeletonBox className="h-5 w-48" />
+            <SkeletonBox className="h-3 w-64" />
+          </div>
+          <div className="flex gap-2">
+            <SkeletonBox className="h-10 w-24" />
+            <SkeletonBox className="h-10 w-24" />
+          </div>
+        </div>
+        <SkeletonBox className="h-[200px] w-full" />
+      </div>
+    </div>
+
+    {/* ── Bottom Widgets Skeleton ── */}
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="bg-white p-6 rounded-2xl border border-gray-150 shadow-sm space-y-4">
+        <SkeletonBox className="h-5 w-36" />
+        <SkeletonBox className="h-[180px] w-full" />
+      </div>
+      <div className="bg-white p-6 rounded-2xl border border-gray-150 shadow-sm space-y-4">
+        <SkeletonBox className="h-5 w-36" />
+        <div className="flex gap-6 items-center">
+          <SkeletonBox className="h-[150px] w-[150px] rounded-full" />
+          <div className="flex-1 space-y-2">
+            <SkeletonBox className="h-4 w-full" />
+            <SkeletonBox className="h-4 w-5/6" />
+            <SkeletonBox className="h-4 w-4/5" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+

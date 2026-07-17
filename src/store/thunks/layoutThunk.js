@@ -2,6 +2,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../lib/api';
 
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export const fetchMe = createAsyncThunk(
   'layout/fetchMe',
   async (_, { rejectWithValue }) => {
@@ -26,6 +28,16 @@ export const fetchMe = createAsyncThunk(
       return rejectWithValue(
         err.response?.data?.message || 'Failed to load user'
       );
+    }
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { me, loading, lastFetchedMe } = getState().layout;
+      if (loading) return false;
+      if (arg?.force !== true && me && lastFetchedMe && (Date.now() - lastFetchedMe < CACHE_TTL)) {
+        console.log('[fetchMe] Returning cached user details');
+        return false;
+      }
     }
   }
 );
@@ -78,6 +90,17 @@ export const fetchTenants = createAsyncThunk(
         err.response?.data?.message || err.message || 'Failed to fetch tenants'
       );
     }
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { tenants, loading, lastFetchedTenants } = getState().layout;
+      if (loading) return false;
+      if (arg?.force !== true && tenants && tenants.length > 0 && lastFetchedTenants && (Date.now() - lastFetchedTenants < CACHE_TTL)) {
+        console.log('[fetchTenants] Returning cached tenants list');
+        return false;
+      }
+    }
   }
 );
+
 

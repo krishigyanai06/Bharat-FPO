@@ -1,6 +1,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../lib/api';
 
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 // GET /product/getProducts
 export const fetchProducts = createAsyncThunk(
   'inventory/fetchProducts',
@@ -22,6 +24,16 @@ export const fetchProducts = createAsyncThunk(
         xTenantId: err.config?.headers?.['x-tenant-id']
       });
       return rejectWithValue(err.response?.data?.message || 'Failed to fetch products');
+    }
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { products, loading, lastFetchedProducts } = getState().inventory;
+      if (loading) return false;
+      if (arg?.force !== true && products && products.length > 0 && lastFetchedProducts && (Date.now() - lastFetchedProducts < CACHE_TTL)) {
+        console.log('[fetchProducts/inventory] Returning cached products');
+        return false;
+      }
     }
   }
 );
@@ -47,6 +59,16 @@ export const fetchStockSummary = createAsyncThunk(
         xTenantId: err.config?.headers?.['x-tenant-id']
       });
       return rejectWithValue(err.response?.data?.message || 'Failed to fetch stock summary');
+    }
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { stockSummary, loading, lastFetchedStocks } = getState().inventory;
+      if (loading) return false;
+      if (arg?.force !== true && stockSummary && stockSummary.length > 0 && lastFetchedStocks && (Date.now() - lastFetchedStocks < CACHE_TTL)) {
+        console.log('[fetchStockSummary/inventory] Returning cached stock summary');
+        return false;
+      }
     }
   }
 );

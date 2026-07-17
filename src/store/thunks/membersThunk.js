@@ -2,6 +2,8 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../lib/api';
 import theme from '../../config/theme';
 
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export const fetchMembers = createAsyncThunk(
   'members/fetch',
   async (_, { rejectWithValue }) => {
@@ -33,6 +35,16 @@ export const fetchMembers = createAsyncThunk(
       return rejectWithValue(
         err.response?.data?.message || 'Failed to fetch members'
       );
+    }
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { members, loading, lastFetched } = getState().members;
+      if (loading) return false;
+      if (arg?.force !== true && members && members.length > 0 && lastFetched && (Date.now() - lastFetched < CACHE_TTL)) {
+        console.log('[fetchMembers] Returning cached members list');
+        return false;
+      }
     }
   }
 );
