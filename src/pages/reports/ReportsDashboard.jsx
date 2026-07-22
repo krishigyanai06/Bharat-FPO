@@ -44,7 +44,6 @@ const ReportsDashboard = ({ onNavigate }) => {
       icon: FileText,
       iconBg: 'bg-green-50/60',
       iconColor: 'text-green-600',
-      comingSoon: true,
     },
     {
       key: 'expense',
@@ -112,7 +111,12 @@ const ReportsDashboard = ({ onNavigate }) => {
           {reportCards.map((card) => (
             <div 
               key={card.key} 
-              className="bg-white rounded-2xl border border-gray-200/60 p-6 flex flex-col justify-between min-h-[165px] shadow-sm hover:shadow-md transition-all duration-200"
+              onClick={() => !card.comingSoon && onNavigate(card.key)}
+              className={`bg-white rounded-2xl border p-6 flex flex-col justify-between min-h-[165px] shadow-sm transition-all duration-200 ${
+                card.comingSoon 
+                  ? 'border-gray-100 opacity-75' 
+                  : 'border-gray-200/60 cursor-pointer hover:shadow-md hover:border-green-300'
+              }`}
             >
               <div className="space-y-3">
                 {/* Top row: Icon and Title inline */}
@@ -137,7 +141,10 @@ const ReportsDashboard = ({ onNavigate }) => {
                   </span>
                 ) : (
                   <button
-                    onClick={() => onNavigate(card.key)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNavigate(card.key);
+                    }}
                     className="text-[#15803D] hover:text-green-800 font-bold text-xs flex items-center gap-1 hover:underline cursor-pointer group/btn"
                   >
                     <span>Open Report</span>

@@ -278,3 +278,22 @@ export const fetchGstr3bReport = createAsyncThunk(
     }
   }
 );
+
+export const downloadProcurementReport = createAsyncThunk(
+  'reports/downloadProcurementPdf',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Downloading procurement PDF with filters:', filters);
+      const blob = await reportService.downloadProcurementReport(filters);
+      const startDateStr = filters.startDate || 'start';
+      const endDateStr = filters.endDate || 'end';
+      const filename = `Procurement_Report_${startDateStr}_to_${endDateStr}.pdf`;
+      downloadBlob(blob, filename);
+      return { success: true };
+    } catch (err) {
+      console.error('[reportsThunk] downloadProcurementReport error:', err);
+      const msg = await parseBlobError(err, 'Failed to download Procurement Report PDF');
+      return rejectWithValue(msg);
+    }
+  }
+);

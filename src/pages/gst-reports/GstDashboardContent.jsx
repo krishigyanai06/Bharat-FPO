@@ -33,7 +33,10 @@ const GstDashboardContent = ({ onNavigate }) => {
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {/* Card 1: GSTR-1 (Available) */}
-          <div className="bg-white rounded-xl border border-gray-150 p-5 flex flex-col justify-between h-[165px] hover:shadow-md transition-all">
+          <div 
+            onClick={() => onNavigate('gstr1')}
+            className="bg-white rounded-xl border border-gray-150 p-5 flex flex-col justify-between h-[165px] hover:shadow-md transition-all cursor-pointer hover:border-green-300"
+          >
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="p-2 bg-emerald-50 text-emerald-700 rounded-lg">
@@ -52,12 +55,21 @@ const GstDashboardContent = ({ onNavigate }) => {
             </div>
             <div className="flex items-center justify-between border-t border-gray-50 pt-2.5">
               <button 
-                onClick={() => onNavigate('gstr1')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigate('gstr1');
+                }}
                 className="text-[#15803D] font-bold text-xs hover:underline cursor-pointer"
               >
                 Open Report
               </button>
-              <ArrowRight onClick={() => onNavigate('gstr1')} className="w-4 h-4 text-[#15803D] cursor-pointer" />
+              <ArrowRight 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigate('gstr1');
+                }} 
+                className="w-4 h-4 text-[#15803D] cursor-pointer" 
+              />
             </div>
           </div>
 
@@ -85,7 +97,10 @@ const GstDashboardContent = ({ onNavigate }) => {
           </div>
 
           {/* Card 3: GSTR-3B (Available) */}
-          <div className="bg-white rounded-xl border border-gray-150 p-5 flex flex-col justify-between h-[165px] hover:shadow-md transition-all">
+          <div 
+            onClick={() => onNavigate('gstr3b')}
+            className="bg-white rounded-xl border border-gray-150 p-5 flex flex-col justify-between h-[165px] hover:shadow-md transition-all cursor-pointer hover:border-green-300"
+          >
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="p-2 bg-emerald-50 text-emerald-700 rounded-lg">
@@ -104,12 +119,21 @@ const GstDashboardContent = ({ onNavigate }) => {
             </div>
             <div className="flex items-center justify-between border-t border-gray-50 pt-2.5">
               <button 
-                onClick={() => onNavigate('gstr3b')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigate('gstr3b');
+                }}
                 className="text-[#15803D] font-bold text-xs hover:underline cursor-pointer"
               >
                 Open Report
               </button>
-              <ArrowRight onClick={() => onNavigate('gstr3b')} className="w-4 h-4 text-[#15803D] cursor-pointer" />
+              <ArrowRight 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigate('gstr3b');
+                }} 
+                className="w-4 h-4 text-[#15803D] cursor-pointer" 
+              />
             </div>
           </div>
 

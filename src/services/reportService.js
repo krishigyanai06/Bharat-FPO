@@ -152,6 +152,19 @@ const reportService = {
     });
     return res.data;
   },
+
+  /**
+   * Downloads Procurement Report PDF.
+   * @param {object} filters - farmer, procurementCenter, startDate, endDate, search
+   * @returns {Promise<Blob>}
+   */
+  downloadProcurementReport: async (filters) => {
+    const res = await api.get('/reports/procurement/pdf', {
+      params: filters,
+      responseType: 'blob',
+    });
+    return res.data;
+  },
 };
 
 export default reportService;

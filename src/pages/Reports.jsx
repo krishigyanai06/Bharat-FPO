@@ -23,6 +23,8 @@ import ExpenseReport from './reports/ExpenseReport';
 import BalanceSheetReport from './reports/BalanceSheetReport';
 import PartySalePurchaseReport from './reports/PartySalePurchaseReport';
 import ItemwiseProfitLossReport from './reports/ItemwiseProfitLossReport';
+import ProcurementReport from './reports/ProcurementReport';
+import { FileText as DocIcon } from 'lucide-react';
 
 const ALL_TABS = {
   dashboard: { key: 'dashboard', label: 'Dashboard', icon: Home },
@@ -32,6 +34,7 @@ const ALL_TABS = {
   paymentout: { key: 'paymentout', label: 'Payment Out', icon: ArrowUpCircle },
   expense: { key: 'expense', label: 'Expense Report', icon: Folder },
   balancesheet: { key: 'balancesheet', label: 'Balance Sheet', icon: Scale },
+  procurement: { key: 'procurement', label: 'Procurement Report', icon: DocIcon },
   partysalepurchase: { key: 'partysalepurchase', label: 'Party Sale-Purchase', icon: UserCheck },
   itemwiseprofitloss: { key: 'itemwiseprofitloss', label: 'Itemwise Profit-Loss', icon: TrendingUp }
 };
@@ -43,6 +46,7 @@ const REPORT_COMPONENTS = {
   paymentin: PaymentInReport,
   paymentout: PaymentOutReport,
   expense: ExpenseReport,
+  procurement: ProcurementReport,
   partysalepurchase: PartySalePurchaseReport,
   itemwiseprofitloss: ItemwiseProfitLossReport,
   balancesheet: BalanceSheetReport
@@ -60,7 +64,8 @@ const Reports = () => {
     'paymentin',
     'paymentout',
     'expense',
-    'balancesheet'
+    'balancesheet',
+    'procurement'
   ]);
 
   const [showAddMenu, setShowAddMenu] = useState(false);

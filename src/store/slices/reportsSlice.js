@@ -12,6 +12,7 @@ import {
   downloadGstr1Report,
   downloadGstr3bReport,
   fetchGstr3bReport,
+  downloadProcurementReport,
 } from '../thunks/reportsThunk';
 
 const initialState = {
@@ -28,6 +29,7 @@ const initialState = {
   expenseDownloadLoading: false,
   gstr1DownloadLoading: false,
   gstr3bDownloadLoading: false,
+  procurementDownloadLoading: false,
 
   balanceSheet: null,
   gstr3bData: null,
@@ -197,6 +199,19 @@ const reportsSlice = createSlice({
       })
       .addCase(downloadGstr3bReport.rejected, (state, action) => {
         state.gstr3bDownloadLoading = false;
+        state.error = action.payload;
+      })
+
+      /* ================= DOWNLOAD PROCUREMENT PDF ================= */
+      .addCase(downloadProcurementReport.pending, (state) => {
+        state.procurementDownloadLoading = true;
+        state.error = null;
+      })
+      .addCase(downloadProcurementReport.fulfilled, (state) => {
+        state.procurementDownloadLoading = false;
+      })
+      .addCase(downloadProcurementReport.rejected, (state, action) => {
+        state.procurementDownloadLoading = false;
         state.error = action.payload;
       })
 
