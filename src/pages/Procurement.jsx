@@ -9,6 +9,7 @@ import {
   adjustProcurementStock 
 } from "../redux/procurementSaleThunk";
 import { SkeletonHeader, SkeletonStatCards, SkeletonTable } from "../components/Skeleton";
+import theme from "../config/theme";
 import api from "../lib/api";
 import {
   Package,
@@ -129,9 +130,19 @@ function Procurement() {
   };
 
   const handleDownloadReceipt = async (orderId) => {
+    const loadId = toast.loading("Downloading procurement PDF...");
     try {
-      const loadId = toast.loading("Downloading procurement PDF...");
-      const res = await api.get(`/procurement/receipt/${orderId}`, { responseType: "blob" });
+      const res = await api.get(`/procurement/receipt/${orderId}`, {
+        responseType: "blob",
+      });
+
+      // If server returned JSON error payload with blob content-type
+      if (res.data && res.data.type === "application/json") {
+        const text = await res.data.text();
+        const json = JSON.parse(text);
+        throw new Error(json.message || "Failed to download procurement PDF");
+      }
+
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -143,8 +154,26 @@ function Procurement() {
       window.URL.revokeObjectURL(url);
       toast.success("PDF Downloaded successfully!", { id: loadId });
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to download procurement PDF");
+      console.error("Procurement PDF Receipt Download error:", err);
+      let msg = "Failed to download procurement PDF";
+      
+      if (err.normalizedError?.message) {
+        msg = err.normalizedError.message;
+      } else if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const json = JSON.parse(text);
+          msg = json.message || json.error || msg;
+        } catch (e) {
+          msg = err.message || msg;
+        }
+      } else if (err.response?.data?.message) {
+        msg = err.response.data.message;
+      } else if (err.message) {
+        msg = err.message;
+      }
+
+      toast.error(msg, { id: loadId });
     }
   };
 
@@ -395,7 +424,7 @@ function Procurement() {
                             <Eye size={13} />
                           </button>
                           <button
-                            onClick={() => handleDownloadReceipt(order._id)}
+                            onClick={() => handleDownloadReceipt(order._id || order.id)}
                             title="Download Receipt PDF"
                             className="p-1 rounded-lg text-gray-450 hover:text-emerald-600 hover:bg-emerald-50 transition cursor-pointer font-bold"
                           >

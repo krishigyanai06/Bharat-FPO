@@ -81,8 +81,7 @@ const menuSections = [
         path: "/purchase",
         isParent: true,
         children: [
-          { label: "Bills", path: "/purchase/bills", icon: Receipt },
-          { label: "Orders", path: "/purchase/orders", icon: ClipboardList },
+          { label: "Stock Purchase", path: "/purchase/bills", icon: Receipt },
           { label: "Payments", path: "/purchase/payments", icon: Wallet },
           { label: "Debit Notes", path: "/purchase/debit-notes", icon: RotateCcw },
           { label: "Expenses", path: "/purchase/expenses", icon: ReceiptIndianRupee },

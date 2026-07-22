@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchOrders, createOrder, updateOrder } from "../store/thunks/procurementThunk";
 import { fetchMembers } from "../store/thunks/membersThunk";
+import SearchableSelect from "../components/common/SearchableSelect";
 import { 
   User, 
   Sprout, 
@@ -75,15 +76,40 @@ export default function PurchaseCrop() {
         });
       } else if (!loadingOrders) {
         toast.error("Procurement record not found");
-        navigate("/sales/procurement");
+        navigate("/procurement");
       }
     }
   }, [id, orders, loadingOrders, navigate]);
 
-  const farmers = members.filter((m) => String(m.role).toLowerCase() === "farmer");
-  const selectedFarmer = farmers.find((f) => f._id === purchaseForm.farmer);
+  const farmerList = useMemo(() => {
+    if (!members || members.length === 0) return [];
+    const filtered = members.filter((m) => String(m.role || m.partyType).toLowerCase() === "farmer");
+    return filtered.length > 0 ? filtered : members;
+  }, [members]);
+
+  const farmerOptions = useMemo(() => {
+    return farmerList.map((f) => {
+      const rawName = (f.name || `${f.firstName || ""} ${f.lastName || ""}`).trim();
+      const phone = f.phone || f.mobile || "";
+      const name = rawName || (phone ? `Farmer (${phone})` : `Farmer #${String(f._id || f.id).slice(-6)}`);
+      const village = f.village || f.district || "";
+      const memberId = f.memberId ? `ID: ${f.memberId}` : "";
+      const subtext = [memberId, village].filter(Boolean).join(" · ");
+
+      return {
+        id: String(f._id || f.id),
+        name,
+        phone: phone || "—",
+        subtext,
+        badge: String(f.role || "Farmer").toUpperCase(),
+        initials: (rawName.charAt(0) || "F").toUpperCase(),
+      };
+    });
+  }, [farmerList]);
+
+  const selectedFarmer = farmerList.find((f) => String(f._id || f.id) === String(purchaseForm.farmer));
   const selectedFarmerRole = selectedFarmer
-    ? String(selectedFarmer.role).toUpperCase()
+    ? String(selectedFarmer.role || "FARMER").toUpperCase()
     : "";
 
   const handleCropRowChange = (index, field, value) => {
@@ -106,8 +132,25 @@ export default function PurchaseCrop() {
     setPurchaseForm({ ...purchaseForm, crops: updated });
   };
 
+  const calculateCropAmount = (quantity, rate, unit = "qtl", rateUnit = "qtl") => {
+    const q = Number(quantity) || 0;
+    const r = Number(rate) || 0;
+    const u = String(unit || "qtl").toLowerCase();
+    const ru = String(rateUnit || "qtl").toLowerCase();
+
+    if (u === "qtl" && ru === "qtl") return q * r;
+    if (u === "kg" && ru === "qtl") return (q / 100) * r;
+    if (u === "qtl" && ru === "kg") return q * 100 * r;
+    if (u === "kg" && ru === "kg") return q * r;
+
+    return q * r;
+  };
+
   const getEditCropsTotal = () => {
-    return purchaseForm.crops.reduce((sum, c) => sum + (Number(c.quantity) * Number(c.rate) || 0), 0);
+    return purchaseForm.crops.reduce(
+      (sum, c) => sum + calculateCropAmount(c.quantity, c.rate, c.unit, c.rateUnit || "qtl"),
+      0
+    );
   };
 
   const getEditGrandTotal = () => {
@@ -157,7 +200,7 @@ export default function PurchaseCrop() {
         await dispatch(createOrder(payload)).unwrap();
         toast.success("Procurement entry recorded successfully!");
       }
-      navigate("/sales/procurement");
+      navigate("/procurement");
     } catch (err) {
       toast.error(err || "Save failed");
     } finally {
@@ -180,7 +223,7 @@ export default function PurchaseCrop() {
       <div className="flex items-center justify-between border-b border-gray-150 pb-4">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate("/sales/procurement")}
+            onClick={() => navigate("/procurement")}
             className="p-2 hover:bg-gray-100 rounded-xl transition text-gray-500 hover:text-gray-900 border-0 bg-transparent cursor-pointer"
           >
             <ArrowLeft size={16} />
@@ -204,22 +247,15 @@ export default function PurchaseCrop() {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
             <div>
-              <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1.5">
-                Choose Farmer *
-              </label>
-              <select
-                required
+              <SearchableSelect
+                options={farmerOptions}
                 value={purchaseForm.farmer}
-                onChange={(e) => setPurchaseForm({ ...purchaseForm, farmer: e.target.value })}
-                className="w-full border border-gray-200 bg-white px-3 py-2.5 rounded-xl font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-500 shadow-sm"
-              >
-                <option value="">-- Search / Select Farmer --</option>
-                {farmers.map((f) => (
-                  <option key={f._id} value={f._id}>
-                    {f.firstName} {f.lastName} ({f.phone || "No Phone"})
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setPurchaseForm({ ...purchaseForm, farmer: val })}
+                placeholder="Type farmer name, phone, or village..."
+                label="Choose Farmer"
+                required
+                icon={User}
+              />
             </div>
             {purchaseForm.farmer && (
               <div className="px-4 py-3 bg-white border border-gray-100 rounded-xl flex items-center justify-between shadow-xs">
@@ -263,25 +299,18 @@ export default function PurchaseCrop() {
 
             {/* Crop Rows */}
             {purchaseForm.crops.map((crop, idx) => {
-              const rowAmt = Number(crop.quantity) * Number(crop.rate) || 0;
+              const rowAmt = calculateCropAmount(crop.quantity, crop.rate, crop.unit, crop.rateUnit || "qtl");
               return (
                 <div key={idx} className="grid grid-cols-12 gap-2 items-center border-b border-gray-100/50 pb-3 last:border-b-0 last:pb-0">
                   <div className="col-span-3">
-                    <select
+                    <input
+                      type="text"
                       required
                       value={crop.cropName}
                       onChange={(e) => handleCropRowChange(idx, "cropName", e.target.value)}
-                      className="w-full border border-gray-200 bg-white px-2.5 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 font-semibold"
-                    >
-                      <option value="Wheat">Wheat</option>
-                      <option value="Rice">Rice</option>
-                      <option value="Paddy">Paddy</option>
-                      <option value="Soybean">Soybean</option>
-                      <option value="Maize">Maize</option>
-                      <option value="Cotton">Cotton</option>
-                      <option value="Pulses">Pulses</option>
-                      <option value="Tomato">Tomato</option>
-                    </select>
+                      placeholder="Crop name (e.g. Wheat)"
+                      className="w-full border border-gray-200 bg-white px-2.5 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 font-semibold text-xs text-gray-800"
+                    />
                   </div>
                   <div className="col-span-2">
                     <input
@@ -296,7 +325,7 @@ export default function PurchaseCrop() {
                     <select
                       value={crop.unit}
                       onChange={(e) => handleCropRowChange(idx, "unit", e.target.value)}
-                      className="w-full border border-gray-200 bg-white px-1.5 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 font-semibold"
+                      className="w-full border border-gray-200 bg-white px-1.5 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 font-semibold text-xs"
                     >
                       <option value="qtl">qtl</option>
                       <option value="Kg">Kg</option>
@@ -314,7 +343,7 @@ export default function PurchaseCrop() {
                       className="w-full border border-gray-200 px-2 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 text-right font-bold"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-2 flex items-center gap-1">
                     <input
                       type="number"
                       required
@@ -323,8 +352,17 @@ export default function PurchaseCrop() {
                       value={crop.rate}
                       onChange={(e) => handleCropRowChange(idx, "rate", e.target.value)}
                       placeholder="0"
-                      className="w-full border border-gray-200 px-2 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 text-right font-bold"
+                      className="w-full border border-gray-200 px-2 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 text-right font-bold text-xs"
                     />
+                    <select
+                      value={crop.rateUnit || "qtl"}
+                      onChange={(e) => handleCropRowChange(idx, "rateUnit", e.target.value)}
+                      className="text-[10px] font-bold border border-gray-200 bg-gray-50 rounded-lg px-1 py-2 text-gray-600 focus:outline-none cursor-pointer"
+                      title="Rate Unit (/qtl or /Kg)"
+                    >
+                      <option value="qtl">/qtl</option>
+                      <option value="Kg">/Kg</option>
+                    </select>
                   </div>
                   <div className="col-span-1.5 flex items-center justify-end gap-1.5">
                     <span className="text-xs font-black text-gray-800">{formatCurrency(rowAmt)}</span>
