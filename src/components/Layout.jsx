@@ -109,7 +109,17 @@ const menuSections = [
     items: [
       { icon: BarChart3, label: "Reports", path: "/reports" },
       { icon: FileText, label: "GST Reports", path: "/gst-reports" },
-      { icon: BookOpen, label: "Ledger", path: "/ledger" },
+      {
+        icon: BookOpen,
+        label: "Ledger",
+        path: "/ledger",
+        isParent: true,
+        children: [
+          { label: "All Transactions", path: "/ledger", icon: BookOpen },
+          { label: "Party Ledger", path: "/ledger?tab=party", icon: Building2 },
+          { label: "Farmer Ledger", path: "/ledger?tab=farmer", icon: User },
+        ]
+      },
       { icon: Package, label: "Listing Approvals", path: "/listing" },
     ]
   },
@@ -165,7 +175,9 @@ export default function Layout() {
     const path = window.location.pathname;
     return {
       purchase: path.startsWith("/purchase"),
-      sales: path.startsWith("/sell")
+      sales: path.startsWith("/sell"),
+      parties: path.startsWith("/party"),
+      ledger: path.startsWith("/ledger"),
     };
   });
 
@@ -187,6 +199,12 @@ export default function Layout() {
       setExpandedMenus((prev) => ({
         ...prev,
         sales: true
+      }));
+    }
+    if (location.pathname.startsWith("/ledger")) {
+      setExpandedMenus((prev) => ({
+        ...prev,
+        ledger: true
       }));
     }
   }, [location.pathname]);
@@ -581,11 +599,16 @@ export default function Layout() {
                   {filteredItems.map((item) => {
                     if (item.isParent) {
                       const Icon = item.icon;
+                      const hasSiblingsWithParams = item.children.some(c => c.path.includes("?"));
                       const parentActive = item.children.some(child => {
                         const currentFullPath = location.pathname + location.search;
-                        return child.path.includes("?")
-                          ? currentFullPath === child.path
-                          : location.pathname === child.path;
+                        if (child.path.includes("?")) {
+                          return currentFullPath === child.path;
+                        }
+                        if (hasSiblingsWithParams) {
+                          return location.pathname === child.path && !location.search;
+                        }
+                        return location.pathname === child.path;
                       });
                       const isExpanded = expandedMenus[item.label.toLowerCase()] || false;
 
@@ -606,7 +629,7 @@ export default function Layout() {
                                 : "text-gray-400 hover:bg-[#F5FBF6] hover:text-[#18864B]"
                             }`}
                           >
-                            <Icon className="w-5 h-5" strokeWidth={1.8} />
+                            <Icon className="w-5 h-5 flex-shrink-0 transition-colors duration-200" strokeWidth={1.8} />
                           </button>
                         );
                       }
@@ -648,6 +671,8 @@ export default function Layout() {
                                 const currentFullPath = location.pathname + location.search;
                                 const childActive = child.path.includes("?")
                                   ? currentFullPath === child.path
+                                  : hasSiblingsWithParams
+                                  ? location.pathname === child.path && !location.search
                                   : location.pathname === child.path;
 
                                 return (
