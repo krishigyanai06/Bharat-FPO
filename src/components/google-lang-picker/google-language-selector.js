@@ -9,37 +9,63 @@ const LANG_CODES = {
   Manipuri: "mni-Mtei",
 };
 
+function clearCookies() {
+  const host = window.location.hostname;
+  const path = "/";
+  document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${path}`;
+  document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${path}; domain=${host}`;
+  if (host && host.includes(".")) {
+    const parts = host.split(".");
+    const mainDomain = parts.slice(-2).join(".");
+    document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${path}; domain=.${mainDomain}`;
+  }
+}
+
 function setCookie(value) {
-  const domain = location.hostname === 'localhost' ? 'localhost' : location.hostname;
-  document.cookie = `googtrans=${value}; path=/; domain=${domain}`;
-  document.cookie = `googtrans=${value}; path=/`;
+  clearCookies();
+  const host = window.location.hostname;
+  const path = "/";
+  document.cookie = `googtrans=${value}; path=${path}`;
+  document.cookie = `googtrans=${value}; path=${path}; domain=${host}`;
+  if (host && host.includes(".")) {
+    const parts = host.split(".");
+    const mainDomain = parts.slice(-2).join(".");
+    document.cookie = `googtrans=${value}; path=${path}; domain=.${mainDomain}`;
+  }
 }
 
 export function translateLanguage(language) {
-  if (!language) return;
-  localStorage.setItem("currentLang", language);
+  return new Promise((resolve) => {
+    if (!language) {
+      resolve(false);
+      return;
+    }
 
-  const code = LANG_CODES[language] || "en";
+    const prevLang = localStorage.getItem("currentLang");
+    localStorage.setItem("currentLang", language);
+    const code = LANG_CODES[language] || "en";
+    const cookieVal = code === "en" ? "/en/en" : `/en/${code}`;
 
-  if (code === "en") {
-    setCookie("/en/en");
-  } else {
-    setCookie(`/en/${code}`);
-  }
+    setCookie(cookieVal);
 
-  const select = document.querySelector(".goog-te-combo");
-  if (select) {
-    select.value = code;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  } else {
-    const interval = setInterval(() => {
-      const s = document.querySelector(".goog-te-combo");
-      if (s) {
-        s.value = code;
-        s.dispatchEvent(new Event("change", { bubbles: true }));
-        clearInterval(interval);
+    const select = document.querySelector(".goog-te-combo");
+    if (select) {
+      try {
+        select.value = code;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        select.dispatchEvent(new Event("input", { bubbles: true }));
+      } catch (e) {
+        console.error("DOM dispatch error:", e);
       }
-    }, 100);
-    setTimeout(() => clearInterval(interval), 5000);
-  }
+    }
+
+    // Reload page on language change to ensure Google Translate activates across all React components
+    if (prevLang && prevLang !== language) {
+      setTimeout(() => {
+        window.location.reload();
+      }, 250);
+    } else {
+      setTimeout(() => resolve(true), 500);
+    }
+  });
 }

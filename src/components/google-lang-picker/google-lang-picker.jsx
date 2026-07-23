@@ -1,14 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import { translateLanguage } from "./google-language-selector";
+import { Globe, Check, ChevronDown, Loader2 } from "lucide-react";
 import "./google-picker.css";
 
 const options = [
-  { label: "EN", language: "English",  flag: "🇬🇧", native: "English" },
-  { label: "HI", language: "Hindi",    flag: "🇮🇳", native: "हिन्दी" },
-  { label: "MR", language: "Marathi",  flag: "🇮🇳", native: "मराठी" },
+  { label: "EN", language: "English", flag: "🌐", native: "English" },
+  { label: "HI", language: "Hindi", flag: "🇮🇳", native: "हिन्दी" },
+  { label: "MR", language: "Marathi", flag: "🇮🇳", native: "मराठी" },
   { label: "GU", language: "Gujarati", flag: "🇮🇳", native: "ગુજરાતી" },
-  { label: "TE", language: "Telugu",   flag: "🇮🇳", native: "తెలుగు" },
-  { label: "BN", language: "Bengali",  flag: "🇮🇳", native: "বাংলা" },
+  { label: "TE", language: "Telugu", flag: "🇮🇳", native: "తెలుగు" },
+  { label: "BN", language: "Bengali", flag: "🇮🇳", native: "বাংলা" },
   { label: "AS", language: "Assamese", flag: "🇮🇳", native: "অসমীয়া" },
   { label: "MN", language: "Manipuri", flag: "🇮🇳", native: "মৈতৈলোন্" },
 ];
@@ -16,6 +17,7 @@ const options = [
 function GoogleLangPicker({ classes = "" }) {
   const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState(options[0]);
+  const [isTranslating, setIsTranslating] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -35,24 +37,53 @@ function GoogleLangPicker({ classes = "" }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleSelect = (option) => {
+  const handleSelect = async (option) => {
+    if (isTranslating) return;
+    if (option.language === selected.language) {
+      setIsOpen(false);
+      return;
+    }
     setSelected(option);
     setIsOpen(false);
-    translateLanguage(option.language);
+    setIsTranslating(true);
+    try {
+      await translateLanguage(option.language);
+    } catch (err) {
+      console.error("Language translation failed:", err);
+    } finally {
+      setIsTranslating(false);
+    }
   };
 
   return (
-    <div ref={ref} className={`lang-picker ${classes}`}>
-      <button className="lang-trigger" onClick={() => setIsOpen((p) => !p)} translate="no">
-        <span className="lang-flag">{selected.flag}</span>
-        <span className="lang-label">{selected.label}</span>
-        <svg className={`lang-chevron ${isOpen ? "open" : ""}`} width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+    <div ref={ref} className={`lang-picker relative z-[9999] ${classes}`}>
+      <button
+        disabled={isTranslating}
+        className={`lang-trigger border-2 border-emerald-500 shadow-sm transition-all ${
+          isTranslating ? "opacity-90 cursor-wait bg-emerald-50" : ""
+        }`}
+        onClick={() => setIsOpen((p) => !p)}
+        translate="no"
+      >
+        {isTranslating ? (
+          <Loader2 className="w-4 h-4 text-emerald-600 animate-spin shrink-0" />
+        ) : (
+          <span className="lang-flag">{selected.flag}</span>
+        )}
+        <span className="lang-label font-bold">
+          {isTranslating ? "Translating..." : selected.label}
+        </span>
+        {!isTranslating && (
+          <ChevronDown
+            className={`w-3.5 h-3.5 text-emerald-600 transition-transform duration-200 ${
+              isOpen ? "rotate-180" : ""
+            }`}
+          />
+        )}
       </button>
 
       {isOpen && (
-        <ul className="lang-dropdown" translate="no">
+        <ul className="lang-dropdown shadow-2xl z-[99999]" translate="no">
           {options.map((option) => (
             <li
               key={option.label}
@@ -65,9 +96,7 @@ function GoogleLangPicker({ classes = "" }) {
                 <span className="lang-name-native">{option.native}</span>
               </div>
               {selected.label === option.label && (
-                <svg className="lang-check" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path d="M2.5 7l3.5 3.5 5.5-6" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
+                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
               )}
             </li>
           ))}

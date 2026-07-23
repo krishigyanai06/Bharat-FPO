@@ -788,9 +788,10 @@ export default function Layout() {
             </p>
           </div>
 
-          <GoogleLangPicker classes="d-none d-xl-block" />
           {/* RIGHT ACTIONS */}
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2.5 ml-auto z-[9999]">
+            <GoogleLangPicker />
+
             {/* TENANT DROPDOWN (ONLY SUPER ADMIN) */}
             {isSuperAdmin && (
               <div className="flex items-center mr-2">
@@ -986,16 +987,6 @@ export default function Layout() {
                     >
                       <User className="w-4 h-4 text-gray-400" />
                       Profile Settings
-                    </button>
-                    <button
-                      onClick={() => {
-                        navigate("/settings");
-                        setShowUserMenu(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
-                    >
-                      <KeyRound className="w-4 h-4 text-gray-400" />
-                      Change Password
                     </button>
                   </div>
                   <div className="border-t py-1">
