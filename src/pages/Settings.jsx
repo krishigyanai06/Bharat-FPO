@@ -24,6 +24,94 @@ function Settings() {
   const [lastConnectedTime, setLastConnectedTime] = useState(null);
   const [connectLoading, setConnectLoading] = useState(false);
 
+  // Validation state
+  const [profileErrors, setProfileErrors] = useState({});
+  const [eInvoiceErrors, setEInvoiceErrors] = useState({});
+  const [eWayBillErrors, setEWayBillErrors] = useState({});
+
+  const handleProfileChange = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (profileErrors[key]) {
+      setProfileErrors((prev) => ({ ...prev, [key]: "" }));
+    }
+  };
+
+  const handleEInvoiceChange = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (eInvoiceErrors[key]) {
+      setEInvoiceErrors((prev) => ({ ...prev, [key]: "" }));
+    }
+  };
+
+  const handleEWayBillChange = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (eWayBillErrors[key]) {
+      setEWayBillErrors((prev) => ({ ...prev, [key]: "" }));
+    }
+  };
+
+  const validateProfile = () => {
+    const errs = {};
+    if (!form.firstName?.trim()) {
+      errs.firstName = "First Name is required.";
+    }
+    if (!form.phone?.trim()) {
+      errs.phone = "Phone number is required.";
+    } else if (!/^[6-9]\d{9}$/.test(form.phone.trim())) {
+      errs.phone = "Enter a valid 10-digit mobile number.";
+    }
+    if (form.emailId?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.emailId.trim())) {
+      errs.emailId = "Enter a valid email address.";
+    }
+    if (form.gstNumber?.trim() && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/i.test(form.gstNumber.trim()) && form.gstNumber.trim().length !== 15) {
+      errs.gstNumber = "GSTIN must be 15 alphanumeric characters.";
+    }
+    if (form.estimatedTurnover && (isNaN(form.estimatedTurnover) || Number(form.estimatedTurnover) < 0)) {
+      errs.estimatedTurnover = "Must be a valid positive amount.";
+    }
+
+    setProfileErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const validateEInvoice = () => {
+    const errs = {};
+    const gstin = form.eInvoiceGstin?.trim();
+    if (!gstin) {
+      errs.eInvoiceGstin = "Business GSTIN is required.";
+    } else if (gstin.length !== 15) {
+      errs.eInvoiceGstin = "GSTIN must be exactly 15 alphanumeric characters.";
+    }
+    if (!form.eInvoiceUsername?.trim()) {
+      errs.eInvoiceUsername = "Username is required.";
+    }
+    if (!form.eInvoicePassword) {
+      errs.eInvoicePassword = "Password is required.";
+    }
+
+    setEInvoiceErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const validateEWayBill = () => {
+    const errs = {};
+    const gstin = form.eInvoiceGstin?.trim();
+    if (!gstin) {
+      errs.eInvoiceGstin = "Business GSTIN is required.";
+    } else if (gstin.length !== 15) {
+      errs.eInvoiceGstin = "GSTIN must be exactly 15 alphanumeric characters.";
+    }
+    if (!form.eWayBillUsername?.trim()) {
+      errs.eWayBillUsername = "Username is required.";
+    }
+    if (!form.eWayBillPassword) {
+      errs.eWayBillPassword = "Password is required.";
+    }
+
+    setEWayBillErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
   // E-Way Bill States
   const { 
     sessionToken: ewayBillSessionToken, 
@@ -108,16 +196,8 @@ function Settings() {
   /* CONNECT TO PORTAL AND SAVE CREDENTIALS */
   const handleConnect = async (e) => {
     if (e) e.preventDefault();
-    if (!form.eInvoiceGstin) {
-      toast.error("Please enter your Business GSTIN.");
-      return;
-    }
-    if (form.eInvoiceGstin.length !== 15) {
-      toast.error("Business GSTIN must be exactly 15 alphanumeric characters.");
-      return;
-    }
-    if (!form.eInvoiceUsername || !form.eInvoicePassword) {
-      toast.error("Please enter your Government Portal Username and Password.");
+    if (!validateEInvoice()) {
+      toast.error("Please fix the highlighted E-Invoice credential errors.");
       return;
     }
     const payload = {
@@ -159,16 +239,8 @@ function Settings() {
   /* CONNECT TO E-WAY BILL PORTAL AND SAVE CREDENTIALS */
   const handleEWayBillConnect = async (e) => {
     if (e) e.preventDefault();
-    if (!form.eInvoiceGstin) {
-      toast.error("Please enter your Business GSTIN.");
-      return;
-    }
-    if (form.eInvoiceGstin.length !== 15) {
-      toast.error("Business GSTIN must be exactly 15 alphanumeric characters.");
-      return;
-    }
-    if (!form.eWayBillUsername || !form.eWayBillPassword) {
-      toast.error("Please enter your Government E-Way Bill Portal Username and Password.");
+    if (!validateEWayBill()) {
+      toast.error("Please fix the highlighted E-Way Bill credential errors.");
       return;
     }
     const payload = {
@@ -212,6 +284,10 @@ function Settings() {
   /* SAVE PROFILE */
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!validateProfile()) {
+      toast.error("Please fix the highlighted errors before saving.");
+      return;
+    }
     const payload = Object.fromEntries(
       Object.entries(form).filter(([, v]) => v !== ""),
     );
@@ -244,15 +320,15 @@ function Settings() {
   const isEWayBillConnected = !!ewayBillSessionToken && isEWayBillSessionValid();
 
   return (
-    <div className="max-w-4xl mx-auto space-y-2">
+    <div className="max-w-[1700px] w-full mx-auto space-y-6 text-gray-900 font-sans">
       <div>
-        <h1 className="text-xl font-semibold">Settings</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Settings</h1>
+        <p className="text-xs text-gray-500 mt-0.5">
           Manage your account and application preferences
         </p>
       </div>
 
-      <div className="bg-white rounded-xl p-6 shadow-sm">
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-150">
         <div className="flex items-center gap-2 mb-6">
           <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center">
             <span className="text-brand-600">👤</span>
@@ -272,11 +348,11 @@ function Settings() {
         )}
 
         <form onSubmit={handleSave}>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
             {[
-              ["firstName", "First Name"],
+              ["firstName", "First Name", true],
               ["lastName", "Last Name"],
-              ["phone", "Phone Number"],
+              ["phone", "Phone Number", true],
               ["emailId", "Email Address"],
               ["village", "Village"],
               ["district", "District"],
@@ -284,18 +360,30 @@ function Settings() {
               ["shopName", "Shop / FPO Name"],
               ["gstNumber", "GST Number"],
               ["estimatedTurnover", "Estimated Turnover"],
-            ].map(([key, label]) => (
-              <div key={key}>
-                <label className="block text-xs text-gray-500 mb-1">
-                  {label}
-                </label>
-                <input
-                  value={form[key]}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                  className="w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
-            ))}
+            ].map(([key, label, isRequired]) => {
+              const hasErr = !!profileErrors[key];
+              return (
+                <div key={key}>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    {label} {isRequired && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    value={form[key]}
+                    onChange={(e) => handleProfileChange(key, e.target.value)}
+                    className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none transition-colors ${
+                      hasErr
+                        ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                        : "border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white"
+                    }`}
+                  />
+                  {hasErr && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {profileErrors[key]}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">Gender</label>
@@ -320,7 +408,7 @@ function Settings() {
               />
             </div>
 
-            <div className="col-span-2 flex justify-end mt-2">
+            <div className="col-span-1 sm:col-span-2 md:col-span-3 xl:col-span-4 flex justify-end mt-2">
               {!isReadOnly && (
                 <button
                   type="submit"
@@ -408,41 +496,63 @@ function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Business GSTIN
+                    Business GSTIN <span className="text-red-500">*</span>
                   </label>
                   <input
                     disabled={connectLoading || sessionLoading}
                     maxLength={15}
                     value={form.eInvoiceGstin}
-                    onChange={(e) => setForm({ ...form, eInvoiceGstin: e.target.value.toUpperCase() })}
+                    onChange={(e) => handleEInvoiceChange("eInvoiceGstin", e.target.value.toUpperCase())}
                     placeholder="29AAACQ3770E000"
-                    className="w-full border border-gray-205 px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                    className={`w-full border px-3 py-2.5 rounded-xl text-sm focus:outline-none bg-white transition-colors disabled:bg-gray-50 disabled:text-gray-400 ${
+                      eInvoiceErrors.eInvoiceGstin
+                        ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                        : "border-gray-205 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                    }`}
                   />
+                  {eInvoiceErrors.eInvoiceGstin && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {eInvoiceErrors.eInvoiceGstin}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Government Portal Username
+                    Government Portal Username <span className="text-red-500">*</span>
                   </label>
                   <input
                     disabled={connectLoading || sessionLoading}
                     value={form.eInvoiceUsername}
-                    onChange={(e) => setForm({ ...form, eInvoiceUsername: e.target.value })}
+                    onChange={(e) => handleEInvoiceChange("eInvoiceUsername", e.target.value)}
                     placeholder="Portal Username"
-                    className="w-full border border-gray-205 px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                    className={`w-full border px-3 py-2.5 rounded-xl text-sm focus:outline-none bg-white transition-colors disabled:bg-gray-50 disabled:text-gray-400 ${
+                      eInvoiceErrors.eInvoiceUsername
+                        ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                        : "border-gray-205 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                    }`}
                   />
+                  {eInvoiceErrors.eInvoiceUsername && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {eInvoiceErrors.eInvoiceUsername}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Government Portal Password
+                    Government Portal Password <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <input
                       disabled={connectLoading || sessionLoading}
                       type={showPassword ? "text" : "password"}
                       value={form.eInvoicePassword}
-                      onChange={(e) => setForm({ ...form, eInvoicePassword: e.target.value })}
+                      onChange={(e) => handleEInvoiceChange("eInvoicePassword", e.target.value)}
                       placeholder="••••••••••••"
-                      className="w-full border border-gray-205 pl-3 pr-10 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                      className={`w-full border pl-3 pr-10 py-2.5 rounded-xl text-sm focus:outline-none bg-white transition-colors disabled:bg-gray-50 disabled:text-gray-400 ${
+                        eInvoiceErrors.eInvoicePassword
+                          ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                          : "border-gray-205 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                      }`}
                     />
                     <button
                       type="button"
@@ -452,6 +562,11 @@ function Settings() {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {eInvoiceErrors.eInvoicePassword && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {eInvoiceErrors.eInvoicePassword}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -761,41 +876,63 @@ function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Business GSTIN
+                    Business GSTIN <span className="text-red-500">*</span>
                   </label>
                   <input
                     disabled={connectEWayBillLoading || ewayBillSessionLoading}
                     maxLength={15}
                     value={form.eInvoiceGstin}
-                    onChange={(e) => setForm({ ...form, eInvoiceGstin: e.target.value.toUpperCase() })}
+                    onChange={(e) => handleEWayBillChange("eInvoiceGstin", e.target.value.toUpperCase())}
                     placeholder="29AAACQ3770E000"
-                    className="w-full border border-gray-205 px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                    className={`w-full border px-3 py-2.5 rounded-xl text-sm focus:outline-none bg-white transition-colors disabled:bg-gray-50 disabled:text-gray-400 ${
+                      eWayBillErrors.eInvoiceGstin
+                        ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                        : "border-gray-205 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                    }`}
                   />
+                  {eWayBillErrors.eInvoiceGstin && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {eWayBillErrors.eInvoiceGstin}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    E-Way Bill Portal Username
+                    E-Way Bill Portal Username <span className="text-red-500">*</span>
                   </label>
                   <input
                     disabled={connectEWayBillLoading || ewayBillSessionLoading}
                     value={form.eWayBillUsername}
-                    onChange={(e) => setForm({ ...form, eWayBillUsername: e.target.value })}
+                    onChange={(e) => handleEWayBillChange("eWayBillUsername", e.target.value)}
                     placeholder="Portal Username"
-                    className="w-full border border-gray-205 px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                    className={`w-full border px-3 py-2.5 rounded-xl text-sm focus:outline-none bg-white transition-colors disabled:bg-gray-50 disabled:text-gray-400 ${
+                      eWayBillErrors.eWayBillUsername
+                        ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                        : "border-gray-205 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                    }`}
                   />
+                  {eWayBillErrors.eWayBillUsername && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {eWayBillErrors.eWayBillUsername}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    E-Way Bill Portal Password
+                    E-Way Bill Portal Password <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <input
                       disabled={connectEWayBillLoading || ewayBillSessionLoading}
                       type={showEWayBillPassword ? "text" : "password"}
                       value={form.eWayBillPassword}
-                      onChange={(e) => setForm({ ...form, eWayBillPassword: e.target.value })}
+                      onChange={(e) => handleEWayBillChange("eWayBillPassword", e.target.value)}
                       placeholder="••••••••••••"
-                      className="w-full border border-gray-205 pl-3 pr-10 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                      className={`w-full border pl-3 pr-10 py-2.5 rounded-xl text-sm focus:outline-none bg-white transition-colors disabled:bg-gray-50 disabled:text-gray-400 ${
+                        eWayBillErrors.eWayBillPassword
+                          ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                          : "border-gray-205 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                      }`}
                     />
                     <button
                       type="button"
@@ -805,6 +942,11 @@ function Settings() {
                       {showEWayBillPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {eWayBillErrors.eWayBillPassword && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {eWayBillErrors.eWayBillPassword}
+                    </p>
+                  )}
                 </div>
               </div>
 

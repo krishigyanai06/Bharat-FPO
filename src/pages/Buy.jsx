@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { usePermissions } from "../hooks/usePermissions";
 
-const ORDER_STATUSES = [
+const STATUS_OPTIONS = [
   {
     value: "PENDING",
     label: "Pending",
@@ -31,22 +31,29 @@ const ORDER_STATUSES = [
     icon: CheckCircle,
   },
   {
+    value: "REJECTED",
+    label: "Rejected",
+    color: "bg-red-100 text-red-700",
+    icon: XCircle,
+  },
+  {
     value: "SOLD",
     label: "Sold",
     color: "bg-brand-100 text-brand-700",
     icon: CheckCircle,
   },
-  {
-    value: "REJECT",
-    label: "Reject",
-    color: "bg-red-100 text-red-700",
-    icon: XCircle,
-  },
 ];
 
-const getStatusConfig = (status) =>
-  ORDER_STATUSES.find((s) => s.value === (status || "").toUpperCase()) ||
-  ORDER_STATUSES[0];
+const ORDER_STATUSES = STATUS_OPTIONS;
+
+const getStatusConfig = (status) => {
+  const norm = (status || "").toUpperCase();
+  return (
+    ORDER_STATUSES.find(
+      (s) => s.value === norm || (s.value === "REJECTED" && norm === "REJECT")
+    ) || ORDER_STATUSES[0]
+  );
+};
 
 const fmt = (date) => {
   if (!date) return "—";
@@ -55,10 +62,12 @@ const fmt = (date) => {
 };
 
 const getDueStatus = (o) => {
+  const norm = (o.status || "").toUpperCase();
   if (
     o.paymentMethod !== "CREDIT" ||
-    o.status === "SOLD" ||
-    o.status === "REJECTED"
+    norm === "SOLD" ||
+    norm === "REJECTED" ||
+    norm === "REJECT"
   )
     return null;
   const due = o.dueDate
@@ -119,8 +128,11 @@ function Buy() {
   }, [location.state, orders]);
 
   const filtered = orders.filter((o) => {
+    const norm = (o.status || "").toUpperCase();
     const matchStatus =
-      statusFilter === "all" || (o.status || "").toUpperCase() === statusFilter;
+      statusFilter === "all" ||
+      norm === statusFilter ||
+      (statusFilter === "REJECTED" && norm === "REJECT");
     const q = search.toLowerCase();
     const farmerName =
       `${o.farmer?.firstName ?? ""} ${o.farmer?.lastName ?? ""}`.toLowerCase();
@@ -141,12 +153,21 @@ function Buy() {
   };
 
   const confirmStatusChange = () => {
+    const isReject = confirmStatus.status === "REJECTED";
     dispatch(
       updateOrderStatus({ id: confirmStatus.id, status: confirmStatus.status }),
     )
       .unwrap()
-      .then(() => toast.success("Status updated"))
-      .catch(() => toast.error("Failed to update status"))
+      .then(() => {
+        if (isReject) {
+          toast.success("Order rejected successfully.");
+        } else {
+          toast.success("Status updated");
+        }
+      })
+      .catch((err) => {
+        toast.error(typeof err === "string" ? err : err?.message || "Failed to update status");
+      })
       .finally(() => setConfirmStatus(null));
   };
 
@@ -193,20 +214,20 @@ function Buy() {
     },
     {
       title: "Pending",
-      value: orders.filter((o) => o.status === "PENDING").length,
+      value: orders.filter((o) => (o.status || "").toUpperCase() === "PENDING").length,
       color: "bg-yellow-50 text-yellow-600",
       icon: Clock,
     },
     {
       title: "Sold",
-      value: orders.filter((o) => o.status === "SOLD").length,
+      value: orders.filter((o) => (o.status || "").toUpperCase() === "SOLD").length,
       color: "bg-brand-50 text-brand-600",
       icon: CheckCircle,
     },
     {
       title: "Total Revenue",
       value: `₹${orders
-        .filter((o) => o.status === "SOLD")
+        .filter((o) => (o.status || "").toUpperCase() === "SOLD")
         .reduce((s, o) => s + (o.finalAmount || 0), 0)
         .toLocaleString("en-IN")}`,
       color: "bg-purple-50 text-purple-600",
@@ -287,9 +308,10 @@ function Buy() {
           </button>
           {ORDER_STATUSES.map((s) => {
             const Icon = s.icon;
-            const count = orders.filter(
-              (o) => (o.status || "").toUpperCase() === s.value,
-            ).length;
+            const count = orders.filter((o) => {
+              const norm = (o.status || "").toUpperCase();
+              return norm === s.value || (s.value === "REJECTED" && norm === "REJECT");
+            }).length;
             return (
               <button
                 key={s.value}
@@ -325,6 +347,7 @@ function Buy() {
               const sc = getStatusConfig(o.status);
               const dueAlert = getDueStatus(o);
               const imgUrl = getFirstImage(o);
+              const currentNormStatus = (o.status || "").toUpperCase() === "REJECT" ? "REJECTED" : ((o.status || "").toUpperCase() || "PENDING");
               return (
                 <tr
                   key={o._id}
@@ -427,10 +450,10 @@ function Buy() {
 
                   <td className="px-4 py-4">
                     <select
-                      value={o.status || "PENDING"}
+                      value={currentNormStatus}
                       onChange={(e) =>
                         !isReadOnly &&
-                        handleStatusChange(o._id, e.target.value, o.status)
+                        handleStatusChange(o._id, e.target.value, currentNormStatus)
                       }
                       disabled={isReadOnly}
                       className={`text-xs font-medium px-2 py-1 rounded-lg border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-400 ${sc.color} ${isReadOnly ? "opacity-50 cursor-not-allowed" : ""}`}

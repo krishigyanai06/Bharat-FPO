@@ -375,6 +375,8 @@ const ProcurementReport = () => {
             <input
               type="date"
               value={startDate}
+              max={new Date().toISOString().split('T')[0]}
+              onClick={(e) => e.target.showPicker?.()}
               onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
               className="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
             />
@@ -386,6 +388,8 @@ const ProcurementReport = () => {
             <input
               type="date"
               value={endDate}
+              max={new Date().toISOString().split('T')[0]}
+              onClick={(e) => e.target.showPicker?.()}
               onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }}
               className="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
             />

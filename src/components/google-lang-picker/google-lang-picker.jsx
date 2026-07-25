@@ -56,7 +56,7 @@ function GoogleLangPicker({ classes = "" }) {
   };
 
   return (
-    <div ref={ref} className={`lang-picker relative z-[9999] ${classes}`}>
+    <div ref={ref} className={`lang-picker relative z-20 ${classes}`}>
       <button
         disabled={isTranslating}
         className={`lang-trigger border-2 border-emerald-500 shadow-sm transition-all ${
@@ -83,7 +83,7 @@ function GoogleLangPicker({ classes = "" }) {
       </button>
 
       {isOpen && (
-        <ul className="lang-dropdown shadow-2xl z-[99999]" translate="no">
+        <ul className="lang-dropdown shadow-2xl z-30" translate="no">
           {options.map((option) => (
             <li
               key={option.label}

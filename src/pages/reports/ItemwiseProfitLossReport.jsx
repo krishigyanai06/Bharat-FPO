@@ -2,11 +2,11 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchItemwiseProfitLoss } from '../../store/thunks/reportsThunk';
 import ErrorState from '../../components/ErrorState';
-import { 
-  RotateCw, 
-  Search, 
-  ArrowLeft, 
-  ArrowRight, 
+import {
+  RotateCw,
+  Search,
+  ArrowLeft,
+  ArrowRight,
   Loader2,
   Wallet,
   AlertCircle,
@@ -118,7 +118,7 @@ const ItemwiseProfitLossReport = () => {
     const filters = {};
     if (rawFilters.startDate) filters.startDate = rawFilters.startDate;
     if (rawFilters.endDate) filters.endDate = rawFilters.endDate;
-    
+
     // itemsHavingSale is set to false/true depending on whether reportType asks for All Items or not
     filters.itemsHavingSale = rawFilters.reportType !== 'all';
 
@@ -208,7 +208,7 @@ const ItemwiseProfitLossReport = () => {
     // Filter by Search (Instant Client-side Search)
     if (search) {
       const q = search.toLowerCase();
-      result = result.filter(item => 
+      result = result.filter(item =>
         String(item.itemName || '').toLowerCase().includes(q)
       );
     }
@@ -286,7 +286,7 @@ const ItemwiseProfitLossReport = () => {
         item.taxPayable || 0,
         item.netProfitLoss || 0
       ]);
-      const csvContent = "data:text/csv;charset=utf-8," 
+      const csvContent = "data:text/csv;charset=utf-8,"
         + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
@@ -358,50 +358,10 @@ const ItemwiseProfitLossReport = () => {
         {/* Header Quick Actions */}
         <div className="flex flex-wrap gap-2">
           {/* Export Dropdown Button */}
-          <div className="relative" ref={exportDropdownRef}>
-            <button
-              onClick={() => setExportOpen(!exportOpen)}
-              className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 hover:bg-gray-50 rounded-lg text-xs font-bold text-gray-700 bg-white shadow-sm transition-all cursor-pointer h-[38px]"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export</span>
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-            
-            {exportOpen && (
-              <div className="absolute right-0 mt-1.5 w-36 bg-white border border-gray-150 rounded-lg shadow-lg py-1 z-50 animate-fade-in text-left">
-                <button
-                  onClick={() => {
-                    setExportOpen(false);
-                    handleExport('excel');
-                  }}
-                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-semibold flex items-center gap-1.5"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-green-600" />
-                  Excel / CSV
-                </button>
-                <button
-                  onClick={() => {
-                    setExportOpen(false);
-                    handleExport('pdf');
-                  }}
-                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-semibold flex items-center gap-1.5"
-                >
-                  <FileText className="w-3.5 h-3.5 text-red-500" />
-                  PDF Report
-                </button>
-              </div>
-            )}
-          </div>
+
 
           {/* Print Button */}
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 hover:bg-gray-50 rounded-lg text-xs font-bold text-gray-700 bg-white shadow-sm transition-all cursor-pointer h-[38px]"
-          >
-            <Printer className="w-3.5 h-3.5 text-gray-500" />
-            <span>Print</span>
-          </button>
+
 
           {/* Refresh Button */}
           <button
@@ -521,16 +481,14 @@ const ItemwiseProfitLossReport = () => {
 
             {/* Card 2: Net Profit / Loss */}
             <div className="bg-white rounded-xl border border-gray-150 p-4 shadow-sm flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                summaryMetrics.netProfitLoss >= 0 ? 'bg-green-50 text-[#16A34A]' : 'bg-red-50 text-red-650'
-              }`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${summaryMetrics.netProfitLoss >= 0 ? 'bg-green-50 text-[#16A34A]' : 'bg-red-50 text-red-650'
+                }`}>
                 {summaryMetrics.netProfitLoss >= 0 ? <TrendingUp className="w-4.5 h-4.5" /> : <TrendingDown className="w-4.5 h-4.5" />}
               </div>
               <div className="space-y-0.5">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Net Profit/Loss</span>
-                <h3 className={`text-sm font-bold tabular-nums ${
-                  summaryMetrics.netProfitLoss >= 0 ? 'text-[#16A34A]' : 'text-red-600'
-                }`}>
+                <h3 className={`text-sm font-bold tabular-nums ${summaryMetrics.netProfitLoss >= 0 ? 'text-[#16A34A]' : 'text-red-600'
+                  }`}>
                   {summaryMetrics.netProfitLoss >= 0 ? '+' : ''}{formatCurrency(summaryMetrics.netProfitLoss)}
                 </h3>
               </div>
@@ -594,7 +552,7 @@ const ItemwiseProfitLossReport = () => {
       {/* ── Quick Insights ── */}
       <div className="space-y-3">
         <h2 className="text-xs font-bold text-gray-450 uppercase tracking-wider">Report Quick Insights</h2>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {itemwiseProfitLossLoading ? (
             Array.from({ length: 3 }).map((_, idx) => <SkeletonInsight key={idx} />)
@@ -709,8 +667,8 @@ const ItemwiseProfitLossReport = () => {
                   <tr className="h-[44px]">
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Item Name</th>
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Unit</th>
-                    
-                    <th 
+
+                    <th
                       onClick={() => handleSort('sale')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                     >
@@ -726,7 +684,7 @@ const ItemwiseProfitLossReport = () => {
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Purchase</th>
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Purchase Return</th>
 
-                    <th 
+                    <th
                       onClick={() => handleSort('openingStock')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                     >
@@ -738,7 +696,7 @@ const ItemwiseProfitLossReport = () => {
                       </div>
                     </th>
 
-                    <th 
+                    <th
                       onClick={() => handleSort('closingStock')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                     >
@@ -752,7 +710,7 @@ const ItemwiseProfitLossReport = () => {
 
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Tax Payable</th>
 
-                    <th 
+                    <th
                       onClick={() => handleSort('netProfitLoss')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                     >
@@ -763,7 +721,7 @@ const ItemwiseProfitLossReport = () => {
                         </span>
                       </div>
                     </th>
-                    
+
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Status</th>
                   </tr>
                 </thead>
@@ -777,13 +735,13 @@ const ItemwiseProfitLossReport = () => {
                     const clStock = Number(item.closingStock || 0);
                     const taxPay = Number(item.taxPayable || 0);
                     const profit = Number(item.netProfitLoss || 0);
-                    
+
                     const isExpanded = expandedItemId === item.itemId;
 
                     return (
                       <React.Fragment key={item.itemId || index}>
                         {/* Main clickable row */}
-                        <tr 
+                        <tr
                           onClick={() => setExpandedItemId(isExpanded ? null : item.itemId)}
                           className="hover:bg-slate-50/40 transition-colors h-[52px] cursor-pointer"
                         >
@@ -814,7 +772,7 @@ const ItemwiseProfitLossReport = () => {
                           <td className="py-2.5 px-4 text-sm text-gray-650 tabular-nums">
                             {formatCurrency(taxPay)}
                           </td>
-                          
+
                           {/* Net Profit Column with arrows */}
                           <td className={`py-2.5 px-4 text-sm font-bold tabular-nums`}>
                             {profit > 0 ? (
@@ -828,13 +786,12 @@ const ItemwiseProfitLossReport = () => {
 
                           {/* Status Badge */}
                           <td className="py-2.5 px-4">
-                            <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
-                              profit > 0 
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${profit > 0
                                 ? 'bg-green-50 text-green-700 border-green-100'
                                 : profit < 0
                                   ? 'bg-red-50 text-red-700 border-red-100'
                                   : 'bg-gray-50 text-gray-500 border-gray-150'
-                            }`}>
+                              }`}>
                               {profit > 0 ? 'Profit' : profit < 0 ? 'Loss' : 'Break Even'}
                             </span>
                           </td>
@@ -848,7 +805,7 @@ const ItemwiseProfitLossReport = () => {
                                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-50 pb-2">
                                   Expanded Inventory Stock & Cost Details
                                 </h4>
-                                
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-3.5">
                                   {/* Column 1 */}
                                   <div className="space-y-3">
@@ -928,7 +885,7 @@ const ItemwiseProfitLossReport = () => {
                   </span>{' '}
                   of <span className="text-[#15803D] font-bold">{Number(processedData.length).toLocaleString('en-IN')}</span> items
                 </div>
-                
+
                 {/* Center: Current Page Status */}
                 <div className="text-xs font-semibold text-gray-500">
                   Page <span className="text-[#15803D] font-bold">{currentPage}</span> of {Math.ceil(processedData.length / itemsPerPage)}

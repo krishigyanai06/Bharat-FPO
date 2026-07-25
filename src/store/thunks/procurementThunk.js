@@ -63,14 +63,14 @@ export const updateOrder = createAsyncThunk(
       if (Object.keys(data).length === 1 && data.status) {
         let res;
         try {
-          res = await api.put(`/procurement/updatePurchase/${id}`, { status: data.status });
+          res = await api.patch(`/procurement/updatePurchase/${id}`, { status: data.status });
         } catch (err) {
           if (err.response?.status === 404) {
             try {
               res = await api.patch(`/procurement/updatePurchase/${id}`, { status: data.status });
             } catch (err2) {
               try {
-                res = await api.put(`/procurement/update/${id}`, { status: data.status });
+                res = await api.patch(`/procurement/update/${id}`, { status: data.status });
               } catch (err3) {
                 res = await api.patch(`/procurement/update/${id}`, { status: data.status });
               }
@@ -93,9 +93,13 @@ export const updateOrder = createAsyncThunk(
         }
       }
 
+      const farmerId = typeof data.farmer === 'object' && data.farmer !== null
+        ? (data.farmer._id || data.farmer.id)
+        : data.farmer;
+
       const payload = {
         ...(purchaseId && { purchaseId }),
-        farmer: data.farmer,
+        farmer: farmerId,
         crops: data.crops.map((c) => ({
           crop: c.cropName || c.crop || '',
           cropName: c.cropName || c.crop || '',
@@ -103,9 +107,11 @@ export const updateOrder = createAsyncThunk(
           rate: Number(c.rate),
           quantity: Number(c.quantity),
           unit: c.unit || 'qtl',
+          ...(c._id && { _id: c._id }),
+          ...(c.id && { id: c.id }),
         })),
         procurementDate: data.procurementDate,
-        procurementCenter: data.procurementCenter,
+        procurementCenter: data.procurementCenter || 'Main Yard',
         godown: data.godown ?? '',
         vehicle: data.vehicle ?? '',
         remarks: data.remarks ?? '',
@@ -115,27 +121,27 @@ export const updateOrder = createAsyncThunk(
 
       let res;
       try {
-        res = await api.put(`/procurement/updatePurchase/${id}`, payload);
+        res = await api.patch(`/procurement/updatePurchase/${id}`, payload);
       } catch (err) {
         if (err.response?.status === 404) {
           try {
-            console.log('[updateOrder] PUT /procurement/updatePurchase failed with 404, trying PATCH...');
-            res = await api.patch(`/procurement/updatePurchase/${id}`, payload);
-          } catch (patchErr) {
-            if (patchErr.response?.status === 404) {
+            console.log('[updateOrder] PATCH /procurement/updatePurchase failed with 404, trying PUT...');
+            res = await api.put(`/procurement/updatePurchase/${id}`, payload);
+          } catch (putErr) {
+            if (putErr.response?.status === 404) {
               try {
-                console.log('[updateOrder] PATCH /procurement/updatePurchase failed with 404, trying PUT /procurement/update...');
-                res = await api.put(`/procurement/update/${id}`, payload);
-              } catch (putUpdateErr) {
-                if (putUpdateErr.response?.status === 404) {
-                  console.log('[updateOrder] PUT /procurement/update failed, trying PATCH /procurement/update...');
-                  res = await api.patch(`/procurement/update/${id}`, payload);
+                console.log('[updateOrder] PUT /procurement/updatePurchase failed with 404, trying PATCH /procurement/update...');
+                res = await api.patch(`/procurement/update/${id}`, payload);
+              } catch (patchUpdateErr) {
+                if (patchUpdateErr.response?.status === 404) {
+                  console.log('[updateOrder] PATCH /procurement/update failed, trying PUT /procurement/update...');
+                  res = await api.put(`/procurement/update/${id}`, payload);
                 } else {
-                  throw putUpdateErr;
+                  throw patchUpdateErr;
                 }
               }
             } else {
-              throw patchErr;
+              throw putErr;
             }
           }
         } else {

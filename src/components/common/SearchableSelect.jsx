@@ -14,6 +14,8 @@ export default function SearchableSelect({
   icon: Icon = User,
   required = false,
   className = "",
+  hasError = false,
+  error = "",
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -45,6 +47,8 @@ export default function SearchableSelect({
     );
   }, [options, searchTerm]);
 
+  const isInvalid = hasError || !!error;
+
   return (
     <div className={`relative w-full ${className}`} ref={dropdownRef}>
       {label && (
@@ -55,7 +59,7 @@ export default function SearchableSelect({
       )}
 
       {selectedOption && !isOpen ? (
-        <div className="flex items-center justify-between bg-brand-50/80 border border-brand-200 rounded-xl px-3 py-2 text-xs shadow-xs">
+        <div className={`flex items-center justify-between ${isInvalid ? "bg-red-50/40 border-red-500 ring-1 ring-red-500" : "bg-brand-50/80 border-brand-200"} rounded-xl px-3 py-2 text-xs shadow-xs border`}>
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-6 h-6 rounded-full bg-brand-600 text-white font-black text-[10px] flex items-center justify-center flex-shrink-0">
               {selectedOption.initials || selectedOption.name?.charAt(0)?.toUpperCase() || "?"}
@@ -103,7 +107,7 @@ export default function SearchableSelect({
               setSearchTerm(e.target.value);
               if (!isOpen) setIsOpen(true);
             }}
-            className="w-full py-2.5 pr-8 text-xs bg-gray-50 border border-gray-200 rounded-xl pl-9 focus:outline-none focus:bg-white focus:ring-2 focus:ring-brand-500 font-medium text-gray-900 shadow-2xs"
+            className={`w-full py-2.5 pr-8 text-xs ${isInvalid ? "bg-red-50/40 border-red-500 ring-1 ring-red-500 text-red-900 placeholder:text-red-300" : "bg-gray-50 border-gray-200 focus:bg-white focus:ring-brand-500 text-gray-900"} border rounded-xl pl-9 focus:outline-none font-medium shadow-2xs`}
           />
           {searchTerm ? (
             <button

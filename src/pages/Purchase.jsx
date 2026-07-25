@@ -191,7 +191,7 @@ const resolveReturnItemLabel = (it, products = [], linkedBill = null) => {
         return true;
       }
       return String(v.unit).toLowerCase() === String(it.unit).toLowerCase() &&
-             Number(v.pricePerUnit) === Number(it.pricePerUnit);
+        Number(v.pricePerUnit) === Number(it.pricePerUnit);
     });
     if (originalItem && originalItem.itemName) {
       return originalItem.itemName;
@@ -222,7 +222,7 @@ const resolveVariantId = (itemRow, products = []) => {
   // 3. Search by matching product name from resolveItemLabel
   const resolvedLabel = resolveItemLabel(itemRow, products);
   if (resolvedLabel && resolvedLabel !== "Product" && products.length > 0) {
-    const matchedProduct = products.find(p => 
+    const matchedProduct = products.find(p =>
       String(p.productName).toLowerCase().includes(String(resolvedLabel).toLowerCase()) ||
       String(resolvedLabel).toLowerCase().includes(String(p.productName).toLowerCase())
     );
@@ -325,9 +325,9 @@ export default function Purchases() {
     if (!p || !v) return 0;
     const stockRecord = (stockSummary || []).find(
       (s) => s.item?.variantId === v._id || s.item?._id === v._id || (
-         s.item?.sourceRef === p._id &&
-         String(s.item?.parameter).trim().toLowerCase() === String(v.parameter).trim().toLowerCase() &&
-         String(s.item?.unit).trim().toLowerCase() === String(v.unit).trim().toLowerCase()
+        s.item?.sourceRef === p._id &&
+        String(s.item?.parameter).trim().toLowerCase() === String(v.parameter).trim().toLowerCase() &&
+        String(s.item?.unit).trim().toLowerCase() === String(v.unit).trim().toLowerCase()
       )
     );
     return stockRecord ? (stockRecord.availableQuantity ?? 0) : (v.quantity ?? 0);
@@ -392,24 +392,28 @@ export default function Purchases() {
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [partyFilter, setPartyFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [purchaseTypeFilter, setPurchaseTypeFilter] = useState(() => {
     const path = window.location.pathname;
     if (path.includes("/purchase/orders")) return "ORDER";
-    if (path.includes("/purchase/bills")) return "BILL";
     return "";
   });
+
+  // Debounce search query input (400ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery.trim());
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Synchronize purchaseTypeFilter from URL pathname transitions
   useEffect(() => {
     if (pathname.includes("/purchase/orders")) {
       setPurchaseTypeFilter("ORDER");
-    } else if (pathname.includes("/purchase/bills")) {
-      setPurchaseTypeFilter("BILL");
-    } else {
-      setPurchaseTypeFilter("");
     }
   }, [pathname]);
   const [billingTypeFilter, setBillingTypeFilter] = useState("");
@@ -418,6 +422,7 @@ export default function Purchases() {
 
   const handleResetFilters = () => {
     setSearchQuery("");
+    setDebouncedSearchQuery("");
     setStartDate("");
     setEndDate("");
     setPurchaseTypeFilter("");
@@ -437,11 +442,11 @@ export default function Purchases() {
   // Handle active tab or filters changes
   useEffect(() => {
     loadListData();
-  }, [activeTab, currentPage, partyFilter, startDate, endDate, purchaseTypeFilter, billingTypeFilter]);
+  }, [activeTab, currentPage, partyFilter, startDate, endDate, purchaseTypeFilter, billingTypeFilter, debouncedSearchQuery]);
 
   const loadListData = () => {
     const filters = { page: currentPage, limit: ITEMS_PER_PAGE };
-    if (searchQuery) filters.search = searchQuery;
+    if (debouncedSearchQuery) filters.search = debouncedSearchQuery;
     if (partyFilter) filters.party = partyFilter;
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
@@ -461,9 +466,67 @@ export default function Purchases() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    setDebouncedSearchQuery(searchQuery.trim());
     setCurrentPage(1);
-    loadListData();
   };
+
+  // Helper function to resolve party/vendor name from item or Redux parties list
+  const getPartyName = (item) => {
+    if (!item) return "";
+    if (item.party && typeof item.party === "object" && item.party.name) {
+      return item.party.name;
+    }
+    const partyId = typeof item.party === "string" ? item.party : item.party?._id;
+    if (partyId) {
+      const found = (parties || []).find((p) => String(p._id) === String(partyId));
+      if (found?.name) return found.name;
+    }
+    return item.partyName || item.vendorName || item.supplierName || "";
+  };
+
+  // Filtered lists with robust vendor/supplier name matching (case-insensitive, trimmed)
+  const displayedPurchases = useMemo(() => {
+    if (!debouncedSearchQuery) return purchases;
+    const q = debouncedSearchQuery.toLowerCase().trim();
+    return purchases.filter((item) => {
+      const billNo = (item.billNumber || item._id || "").toLowerCase();
+      const vendorName = getPartyName(item).toLowerCase();
+      const itemsMatch = (item.items || []).some((it) =>
+        (it.productName || it.name || it.itemCode || "").toLowerCase().includes(q)
+      );
+      return billNo.includes(q) || vendorName.includes(q) || itemsMatch;
+    });
+  }, [purchases, debouncedSearchQuery, parties]);
+
+  const displayedPayments = useMemo(() => {
+    if (!debouncedSearchQuery) return payments;
+    const q = debouncedSearchQuery.toLowerCase().trim();
+    return payments.filter((item) => {
+      const receiptNo = (item.receiptNo || item.receiptNumber || item._id || "").toLowerCase();
+      const vendorName = getPartyName(item).toLowerCase();
+      return receiptNo.includes(q) || vendorName.includes(q);
+    });
+  }, [payments, debouncedSearchQuery, parties]);
+
+  const displayedReturns = useMemo(() => {
+    if (!debouncedSearchQuery) return returns;
+    const q = debouncedSearchQuery.toLowerCase().trim();
+    return returns.filter((item) => {
+      const returnNo = (item.returnNo || item.debitNoteNo || item._id || "").toLowerCase();
+      const vendorName = getPartyName(item).toLowerCase();
+      return returnNo.includes(q) || vendorName.includes(q);
+    });
+  }, [returns, debouncedSearchQuery, parties]);
+
+  const displayedExpenses = useMemo(() => {
+    if (!debouncedSearchQuery) return expenses;
+    const q = debouncedSearchQuery.toLowerCase().trim();
+    return expenses.filter((item) => {
+      const title = (item.title || item.expenseCategory || item._id || "").toLowerCase();
+      const vendorName = (getPartyName(item) || item.paidTo || "").toLowerCase();
+      return title.includes(q) || vendorName.includes(q);
+    });
+  }, [expenses, debouncedSearchQuery, parties]);
 
   // Helper date formatter
   const formatDate = (dateString) => {
@@ -540,7 +603,7 @@ export default function Purchases() {
       const res = await api.get(`/purchase/receipt/${id}`, { responseType: "blob" });
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
-      
+
       const printWindow = window.open(url, "_blank");
       if (!printWindow || printWindow.closed || typeof printWindow.closed === "undefined") {
         const link = document.createElement("a");
@@ -561,7 +624,7 @@ export default function Purchases() {
           const text = await err.response.data.text();
           const json = JSON.parse(text);
           if (json.message) errorMsg = json.message;
-        } catch (_) {}
+        } catch (_) { }
       } else if (err.response?.data?.message) {
         errorMsg = err.response.data.message;
       } else if (err.message) {
@@ -577,7 +640,7 @@ export default function Purchases() {
       const res = await api.get(`/purchase/payment-out/receipt/${id}`, { responseType: "blob" });
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
-      
+
       const printWindow = window.open(url, "_blank");
       if (!printWindow || printWindow.closed || typeof printWindow.closed === "undefined") {
         const link = document.createElement("a");
@@ -598,7 +661,7 @@ export default function Purchases() {
           const text = await err.response.data.text();
           const json = JSON.parse(text);
           if (json.message) errorMsg = json.message;
-        } catch (_) {}
+        } catch (_) { }
       } else if (err.response?.data?.message) {
         errorMsg = err.response.data.message;
       } else if (err.message) {
@@ -614,7 +677,7 @@ export default function Purchases() {
       const res = await api.get(`/purchase/return/receipt/${id}`, { responseType: "blob" });
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
-      
+
       const printWindow = window.open(url, "_blank");
       if (!printWindow || printWindow.closed || typeof printWindow.closed === "undefined") {
         const link = document.createElement("a");
@@ -635,7 +698,7 @@ export default function Purchases() {
           const text = await err.response.data.text();
           const json = JSON.parse(text);
           if (json.message) errorMsg = json.message;
-        } catch (_) {}
+        } catch (_) { }
       } else if (err.response?.data?.message) {
         errorMsg = err.response.data.message;
       } else if (err.message) {
@@ -795,7 +858,7 @@ export default function Purchases() {
             <button
               key={t.key}
               onClick={() => {
-                if (t.key === "purchases") navigate("/purchase/bills");
+                if (t.key === "purchases") navigate("/purchase");
                 else if (t.key === "payments") navigate("/purchase/payments");
                 else if (t.key === "returns") navigate("/purchase/debit-notes");
                 else if (t.key === "expenses") navigate("/purchase/expenses");
@@ -973,7 +1036,7 @@ export default function Purchases() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {purchases.length === 0 ? (
+                  {displayedPurchases.length === 0 ? (
                     <tr className="hover:bg-transparent">
                       <td colSpan={9} className="px-6 py-16 text-center">
                         <EmptyState
@@ -983,7 +1046,7 @@ export default function Purchases() {
                       </td>
                     </tr>
                   ) : (
-                    purchases.map((item) => {
+                    displayedPurchases.map((item) => {
                       const paid = item.paidAmount || 0;
                       const unpaid = item.unpaidAmount || 0;
                       return (
@@ -991,8 +1054,8 @@ export default function Purchases() {
                           <td className="px-3 py-2.5 font-bold text-gray-900 truncate" title={item.billNumber || item._id.substring(0, 8).toUpperCase()}>
                             {item.billNumber || item._id.substring(0, 8).toUpperCase()}
                           </td>
-                          <td className="px-3 py-2.5 font-semibold text-gray-805 truncate" title={item.party?.name || "Unknown Vendor"}>
-                            {item.party?.name || "Unknown Vendor"}
+                          <td className="px-3 py-2.5 font-semibold text-gray-805 truncate" title={getPartyName(item) || "Unknown Vendor"}>
+                            {getPartyName(item) || "Unknown Vendor"}
                           </td>
                           <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">
                             {formatDate(item.billDate)}
@@ -1033,12 +1096,11 @@ export default function Purchases() {
                               >
                                 <MoreVertical className="w-4 h-4" />
                               </button>
-                              
+
                               {activeMenuId === item._id && (
                                 <div
-                                  className={`absolute right-0 z-50 w-[130px] bg-white rounded-2xl border border-slate-200 shadow-xl py-2 focus:outline-none animate-in fade-in zoom-in-95 duration-150 ${
-                                    menuDirection === "up" ? "bottom-full mb-2" : "top-full mt-2"
-                                  }`}
+                                  className={`absolute right-0 z-50 w-[130px] bg-white rounded-2xl border border-slate-200 shadow-xl py-2 focus:outline-none animate-in fade-in zoom-in-95 duration-150 ${menuDirection === "up" ? "bottom-full mb-2" : "top-full mt-2"
+                                    }`}
                                   role="menu"
                                 >
                                   <div className="flex flex-col px-1">
@@ -1052,7 +1114,7 @@ export default function Purchases() {
                                     >
                                       View Bill
                                     </button>
-                                    
+
                                     <button
                                       role="menuitem"
                                       onClick={() => {
@@ -1161,7 +1223,7 @@ export default function Purchases() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {payments.length === 0 ? (
+                  {displayedPayments.length === 0 ? (
                     <tr className="hover:bg-transparent">
                       <td colSpan={6} className="px-6 py-16 text-center">
                         <EmptyState
@@ -1171,7 +1233,7 @@ export default function Purchases() {
                       </td>
                     </tr>
                   ) : (
-                    payments.map((item) => (
+                    displayedPayments.map((item) => (
                       <tr key={item._id} className="hover:bg-gray-50 transition">
                         <td className="px-6 py-2.5">
                           <div className="flex flex-col">
@@ -1188,8 +1250,8 @@ export default function Purchases() {
                           </div>
                         </td>
                         <td className="px-6 py-2.5 text-gray-505 whitespace-nowrap">{formatDate(item.date)}</td>
-                        <td className="px-6 py-2.5 font-semibold text-gray-805 truncate max-w-[220px]" title={item.party?.name || "Unknown Supplier"}>
-                          {item.party?.name || "Unknown Supplier"}
+                        <td className="px-6 py-2.5 font-semibold text-gray-805 truncate max-w-[220px]" title={getPartyName(item) || "Unknown Supplier"}>
+                          {getPartyName(item) || "Unknown Supplier"}
                         </td>
                         <td className="px-6 py-2.5">
                           <div className="flex flex-wrap gap-1">
@@ -1281,7 +1343,7 @@ export default function Purchases() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {returns.length === 0 ? (
+                  {displayedReturns.length === 0 ? (
                     <tr className="hover:bg-transparent">
                       <td colSpan={6} className="px-6 py-16 text-center">
                         <EmptyState
@@ -1291,12 +1353,12 @@ export default function Purchases() {
                       </td>
                     </tr>
                   ) : (
-                    returns.map((item) => (
+                    displayedReturns.map((item) => (
                       <tr key={item._id} className="hover:bg-gray-50 transition">
                         <td className="px-6 py-2.5 font-bold text-gray-900">{item.returnNo || item._id.substring(0, 8).toUpperCase()}</td>
                         <td className="px-6 py-2.5 text-gray-505 whitespace-nowrap">{formatDate(item.returnDate)}</td>
-                        <td className="px-6 py-2.5 font-semibold text-gray-805 truncate max-w-[220px]" title={item.party?.name || "Unknown Party"}>
-                          {item.party?.name || "Unknown Party"}
+                        <td className="px-6 py-2.5 font-semibold text-gray-805 truncate max-w-[220px]" title={getPartyName(item) || "Unknown Party"}>
+                          {getPartyName(item) || "Unknown Party"}
                         </td>
                         <td className="px-6 py-2.5 text-gray-505 font-mono text-xs">
                           <LinkedBillCell billId={item.purchase} />
@@ -1353,7 +1415,7 @@ export default function Purchases() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {expenses.length === 0 ? (
+                  {displayedExpenses.length === 0 ? (
                     <tr className="hover:bg-transparent">
                       <td colSpan={7} className="px-6 py-16 text-center">
                         <EmptyState
@@ -1363,7 +1425,7 @@ export default function Purchases() {
                       </td>
                     </tr>
                   ) : (
-                    expenses.map((item) => (
+                    displayedExpenses.map((item) => (
                       <tr key={item._id} className="hover:bg-gray-50 transition">
                         <td className="px-6 py-2.5 font-bold text-gray-900">{item.expenseNo || item._id.substring(0, 8).toUpperCase()}</td>
                         <td className="px-6 py-2.5 font-medium text-gray-800">{item.expenseCategory}</td>
@@ -1658,9 +1720,9 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
     if (!p || !v) return 0;
     const stockRecord = (stockSummary || []).find(
       (s) => s.item?.variantId === v._id || s.item?._id === v._id || (
-         s.item?.sourceRef === p._id &&
-         String(s.item?.parameter).trim().toLowerCase() === String(v.parameter).trim().toLowerCase() &&
-         String(s.item?.unit).trim().toLowerCase() === String(v.unit).trim().toLowerCase()
+        s.item?.sourceRef === p._id &&
+        String(s.item?.parameter).trim().toLowerCase() === String(v.parameter).trim().toLowerCase() &&
+        String(s.item?.unit).trim().toLowerCase() === String(v.unit).trim().toLowerCase()
       )
     );
     return stockRecord ? (stockRecord.availableQuantity ?? 0) : (v.quantity ?? 0);
@@ -1845,7 +1907,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
   // Enhanced search filtering
   const filteredProducts = useMemo(() => {
     const query = debouncedSearchQuery.trim().toLowerCase();
-    
+
     // If search text exactly matches selected product, do not filter out everything else
     const selectedProd = products.find(p => p._id === formProductId);
     if (selectedProd && selectedProd.productName.toLowerCase() === query) {
@@ -2751,7 +2813,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
   return (
     <div className="w-full bg-[#F8FAFC] h-[calc(100vh-140px)] lg:h-[calc(100vh-112px)] flex flex-col border border-slate-200 rounded-3xl overflow-hidden shadow-sm animate-in fade-in duration-200 select-none">
       <div className="bg-white w-full flex-1 flex flex-col overflow-hidden">
-        
+
         {/* 1. Header Area */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-8 py-4 border-b border-slate-100 bg-white gap-4">
           <div className="flex items-center gap-3">
@@ -2763,9 +2825,8 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                 <span className="leading-tight text-slate-800 font-black text-lg">
                   Purchase Entry
                 </span>
-                <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider ${
-                  editRecord ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
-                }`}>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider ${editRecord ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                  }`}>
                   {editRecord ? "Saved" : "Draft"}
                 </span>
               </div>
@@ -2782,11 +2843,10 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
             <button
               type="button"
               onClick={() => activeStep > 1 && setActiveStep(1)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all ${
-                activeStep === 1
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all ${activeStep === 1
                   ? "text-[#16A34A] bg-[#DCFCE7]"
                   : "text-slate-400 hover:text-slate-655"
-              }`}
+                }`}
             >
               <span>{activeStep > 1 ? "✓" : "①"} Invoice Details</span>
             </button>
@@ -2800,13 +2860,12 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                   handleNextStep();
                 }
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all ${
-                activeStep === 2
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all ${activeStep === 2
                   ? "text-[#16A34A] bg-[#DCFCE7]"
                   : activeStep > 2
-                  ? "text-[#16A34A]"
-                  : "text-slate-400 hover:text-slate-655"
-              }`}
+                    ? "text-[#16A34A]"
+                    : "text-slate-400 hover:text-slate-655"
+                }`}
             >
               <span>{activeStep > 2 ? "✓" : "②"} Products</span>
             </button>
@@ -2849,11 +2908,10 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                   }
                 }
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all ${
-                activeStep === 3
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all ${activeStep === 3
                   ? "text-[#16A34A] bg-[#DCFCE7]"
                   : "text-slate-400 hover:text-slate-655"
-              }`}
+                }`}
             >
               <span>③ Review</span>
             </button>
@@ -2868,14 +2926,14 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
             <div className="space-y-4 animate-in fade-in slide-in-from-left-4 duration-200">
               <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 align-start divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
-                  
+
                   {/* Supplier Column */}
                   <div className="space-y-4 pr-0 lg:pr-4">
                     <h4 className="text-[11px] font-extrabold text-[#16A34A] uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center gap-1.5">
                       <User className="w-4 h-4" />
                       Supplier Details
                     </h4>
-                    
+
                     {/* Party Selector */}
                     <div className="group">
                       <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Party/Supplier *</label>
@@ -2896,11 +2954,10 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                             }}
                             aria-invalid={errors.selectedParty ? "true" : "false"}
                             aria-describedby={errors.selectedParty ? "party-error" : undefined}
-                            className={`pl-9 pr-8 w-full border rounded-xl text-xs focus:outline-none focus:ring-4 h-[40px] transition-all font-semibold cursor-pointer ${
-                              errors.selectedParty
+                            className={`pl-9 pr-8 w-full border rounded-xl text-xs focus:outline-none focus:ring-4 h-[40px] transition-all font-semibold cursor-pointer ${errors.selectedParty
                                 ? "border-[#EF4444] bg-[#FEF2F2] focus:ring-red-500/10 focus:border-[#EF4444]"
                                 : "border-slate-200 hover:border-slate-350 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white text-slate-800"
-                            }`}
+                              }`}
                             required
                           >
                             <option value="">-- Choose Party --</option>
@@ -3061,11 +3118,10 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                               }}
                               aria-invalid={errors.dueDate ? "true" : "false"}
                               aria-describedby={errors.dueDate ? "due-date-error" : undefined}
-                              className={`pl-9 pr-3 w-full border rounded-xl text-xs focus:outline-none focus:ring-4 h-[40px] cursor-pointer transition-all font-semibold ${
-                                errors.dueDate
+                              className={`pl-9 pr-3 w-full border rounded-xl text-xs focus:outline-none focus:ring-4 h-[40px] cursor-pointer transition-all font-semibold ${errors.dueDate
                                   ? "border-[#EF4444] bg-[#FEF2F2] focus:ring-red-500/10 focus:border-[#EF4444] text-slate-800"
                                   : "border-slate-200 hover:border-slate-350 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white text-slate-800"
-                              }`}
+                                }`}
                               required
                             />
                             <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -3099,11 +3155,10 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                               placeholder="₹0"
                               aria-invalid={errors.paidAmount ? "true" : "false"}
                               aria-describedby={errors.paidAmount ? "paid-amount-error" : undefined}
-                              className={`pl-9 pr-3 w-full border rounded-xl text-xs focus:outline-none focus:ring-4 h-[40px] transition-all font-semibold ${
-                                errors.paidAmount
+                              className={`pl-9 pr-3 w-full border rounded-xl text-xs focus:outline-none focus:ring-4 h-[40px] transition-all font-semibold ${errors.paidAmount
                                   ? "border-[#EF4444] bg-[#FEF2F2] focus:ring-red-500/10 focus:border-[#EF4444] text-slate-800"
                                   : "border-slate-200 hover:border-slate-350 focus:ring-[#16A34A]/10 focus:border-[#16A34A] bg-white text-slate-800"
-                              }`}
+                                }`}
                             />
                             <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                           </div>
@@ -3191,10 +3246,10 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
           {/* ==================== STEP 2: ADD PRODUCTS ==================== */}
           {activeStep === 2 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-200">
-              
+
               {/* Two-Column Desktop Product Entry Layout */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                
+
                 {/* Form fields card - takes 2/3 width on large screen */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3 lg:col-span-2">
                   <div className="text-[11px] font-extrabold text-[#16A34A] uppercase tracking-wider border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
@@ -3264,13 +3319,12 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                             placeholder="Search item by name / code"
                             aria-invalid={errors.formProductId ? "true" : "false"}
                             aria-describedby={errors.formProductId ? "product-search-error" : undefined}
-                            className={`pl-10 pr-10 w-full border rounded-xl text-xs h-[46px] transition-all font-semibold ${
-                              errors.formProductId
+                            className={`pl-10 pr-10 w-full border rounded-xl text-xs h-[46px] transition-all font-semibold ${errors.formProductId
                                 ? "border-[#EF4444] bg-[#FEF2F2] focus:ring-red-500/10 focus:border-[#EF4444] text-slate-855"
                                 : productDropdownOpen
-                                ? "border-emerald-500 bg-white ring-4 ring-emerald-500/10 text-slate-855"
-                                : "border-slate-200 hover:border-slate-355 bg-white text-slate-700"
-                            }`}
+                                  ? "border-emerald-500 bg-white ring-4 ring-emerald-500/10 text-slate-855"
+                                  : "border-slate-200 hover:border-slate-355 bg-white text-slate-700"
+                              }`}
                           />
                           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                           <ChevronDown
@@ -3278,9 +3332,8 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                               e.stopPropagation();
                               setProductDropdownOpen(!productDropdownOpen);
                             }}
-                            className={`absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 cursor-pointer transition-transform duration-200 text-slate-400 ${
-                              productDropdownOpen ? "rotate-180 text-emerald-600" : ""
-                            }`}
+                            className={`absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 cursor-pointer transition-transform duration-200 text-slate-400 ${productDropdownOpen ? "rotate-180 text-emerald-600" : ""
+                              }`}
                           />
 
                           {productDropdownOpen && (
@@ -3325,7 +3378,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                                     const hsnCode = product.hsnCode || "—";
                                     const skuCode = variant?.sku || variant?.itemCode || product.sku || product.itemCode || "—";
                                     const liveStock = variant ? getLiveVariantStock(product, variant) : getLiveProductStock(product);
-                                    
+
                                     const stockVal = Number(liveStock || 0);
                                     let stockColor = "text-emerald-600";
                                     if (stockVal <= 0) {
@@ -3350,9 +3403,8 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                                           }
                                           setProductDropdownOpen(false);
                                         }}
-                                        className={`px-4 py-3 cursor-pointer transition flex flex-col gap-1.5 ${
-                                          isSelected ? "bg-emerald-50/40" : "bg-white hover:bg-slate-50/50"
-                                        }`}
+                                        className={`px-4 py-3 cursor-pointer transition flex flex-col gap-1.5 ${isSelected ? "bg-emerald-50/40" : "bg-white hover:bg-slate-50/50"
+                                          }`}
                                       >
                                         <div className="flex justify-between items-start gap-4">
                                           <div className="font-bold text-slate-800 leading-tight text-xs">
@@ -3518,11 +3570,10 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                               onWheel={(e) => e.target.blur()}
                               aria-invalid={errors.formQuantity ? "true" : "false"}
                               aria-describedby={errors.formQuantity ? "quantity-error" : undefined}
-                              className={`w-20 h-[48px] border-y text-center text-sm focus:outline-none focus:ring-0 font-bold ${
-                                errors.formQuantity
+                              className={`w-20 h-[48px] border-y text-center text-sm focus:outline-none focus:ring-0 font-bold ${errors.formQuantity
                                   ? "border-red-500 bg-red-50 text-red-800"
                                   : "border-slate-200 text-slate-855"
-                              }`}
+                                }`}
                             />
                             <button
                               type="button"
@@ -3550,7 +3601,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                             </p>
                           )}
                         </div>
-                                                  {/* Purchase Price */}
+                        {/* Purchase Price */}
                         <div className="flex flex-col">
                           <div className="flex justify-between items-center mb-1.5 font-semibold text-slate-500">
                             <label className="block text-[11px] font-bold uppercase tracking-wider">Purchase Price *</label>
@@ -3580,11 +3631,10 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                               placeholder="0.00"
                               aria-invalid={errors.formPricePerUnit ? "true" : "false"}
                               aria-describedby={errors.formPricePerUnit ? "price-error" : undefined}
-                              className={`w-full border rounded-xl pl-7 pr-3 text-xs focus:outline-none focus:ring-4 h-[38px] transition-all font-semibold text-right ${
-                                errors.formPricePerUnit
+                              className={`w-full border rounded-xl pl-7 pr-3 text-xs focus:outline-none focus:ring-4 h-[38px] transition-all font-semibold text-right ${errors.formPricePerUnit
                                   ? "border-[#EF4444] bg-[#FEF2F2] focus:ring-red-500/10 focus:border-[#EF4444] text-slate-800"
                                   : "border-slate-200 hover:border-slate-355 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white text-slate-800"
-                              }`}
+                                }`}
                             />
                           </div>
                           {errors.formPricePerUnit && (
@@ -3602,22 +3652,20 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                               <button
                                 type="button"
                                 onClick={() => setTaxInputType("amount")}
-                                className={`flex-1 text-[11px] font-extrabold h-[26px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer ${
-                                  taxInputType === "amount"
+                                className={`flex-1 text-[11px] font-extrabold h-[26px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer ${taxInputType === "amount"
                                     ? "bg-white text-[#16A34A] shadow-xs"
                                     : "text-slate-450 hover:text-slate-655"
-                                }`}
+                                  }`}
                               >
                                 ₹
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setTaxInputType("percentage")}
-                                className={`flex-1 text-[11px] font-extrabold h-[26px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer ${
-                                  taxInputType === "percentage"
+                                className={`flex-1 text-[11px] font-extrabold h-[26px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer ${taxInputType === "percentage"
                                     ? "bg-white text-[#16A34A] shadow-xs"
                                     : "text-slate-450 hover:text-slate-655"
-                                }`}
+                                  }`}
                               >
                                 %
                               </button>
@@ -3645,22 +3693,20 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                               <button
                                 type="button"
                                 onClick={() => setDiscountType("amount")}
-                                className={`flex-1 text-[11px] font-extrabold h-[26px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer ${
-                                  discountType === "amount"
+                                className={`flex-1 text-[11px] font-extrabold h-[26px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer ${discountType === "amount"
                                     ? "bg-white text-[#16A34A] shadow-xs"
                                     : "text-slate-450 hover:text-slate-655"
-                                }`}
+                                  }`}
                               >
                                 ₹
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setDiscountType("percentage")}
-                                className={`flex-1 text-[11px] font-extrabold h-[26px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer ${
-                                  discountType === "percentage"
+                                className={`flex-1 text-[11px] font-extrabold h-[26px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer ${discountType === "percentage"
                                     ? "bg-white text-[#16A34A] shadow-xs"
                                     : "text-slate-450 hover:text-slate-655"
-                                }`}
+                                  }`}
                               >
                                 %
                               </button>
@@ -3687,22 +3733,20 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                             <button
                               type="button"
                               onClick={() => setFormTaxType("With Tax")}
-                              className={`flex-1 text-[11px] font-extrabold h-[26px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer ${
-                                formTaxType === "With Tax"
+                              className={`flex-1 text-[11px] font-extrabold h-[26px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer ${formTaxType === "With Tax"
                                   ? "bg-white text-[#16A34A] shadow-xs"
                                   : "text-slate-450 hover:text-slate-655"
-                              }`}
+                                }`}
                             >
                               GST Included
                             </button>
                             <button
                               type="button"
                               onClick={() => setFormTaxType("Without Tax")}
-                              className={`flex-1 text-[11px] font-extrabold h-[26px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer ${
-                                formTaxType === "Without Tax"
+                              className={`flex-1 text-[11px] font-extrabold h-[26px] rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer ${formTaxType === "Without Tax"
                                   ? "bg-white text-[#16A34A] shadow-xs"
                                   : "text-slate-450 hover:text-slate-655"
-                              }`}
+                                }`}
                             >
                               GST Extra
                             </button>
@@ -3755,7 +3799,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                         );
                       })()}
                     </div>
-                    
+
                     <div className="text-[13px] text-slate-500 font-medium space-y-2 border-t border-b border-slate-100 py-3">
                       <div className="flex justify-between items-baseline">
                         <span className="w-28 shrink-0">Pack Size</span>
@@ -3825,7 +3869,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                     <span>{errors.items}</span>
                   </div>
                 )}
-                
+
                 {/* Compact summary bar */}
                 <div className="sticky top-0 z-15 bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between text-xs text-emerald-800 font-bold select-none shadow-xs">
                   <div className="flex items-center gap-4 flex-wrap">
@@ -3896,7 +3940,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
 
                           return (
                             <Fragment key={idx}>
-                              <tr 
+                              <tr
                                 onDoubleClick={() => {
                                   if (!isReadOnly) {
                                     setEditingRowIndex(idx);
@@ -3904,9 +3948,8 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                                   }
                                 }}
                                 onClick={() => setSelectedRowIndex(idx)}
-                                className={`transition-colors group hover:bg-slate-50/70 select-none animate-in fade-in slide-in-from-left-2 duration-150 ${
-                                  isEditing ? "bg-emerald-50/10" : isSelected ? "bg-slate-50/50" : ""
-                                }`}
+                                className={`transition-colors group hover:bg-slate-50/70 select-none animate-in fade-in slide-in-from-left-2 duration-150 ${isEditing ? "bg-emerald-50/10" : isSelected ? "bg-slate-50/50" : ""
+                                  }`}
                               >
                                 {/* Product info */}
                                 <td className="py-2 px-3">
@@ -4190,7 +4233,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                               )}
                             </div>
                           </div>
-                          
+
                           {isEditing ? (
                             <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
                               <div className="flex flex-col gap-1">
@@ -4254,7 +4297,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
           {activeStep === 3 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-200">
               <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-6">
-                
+
                 {/* Header title */}
                 <div className="flex justify-between items-center border-b border-slate-100 pb-4">
                   <h3 className="font-extrabold text-slate-905 text-base uppercase tracking-wider">Purchase Summary Confirmation</h3>
@@ -4353,7 +4396,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
 
                 {/* Bottom Left remarks/attachments vs Bottom Right billing summary card */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-                  
+
                   {/* Notes & File attachments */}
                   <div className="space-y-4">
                     {/* Remarks input */}
@@ -4432,7 +4475,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
                         <span>Total GST Tax</span>
                         <span>+₹{totalTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                       </div>
-                      
+
                       <div className="border-t border-emerald-100 my-2.5 pt-3 flex justify-between font-black text-slate-850 items-baseline">
                         <span className="text-sm">Grand Total</span>
                         <span className="text-2xl text-[#16A34A] font-black">
@@ -4475,15 +4518,7 @@ function NewBillModal({ editRecord = null, parties, products, stockSummary = [],
             </button>
           </div>
           <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={loading}
-              className="px-5 py-2.5 border border-slate-200 hover:border-slate-350 bg-white text-slate-700 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 active:scale-95 shadow-3xs"
-            >
-              {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
-              Save Draft
-            </button>
+
             <button
               type="button"
               onClick={onClose}
@@ -5126,9 +5161,8 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                             if (gstinError) setGstinError(null);
                             if (hasAttemptedGstin) setHasAttemptedGstin(false);
                           }}
-                          className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${
-                            errors.gstin ? "border-red-400 focus:ring-red-400" : "border-gray-200"
-                          }`}
+                          className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${errors.gstin ? "border-red-400 focus:ring-red-400" : "border-gray-200"
+                            }`}
                           placeholder="22AAAAA0000A1Z5"
                         />
                       </div>
@@ -5136,11 +5170,10 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                         type="button"
                         disabled={gstinLoading || form.gstin.length !== 15}
                         onClick={handleVerifyGstin}
-                        className={`px-3.5 py-2 disabled:opacity-50 text-xs font-bold rounded-lg border transition shrink-0 flex items-center gap-1.5 h-[38px] ${
-                          verifiedGstinDetails
+                        className={`px-3.5 py-2 disabled:opacity-50 text-xs font-bold rounded-lg border transition shrink-0 flex items-center gap-1.5 h-[38px] ${verifiedGstinDetails
                             ? "bg-emerald-50 border-emerald-250 text-emerald-700 hover:bg-emerald-100"
                             : "bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100"
-                        }`}
+                          }`}
                       >
                         {gstinLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                         {gstinLoading ? "Fetching..." : verifiedGstinDetails ? "Re-Verify" : "Verify GSTIN"}
@@ -5193,11 +5226,11 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                         {verifiedGstinDetails.taxpayerType}
                       </span>
                       <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-805 text-[9px] font-bold uppercase tracking-wider">
-                        {verifiedGstinDetails.einvoiceStatus?.toLowerCase()?.includes("elig") || 
-                         verifiedGstinDetails.einvoiceStatus?.toLowerCase()?.includes("enab") || 
-                         verifiedGstinDetails.einvoiceStatus?.toLowerCase() === "yes" || 
-                         verifiedGstinDetails.einvoiceStatus?.toLowerCase() === "y"
-                          ? "E-Invoice Enabled" 
+                        {verifiedGstinDetails.einvoiceStatus?.toLowerCase()?.includes("elig") ||
+                          verifiedGstinDetails.einvoiceStatus?.toLowerCase()?.includes("enab") ||
+                          verifiedGstinDetails.einvoiceStatus?.toLowerCase() === "yes" ||
+                          verifiedGstinDetails.einvoiceStatus?.toLowerCase() === "y"
+                          ? "E-Invoice Enabled"
                           : "E-Invoice Disabled"}
                       </span>
                     </div>
@@ -5207,7 +5240,7 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                         <span className="text-gray-400 font-semibold block text-[10px] uppercase tracking-wider">GSTIN</span>
                         <span className="font-bold text-gray-800 text-[11px]">{verifiedGstinDetails.gstin}</span>
                       </div>
-                      
+
                       <div className="pt-2 border-t border-gray-150 flex items-start gap-2">
                         <span className="text-emerald-700 text-xs shrink-0 mt-0.5">📍</span>
                         <div>
@@ -5225,7 +5258,7 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                       >
                         {showMoreDetails ? "▲ Hide Details" : "▼ Show More Details"}
                       </button>
-                      
+
                       {showMoreDetails && (
                         <div className="grid grid-cols-2 gap-3 pt-2 text-[11px] leading-relaxed border-t border-emerald-100/30 animate-in fade-in slide-in-from-top-1 duration-200">
                           <div>
@@ -5308,13 +5341,12 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                     type="text"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 bg-white h-[38px] ${
-                      errors.name 
-                        ? "border-red-400 focus:ring-red-400" 
-                        : isNameAutofilled 
-                          ? "border-emerald-300 focus:ring-emerald-450 focus:border-emerald-450 bg-emerald-50/5 text-emerald-950" 
+                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 bg-white h-[38px] ${errors.name
+                        ? "border-red-400 focus:ring-red-400"
+                        : isNameAutofilled
+                          ? "border-emerald-300 focus:ring-emerald-450 focus:border-emerald-450 bg-emerald-50/5 text-emerald-950"
                           : "border-gray-200 focus:ring-brand-500"
-                    }`}
+                      }`}
                     placeholder="Mahadev Traders"
                   />
                 </div>
@@ -5352,9 +5384,8 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                     maxLength={10}
                     value={form.phoneNumber}
                     onChange={(e) => setForm({ ...form, phoneNumber: e.target.value.replace(/\D/g, "") })}
-                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${
-                      errors.phoneNumber ? "border-red-400 focus:ring-red-400 bg-white" : "border-gray-200 bg-white"
-                    }`}
+                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${errors.phoneNumber ? "border-red-400 focus:ring-red-400 bg-white" : "border-gray-200 bg-white"
+                      }`}
                     placeholder="9876543210"
                   />
                 </div>
@@ -5372,9 +5403,8 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                     type="email"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${
-                      errors.email ? "border-red-400 focus:ring-red-400 bg-white" : "border-gray-200 bg-white"
-                    }`}
+                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${errors.email ? "border-red-400 focus:ring-red-400 bg-white" : "border-gray-200 bg-white"
+                      }`}
                     placeholder="mahadevtraders@example.com"
                   />
                 </div>
@@ -5425,11 +5455,10 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                       }));
                     }}
                     rows={3}
-                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 bg-white ${
-                      isAddressAutofilled
+                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 bg-white ${isAddressAutofilled
                         ? "border-emerald-300 focus:ring-emerald-450 focus:border-emerald-450 bg-emerald-50/5 text-emerald-950"
                         : "border-gray-200 focus:ring-brand-500 bg-white"
-                    }`}
+                      }`}
                     placeholder="Main Road, Deoria"
                   />
                 </div>
@@ -5491,11 +5520,10 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                 <label className="block text-xs font-semibold text-gray-500 mb-2">Balance Type</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Credit Option */}
-                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                    form.openingBalanceType === "CREDIT"
+                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${form.openingBalanceType === "CREDIT"
                       ? "bg-emerald-50/20 border-emerald-500 ring-1 ring-emerald-500"
                       : "bg-white border-gray-200 hover:bg-gray-50/50"
-                  }`}>
+                    }`}>
                     <input
                       type="radio"
                       name="openingBalanceTypeQuick"
@@ -5511,11 +5539,10 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                   </label>
 
                   {/* Debit Option */}
-                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                    form.openingBalanceType === "DEBIT"
+                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${form.openingBalanceType === "DEBIT"
                       ? "bg-emerald-50/20 border-emerald-500 ring-1 ring-emerald-500"
                       : "bg-white border-gray-200 hover:bg-gray-50/50"
-                  }`}>
+                    }`}>
                     <input
                       type="radio"
                       name="openingBalanceTypeQuick"
@@ -5660,9 +5687,8 @@ function QuickAddProductModal({ onClose, onSuccess, defaultName = "" }) {
                 type="text"
                 value={form.productName}
                 onChange={(e) => setForm({ ...form, productName: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-805 ${
-                  errors.productName ? "border-red-400 focus:ring-red-450" : "border-gray-200"
-                }`}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-805 ${errors.productName ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                  }`}
                 placeholder="e.g. Urea Coarse"
               />
               {errors.productName && <p className="text-[11px] text-red-500 mt-1">{errors.productName}</p>}
@@ -5714,9 +5740,8 @@ function QuickAddProductModal({ onClose, onSuccess, defaultName = "" }) {
                 type="text"
                 value={form.parameter}
                 onChange={(e) => setForm({ ...form, parameter: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-805 ${
-                  errors.parameter ? "border-red-400 focus:ring-red-450" : "border-gray-200"
-                }`}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-805 ${errors.parameter ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                  }`}
                 placeholder="e.g. 50"
               />
               {errors.parameter && <p className="text-[11px] text-red-500 mt-1">{errors.parameter}</p>}
@@ -5756,9 +5781,8 @@ function QuickAddProductModal({ onClose, onSuccess, defaultName = "" }) {
                 step="any"
                 value={form.mrp}
                 onChange={(e) => setForm({ ...form, mrp: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${
-                  errors.mrp ? "border-red-400 focus:ring-red-450" : "border-gray-200"
-                }`}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${errors.mrp ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                  }`}
                 placeholder="0.00"
               />
               {errors.mrp && <p className="text-[11px] text-red-500 mt-1">{errors.mrp}</p>}
@@ -5775,9 +5799,8 @@ function QuickAddProductModal({ onClose, onSuccess, defaultName = "" }) {
                 step="any"
                 value={form.purchasePrice}
                 onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${
-                  errors.purchasePrice ? "border-red-400 focus:ring-red-450" : "border-gray-200"
-                }`}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${errors.purchasePrice ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                  }`}
                 placeholder="0.00"
               />
               {errors.purchasePrice && <p className="text-[11px] text-red-500 mt-1">{errors.purchasePrice}</p>}
@@ -5794,9 +5817,8 @@ function QuickAddProductModal({ onClose, onSuccess, defaultName = "" }) {
                 step="any"
                 value={form.salePrice}
                 onChange={(e) => setForm({ ...form, salePrice: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${
-                  errors.salePrice ? "border-red-400 focus:ring-red-450" : "border-gray-200"
-                }`}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${errors.salePrice ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                  }`}
                 placeholder="0.00"
               />
               {errors.salePrice && <p className="text-[11px] text-red-500 mt-1">{errors.salePrice}</p>}
@@ -5812,9 +5834,8 @@ function QuickAddProductModal({ onClose, onSuccess, defaultName = "" }) {
                 min="0"
                 value={form.quantity}
                 onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${
-                  errors.quantity ? "border-red-400 focus:ring-red-450" : "border-gray-200"
-                }`}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${errors.quantity ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                  }`}
                 placeholder="0"
               />
               {errors.quantity && <p className="text-[11px] text-red-500 mt-1">{errors.quantity}</p>}
@@ -6786,7 +6807,7 @@ function DetailsModal({ item, type, onClose, handleDownloadPurchaseReceipt, hand
                   {item.items?.map((it, idx) => (
                     <tr key={idx} className="hover:bg-gray-50/50">
                       <td className="px-4 py-3 font-semibold text-gray-850">
-                        {type === "return" 
+                        {type === "return"
                           ? resolveReturnItemLabel(it, products, linkedBill)
                           : resolveItemLabel(it, products)
                         }

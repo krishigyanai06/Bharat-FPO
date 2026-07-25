@@ -8,6 +8,7 @@ import { generateClientSalesReportPDF, generateIndividualSalePDF } from '../../u
 import { fetchProcurementSales } from '../../redux/procurementSaleThunk';
 import api from '../../lib/api';
 import ErrorState from '../../components/ErrorState';
+import toast from 'react-hot-toast';
 
 import { 
   RotateCw, 
@@ -39,6 +40,8 @@ const SalesReport = () => {
   const dispatch = useDispatch();
   const exportDropdownRef = useRef(null);
   const rowMenuRef = useRef(null);
+  const startDateInputRef = useRef(null);
+  const endDateInputRef = useRef(null);
 
   // Redux Selectors
   const { sales: inventorySales, loading: inventoryLoading } = useSelector((state) => state.sell);
@@ -56,6 +59,7 @@ const SalesReport = () => {
   const [partyId, setPartyId] = useState('');
   const [itemId, setItemId] = useState('');
   const [search, setSearch] = useState('');
+  const [dateError, setDateError] = useState(null);
 
   const combinedSales = useMemo(() => {
     const inv = (saleType === 'PROCUREMENT') ? [] : (inventorySales || []).map(s => ({ ...s, sourceType: 'Inventory', saleType: s.saleType || 'SALE' }));
@@ -136,11 +140,39 @@ const SalesReport = () => {
     };
   }, [startDate, endDate, saleType, billingType, partyId, search, itemId]);
 
+  const getTodayString = () => new Date().toISOString().split('T')[0];
+
+  const validateDateRange = (sDate, eDate) => {
+    const today = getTodayString();
+    if (sDate && sDate > today) {
+      return "Future dates are not allowed.\nPlease select today's date or an earlier date.";
+    }
+    if (eDate && eDate > today) {
+      return "Future dates are not allowed.\nPlease select today's date or an earlier date.";
+    }
+    if (sDate && eDate && sDate > eDate) {
+      return "From Date cannot be later than To Date.\nPlease select a valid date range.";
+    }
+    return null;
+  };
+
   const handleFetchData = (targetFilters = null) => {
     const rawFilters = targetFilters || { startDate, endDate, saleType, billingType, party: partyId, search, item: itemId };
+    
+    // Date Range Validation
+    const dateErr = validateDateRange(rawFilters.startDate, rawFilters.endDate);
+    if (dateErr) {
+      setDateError(dateErr);
+      toast.error(dateErr);
+      return;
+    }
+
+    setDateError(null);
+
     const filters = {};
     if (rawFilters.startDate) filters.startDate = rawFilters.startDate;
     if (rawFilters.endDate) filters.endDate = rawFilters.endDate;
+    if (rawFilters.saleType) filters.saleType = rawFilters.saleType;
     if (rawFilters.billingType) filters.billingType = rawFilters.billingType;
     if (rawFilters.party) filters.party = rawFilters.party;
     if (rawFilters.search) filters.search = rawFilters.search;
@@ -154,11 +186,17 @@ const SalesReport = () => {
 
     const selectedType = rawFilters.saleType; // "INVENTORY", "PROCUREMENT", or ""
 
+    // Don't pass UI category 'INVENTORY' or 'PROCUREMENT' as query param to sell list APIs
+    const apiFilters = { ...filters };
+    if (selectedType === 'INVENTORY' || selectedType === 'PROCUREMENT') {
+      delete apiFilters.saleType;
+    }
+
     if (selectedType === 'INVENTORY' || !selectedType) {
-      dispatch(fetchSales(filters));
+      dispatch(fetchSales(apiFilters));
     }
     if (selectedType === 'PROCUREMENT' || !selectedType) {
-      dispatch(fetchProcurementSales(filters));
+      dispatch(fetchProcurementSales(apiFilters));
     }
 
     setCurrentPage(1);
@@ -173,6 +211,7 @@ const SalesReport = () => {
     setPartyId('');
     setItemId('');
     setSearch('');
+    setDateError(null);
 
     const cleanFilters = { startDate: '', endDate: '', saleType: '', billingType: '', party: '', search: '', item: '' };
 
@@ -183,21 +222,26 @@ const SalesReport = () => {
     handleFetchData(cleanFilters);
   };
 
-  const handleDownloadPDF = async () => {
+  const getReportApiQueryFilters = () => {
     const filters = {};
-    if (startDate) filters.startDate = startDate;
-    if (endDate) filters.endDate = endDate;
     if (saleType) filters.saleType = saleType;
     if (billingType) filters.billingType = billingType;
-    if (partyId) filters.party = partyId;
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
     if (search) filters.search = search;
-    if (itemId) {
-      filters.item = itemId;
-      const matchedProd = products.find(p => p._id === itemId);
-      if (matchedProd) {
-        filters.itemName = matchedProd.productName;
-      }
+    if (itemId) filters.item = itemId;
+    return filters;
+  };
+
+  const handleDownloadPDF = async () => {
+    const dateErr = validateDateRange(startDate, endDate);
+    if (dateErr) {
+      setDateError(dateErr);
+      toast.error(dateErr);
+      return;
     }
+
+    const filters = getReportApiQueryFilters();
 
     const res = await dispatch(downloadSalesReport(filters));
     
@@ -364,13 +408,27 @@ const SalesReport = () => {
 
     // Client-side item filter
     if (itemId) {
-      result = result.filter((item) => {
-        return (item.items || []).some((i) => {
+      result = result.filter((sale) => {
+        const matchesItems = (sale.items || []).some((i) => {
+          if (!i) return false;
           const itemRef = i.item;
-          const refId = typeof itemRef === 'string' ? itemRef : (itemRef?._id || '');
-          const prodId = i.productId || '';
-          return refId === itemId || prodId === itemId || (itemRef?.sourceRef === itemId);
+          const refId = typeof itemRef === 'string' ? itemRef : (itemRef?._id || itemRef?.id || '');
+          const prodVal = i.product || i.productId;
+          const prodId = typeof prodVal === 'string' ? prodVal : (prodVal?._id || prodVal?.id || '');
+          const selfId = i._id || i.id || '';
+          const sourceRef = itemRef?.sourceRef || '';
+          return refId === itemId || prodId === itemId || selfId === itemId || sourceRef === itemId;
         });
+
+        const matchesCrops = (sale.crops || []).some((c) => {
+          if (!c) return false;
+          const cropVal = c.crop || c.cropId;
+          const cropId = typeof cropVal === 'string' ? cropVal : (cropVal?._id || cropVal?.id || '');
+          const selfId = c._id || c.id || '';
+          return cropId === itemId || selfId === itemId;
+        });
+
+        return matchesItems || matchesCrops;
       });
     }
 
@@ -590,22 +648,46 @@ const SalesReport = () => {
           {/* Date Range Picker */}
           <div className="flex flex-col">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Date Range</span>
-            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-3 py-1.5 h-[38px] shadow-sm hover:border-gray-300 transition-colors focus-within:border-[#15803D] focus-within:ring-1 focus-within:ring-[#15803D]">
-              <Calendar className="w-3.5 h-3.5 text-gray-450" />
+            <div className={`flex items-center gap-1.5 bg-white border ${dateError ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'} rounded-lg px-3 py-1.5 h-[38px] shadow-sm hover:border-gray-300 transition-colors focus-within:border-[#15803D] focus-within:ring-1 focus-within:ring-[#15803D] cursor-pointer`}>
+              <Calendar
+                className="w-3.5 h-3.5 text-gray-450 hover:text-[#15803D] transition-colors shrink-0 cursor-pointer"
+                onClick={() => startDateInputRef.current?.showPicker?.()}
+              />
               <input
+                ref={startDateInputRef}
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-transparent border-none text-xs font-semibold text-gray-700 focus:outline-none w-[115px] p-0"
+                max={getTodayString()}
+                onClick={(e) => e.target.showPicker?.()}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setStartDate(val);
+                  const err = validateDateRange(val, endDate);
+                  setDateError(err);
+                }}
+                className="bg-transparent border-none text-xs font-semibold text-gray-700 focus:outline-none w-[115px] p-0 cursor-pointer"
               />
               <span className="text-gray-400 text-xs font-semibold px-0.5">–</span>
               <input
+                ref={endDateInputRef}
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="bg-transparent border-none text-xs font-semibold text-gray-700 focus:outline-none w-[115px] p-0"
+                max={getTodayString()}
+                onClick={(e) => e.target.showPicker?.()}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setEndDate(val);
+                  const err = validateDateRange(startDate, val);
+                  setDateError(err);
+                }}
+                className="bg-transparent border-none text-xs font-semibold text-gray-700 focus:outline-none w-[115px] p-0 cursor-pointer"
               />
             </div>
+            {dateError && (
+              <span className="text-[11px] font-semibold text-red-600 mt-1 animate-fade-in whitespace-pre-line">
+                {dateError}
+              </span>
+            )}
           </div>
 
           {/* Customer filter */}
@@ -689,10 +771,26 @@ const SalesReport = () => {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => handleFetchData()}
-              className="flex items-center justify-center px-4 h-[38px] bg-[#15803D] hover:bg-[#126630] text-white rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95 cursor-pointer"
+              disabled={salesLoading || salesDownloadLoading}
+              onClick={() => {
+                if (startDate && endDate && startDate > endDate) {
+                  const msg = "From Date cannot be later than To Date.\nPlease select a valid date range.";
+                  setDateError(msg);
+                  toast.error("From Date cannot be later than To Date.\nPlease select a valid date range.");
+                  return;
+                }
+                handleFetchData();
+              }}
+              className="flex items-center justify-center px-4 h-[38px] bg-[#15803D] hover:bg-[#126630] disabled:bg-gray-400 text-white rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
             >
-              Generate Report
+              {(salesLoading || salesDownloadLoading) ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <span>Generate Report</span>
+              )}
             </button>
 
             <button
@@ -890,14 +988,16 @@ const SalesReport = () => {
           </div>
         ) : processedData.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-            <span className="text-5xl mb-4 select-none">📊</span>
-            <h3 className="text-base font-bold text-gray-800">No Sales Records Found</h3>
-            <p className="text-xs text-gray-400 mt-1 max-w-sm select-none">
-              Try changing the filters or selecting another date range.
+            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+              <FileText className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900">No Transactions Found</h3>
+            <p className="text-xs text-gray-500 mt-1 max-w-sm font-medium leading-relaxed">
+              No transactions are available for the selected date range. Try selecting a different date range or adjusting your filters.
             </p>
             <button
               onClick={handleResetFilters}
-              className="mt-4 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-xs font-bold rounded-lg shadow-sm transition-all"
+              className="mt-4 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-xs font-bold text-gray-700 rounded-lg shadow-sm transition-all cursor-pointer"
             >
               Reset Filters
             </button>

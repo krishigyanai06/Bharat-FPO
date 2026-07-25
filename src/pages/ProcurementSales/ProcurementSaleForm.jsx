@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { 
-  createProcurementSale, 
-  updateProcurementSale, 
-  fetchProcurementSaleDetails, 
+import {
+  createProcurementSale,
+  updateProcurementSale,
+  fetchProcurementSaleDetails,
   fetchProcurementStock,
   generateProcurementEWayBill
 } from "../../redux/procurementSaleThunk";
@@ -12,19 +13,19 @@ import { authenticateEWayBillSession } from "../../store/thunks/eWayBillThunk";
 import { isEWayBillSessionValid } from "../../lib/api";
 import CropSearch from "../../components/ProcurementSales/CropSearch";
 import procurementSaleService from "../../services/procurementSaleService";
-import { 
-  AlertCircle, 
-  Loader2, 
-  Save, 
-  User, 
-  Package, 
-  Truck, 
-  CheckCircle, 
-  ChevronDown, 
-  ChevronUp, 
-  Download, 
-  Trash2, 
-  Search, 
+import {
+  AlertCircle,
+  Loader2,
+  Save,
+  User,
+  Package,
+  Truck,
+  CheckCircle,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Trash2,
+  Search,
   FileText,
   ShieldCheck,
   ExternalLink,
@@ -38,7 +39,8 @@ import {
   Scale,
   Coins,
   Lock,
-  Plus
+  Plus,
+  Sprout
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -53,11 +55,11 @@ const formatCurrency = (value) => {
 
 export default function ProcurementSaleForm({ id, onBack }) {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const isEdit = !!id;
 
-  const { submitting, submitError } = useSelector((s) => s.procurementSales);
+  const { submitting, submitError, stock = [], loading } = useSelector((s) => s.procurementSales);
   const { parties = [], loading: partiesLoading } = useSelector((s) => s.party || { parties: [] });
-  const { stock = [] } = useSelector((s) => s.procurementSales);
 
   // Form Local State
   const [buyerDetails, setBuyerDetails] = useState({
@@ -131,7 +133,7 @@ export default function ProcurementSaleForm({ id, onBack }) {
                 ...c,
                 // Match fields
                 cropName: c.cropName || c.crop || "",
-                availableQuantity: (c.availableQuantity || c.quantity || 0) + 1000, 
+                availableQuantity: (c.availableQuantity || c.quantity || 0) + 1000,
               }))
             );
 
@@ -155,6 +157,12 @@ export default function ProcurementSaleForm({ id, onBack }) {
         });
     }
   }, [id, isEdit, dispatch]);
+
+  // Available stock check
+  const hasAvailableStock =
+    (stock || []).some(
+      (item) => (Number(item.availableQuantity) || Number(item.quantity) || 0) > 0
+    ) || (stock || []).length > 0;
 
   // Live Auto-Calculations
   const subtotal = crops.reduce((sum, c) => sum + (Number(c.quantity) || 0) * (Number(c.rate) || 0), 0);
@@ -290,6 +298,10 @@ export default function ProcurementSaleForm({ id, onBack }) {
   };
 
   const handleCropRowEdit = (index, field, value) => {
+    if ((field === "quantity" || field === "rate") && value !== "" && Number(value) < 0) {
+      toast.error(`${field === "quantity" ? "Quantity" : "Rate"} cannot be negative.`);
+      return;
+    }
     const updated = crops.map((c, i) => {
       if (i !== index) return c;
       return { ...c, [field]: value };
@@ -306,6 +318,11 @@ export default function ProcurementSaleForm({ id, onBack }) {
     }
     if (crops.length === 0) {
       toast.error("Please add at least one crop item.");
+      return;
+    }
+    const hasNegativeQty = crops.some((c) => Number(c.quantity) < 0);
+    if (hasNegativeQty) {
+      toast.error("Quantity cannot be negative.");
       return;
     }
     const hasExceeded = crops.some((c) => Number(c.quantity) > Number(c.availableQuantity));
@@ -378,9 +395,9 @@ export default function ProcurementSaleForm({ id, onBack }) {
       {/* HEADER */}
       <div className="flex justify-between items-center pb-4 border-b border-gray-100">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             type="button"
-            onClick={onBack} 
+            onClick={onBack}
             className="p-2 bg-emerald-50 text-emerald-700 rounded-full hover:bg-emerald-100 transition active:scale-95 cursor-pointer shrink-0"
           >
             <ArrowLeft size={16} />
@@ -405,10 +422,10 @@ export default function ProcurementSaleForm({ id, onBack }) {
 
       {/* SINGLE PAGE ERP GRID CONTAINER */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        
+
         {/* LEFT COLUMN: FORM DETAILS (2/3 width) */}
         <div className="lg:col-span-2 space-y-6">
-          
+
           {/* 1. BUYER INFORMATION CARD */}
           <div className="bg-white border border-gray-150 rounded-3xl p-6 shadow-xs space-y-5">
             <h3 className="text-sm font-bold text-gray-800 tracking-wide flex items-center gap-2 border-b border-gray-50 pb-3">
@@ -440,11 +457,10 @@ export default function ProcurementSaleForm({ id, onBack }) {
                       });
                       setPartySearchQuery("");
                     }}
-                    className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition ${
-                      isActive
+                    className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition ${isActive
                         ? "bg-emerald-50 border border-emerald-600 text-emerald-700 shadow-xs"
                         : "text-gray-400 border border-transparent hover:text-gray-600 cursor-pointer"
-                    }`}
+                      }`}
                   >
                     {btn.icon}
                     {btn.label}
@@ -609,155 +625,175 @@ export default function ProcurementSaleForm({ id, onBack }) {
               </div>
             </div>
 
-            {/* Search Stock Input & Add Crop row */}
-            <div className="flex gap-4 items-end">
-              <div className="flex-1">
-                <CropSearch onSelect={handleSelectCropStock} selectedCrops={crops} />
-              </div>
-              <button
-                type="button"
-                className="px-4 py-2.5 border border-emerald-600 text-emerald-700 font-bold rounded-xl text-xs flex items-center gap-1.5 hover:bg-emerald-50 transition active:scale-95 cursor-pointer shadow-xs shrink-0 h-[38px]"
-              >
-                <Plus size={14} /> Add Crop
-              </button>
-            </div>
-
-            {/* Selected Crops Spreadsheet Table */}
-            {crops.length > 0 ? (
-              <div className="border border-gray-150 rounded-2xl overflow-hidden shadow-xs">
-                <table className="w-full text-xs text-left border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50 text-[9px] text-gray-400 font-extrabold uppercase border-b border-gray-150 select-none">
-                      <th className="px-4 py-3 text-center w-8">#</th>
-                      <th className="px-4 py-3">Crop / Variety</th>
-                      <th className="px-4 py-3 text-right w-24">Available Stock</th>
-                      <th className="px-4 py-3 text-center w-20">Unit</th>
-                      <th className="px-4 py-3 text-right w-28">Quantity</th>
-                      <th className="px-4 py-3 text-right w-28">Rate (₹)</th>
-                      <th className="px-4 py-3 text-right w-28">Amount (₹)</th>
-                      <th className="px-3 py-3 text-center w-12">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 font-semibold text-gray-750 bg-white">
-                    {crops.map((item, index) => {
-                      const rowAmt = Number(item.quantity) * Number(item.rate) || 0;
-                      const hasExceeded = Number(item.quantity) > Number(item.availableQuantity);
-                      
-                      return (
-                        <tr key={index} className={`hover:bg-gray-50/50 transition border-b border-gray-100 ${hasExceeded ? "bg-red-50/20" : ""}`}>
-                          {/* # */}
-                          <td className="px-4 py-3 font-bold text-gray-500 text-center w-8">
-                            {index + 1}
-                          </td>
-                          {/* Crop/Variety Details */}
-                          <td className="px-4 py-3">
-                            <span className="font-bold text-gray-900 block">{item.cropName}</span>
-                            {item.variety && (
-                              <span className="text-[10px] text-gray-455 block font-medium mt-0.5">{item.variety}</span>
-                            )}
-                          </td>
-                          {/* Available stock */}
-                          <td className="px-4 py-3 text-right font-bold text-gray-600 w-24">
-                            {item.availableQuantity} {item.unit || "qtl"}
-                          </td>
-                          {/* Original Unit (non-editable plain text) */}
-                          <td className="px-4 py-3 text-center font-bold text-gray-750 w-20">
-                            {item.unit || "qtl"}
-                          </td>
-                          {/* Quantity input */}
-                          <td className="px-4 py-3 text-right w-28">
-                            <div className="space-y-1">
-                              <input
-                                type="number"
-                                min={0.01}
-                                step="any"
-                                required
-                                value={item.quantity}
-                                onChange={(e) => handleCropRowEdit(index, "quantity", e.target.value)}
-                                placeholder="0.00"
-                                className={`w-full border px-2.5 py-1.5 rounded-xl text-right font-black focus:outline-none focus:ring-1 text-xs shadow-xs transition ${
-                                  hasExceeded
-                                    ? "border-red-300 bg-red-50/10 focus:ring-red-500 focus:border-red-500 text-red-700"
-                                    : "border-gray-200 bg-white focus:ring-emerald-500 focus:border-emerald-500 text-gray-900"
-                                }`}
-                              />
-                              {hasExceeded && (
-                                <span className="text-[9px] text-red-600 font-bold flex items-center justify-end gap-1 mt-1 leading-none">
-                                  <AlertCircle size={10} className="text-red-500 shrink-0" />
-                                  Max: {item.availableQuantity} {item.unit}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          {/* Rate input */}
-                          <td className="px-4 py-3 text-right w-28">
-                            <input
-                              type="number"
-                              min={0.01}
-                              step="any"
-                              required
-                              value={item.rate}
-                              onChange={(e) => handleCropRowEdit(index, "rate", e.target.value)}
-                              placeholder="0"
-                              className="w-full border border-gray-200 bg-white px-2.5 py-1.5 rounded-xl text-right font-black focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs shadow-xs"
-                            />
-                          </td>
-                          {/* Row Total amount */}
-                          <td className="px-4 py-3 text-right font-black text-emerald-700 text-xs w-28">
-                            {formatCurrency(rowAmt)}
-                          </td>
-                          {/* Remove button */}
-                          <td className="px-3 py-3 text-center w-12">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveCrop(index)}
-                              className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded-lg transition cursor-pointer"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            {!isEdit && !loading && !hasAvailableStock ? (
+              <div className="py-10 px-6 flex flex-col items-center justify-center text-center bg-emerald-50/30 border border-dashed border-emerald-200 rounded-2xl space-y-4 my-2">
+                <div className="w-16 h-16 bg-emerald-100/60 rounded-full flex items-center justify-center text-emerald-700 shadow-xs border border-emerald-200">
+                  <span className="text-3xl select-none" role="img" aria-label="crop">🌾</span>
+                </div>
+                <div className="max-w-md space-y-2">
+                  <h4 className="text-base font-bold text-gray-900 tracking-tight">
+                    No Crops Available for Sale
+                  </h4>
+                  <p className="text-xs text-gray-600 leading-relaxed font-medium">
+                    You don't have any procured crops available for sale. Please purchase crops from farmers first. Once crops are added to your procurement stock, you can create a sale.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onBack) onBack();
+                    navigate("/purchase/crop");
+                  }}
+                  className="mt-1 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-sm transition active:scale-95 cursor-pointer"
+                >
+                  <Sprout size={15} />
+                  Go to Crop Procurement
+                </button>
               </div>
             ) : (
-              <div className="border border-dashed border-gray-200 rounded-2xl py-8 text-center text-gray-400 font-semibold text-xs select-none">
-                No items added. Search and select a stock item above.
-              </div>
-            )}
+              <>
+                {/* Search Stock Input */}
+                <div>
+                  <CropSearch onSelect={handleSelectCropStock} selectedCrops={crops} />
+                </div>
 
-            {/* Table Summary Bar */}
-            <div className="grid grid-cols-3 gap-4 border border-gray-200 rounded-2xl p-4 bg-gray-50/50 text-xs font-semibold">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
-                  <Package size={15} />
+                {/* Selected Crops Spreadsheet Table */}
+                {crops.length > 0 ? (
+                  <div className="border border-gray-150 rounded-2xl overflow-hidden shadow-xs">
+                    <table className="w-full text-xs text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50 text-[9px] text-gray-400 font-extrabold uppercase border-b border-gray-150 select-none">
+                          <th className="px-4 py-3 text-center w-8">#</th>
+                          <th className="px-4 py-3">Crop / Variety</th>
+                          <th className="px-4 py-3 text-right w-24">Available Stock</th>
+                          <th className="px-4 py-3 text-center w-20">Unit</th>
+                          <th className="px-4 py-3 text-right w-28">Quantity</th>
+                          <th className="px-4 py-3 text-right w-28">Rate (₹)</th>
+                          <th className="px-4 py-3 text-right w-28">Amount (₹)</th>
+                          <th className="px-3 py-3 text-center w-12">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 font-semibold text-gray-750 bg-white">
+                        {crops.map((item, index) => {
+                          const rowAmt = Number(item.quantity) * Number(item.rate) || 0;
+                          const hasExceeded = Number(item.quantity) > Number(item.availableQuantity);
+
+                          return (
+                            <tr key={index} className={`hover:bg-gray-50/50 transition border-b border-gray-100 ${hasExceeded ? "bg-red-50/20" : ""}`}>
+                              {/* # */}
+                              <td className="px-4 py-3 font-bold text-gray-500 text-center w-8">
+                                {index + 1}
+                              </td>
+                              {/* Crop/Variety Details */}
+                              <td className="px-4 py-3">
+                                <span className="font-bold text-gray-900 block">{item.cropName}</span>
+                                {item.variety && (
+                                  <span className="text-[10px] text-gray-455 block font-medium mt-0.5">{item.variety}</span>
+                                )}
+                              </td>
+                              {/* Available stock */}
+                              <td className="px-4 py-3 text-right font-bold text-gray-600 w-24">
+                                {item.availableQuantity} {item.unit || "qtl"}
+                              </td>
+                              {/* Original Unit (non-editable plain text) */}
+                              <td className="px-4 py-3 text-center font-bold text-gray-750 w-20">
+                                {item.unit || "qtl"}
+                              </td>
+                              {/* Quantity input */}
+                              <td className="px-4 py-3 text-right w-28">
+                                <div className="space-y-1">
+                                  <input
+                                    type="number"
+                                    min={0.01}
+                                    step="any"
+                                    required
+                                    value={item.quantity}
+                                    onChange={(e) => handleCropRowEdit(index, "quantity", e.target.value)}
+                                    placeholder="0.00"
+                                    className={`w-full border px-2.5 py-1.5 rounded-xl text-right font-black focus:outline-none focus:ring-1 text-xs shadow-xs transition ${hasExceeded
+                                        ? "border-red-300 bg-red-50/10 focus:ring-red-500 focus:border-red-500 text-red-700"
+                                        : "border-gray-200 bg-white focus:ring-emerald-500 focus:border-emerald-500 text-gray-900"
+                                      }`}
+                                  />
+                                  {hasExceeded && (
+                                    <span className="text-[9px] text-red-600 font-bold flex items-center justify-end gap-1 mt-1 leading-none">
+                                      <AlertCircle size={10} className="text-red-500 shrink-0" />
+                                      Max: {item.availableQuantity} {item.unit}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              {/* Rate input */}
+                              <td className="px-4 py-3 text-right w-28">
+                                <input
+                                  type="number"
+                                  min={0.01}
+                                  step="any"
+                                  required
+                                  value={item.rate}
+                                  onChange={(e) => handleCropRowEdit(index, "rate", e.target.value)}
+                                  placeholder="0"
+                                  className="w-full border border-gray-200 bg-white px-2.5 py-1.5 rounded-xl text-right font-black focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs shadow-xs"
+                                />
+                              </td>
+                              {/* Row Total amount */}
+                              <td className="px-4 py-3 text-right font-black text-emerald-700 text-xs w-28">
+                                {formatCurrency(rowAmt)}
+                              </td>
+                              {/* Remove button */}
+                              <td className="px-3 py-3 text-center w-12">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveCrop(index)}
+                                  className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="border border-dashed border-gray-200 rounded-2xl py-8 text-center text-gray-400 font-semibold text-xs select-none">
+                    No items added. Search and select a stock item above.
+                  </div>
+                )}
+
+                {/* Table Summary Bar */}
+                <div className="grid grid-cols-3 gap-4 border border-gray-200 rounded-2xl p-4 bg-gray-50/50 text-xs font-semibold">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
+                      <Package size={15} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Total Items</span>
+                      <span className="font-extrabold text-gray-800 text-xs mt-0.5 block">{crops.length}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 border-l border-gray-200 pl-4">
+                    <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
+                      <Scale size={15} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Total Quantity</span>
+                      <span className="font-extrabold text-gray-800 text-xs mt-0.5 block">{totalQty} {firstUnit}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 border-l border-gray-200 pl-4">
+                    <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
+                      <Coins size={15} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Subtotal</span>
+                      <span className="font-black text-emerald-700 text-xs mt-0.5 block">{formatCurrency(subtotal)}</span>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Total Items</span>
-                  <span className="font-extrabold text-gray-800 text-xs mt-0.5 block">{crops.length}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 border-l border-gray-200 pl-4">
-                <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
-                  <Scale size={15} />
-                </div>
-                <div>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Total Quantity</span>
-                  <span className="font-extrabold text-gray-800 text-xs mt-0.5 block">{totalQty} {firstUnit}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 border-l border-gray-200 pl-4">
-                <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
-                  <Coins size={15} />
-                </div>
-                <div>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Subtotal</span>
-                  <span className="font-black text-emerald-700 text-xs mt-0.5 block">{formatCurrency(subtotal)}</span>
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
 
           {/* 3. PAYMENT & ACCOUNTING */}
@@ -765,9 +801,9 @@ export default function ProcurementSaleForm({ id, onBack }) {
             <h3 className="text-sm font-bold text-gray-800 tracking-wide flex items-center gap-2 border-b border-gray-50 pb-3">
               <Wallet size={16} className="text-emerald-600" /> Payment & Double-entry Ledger
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-semibold text-xs text-gray-700">
-              
+
               {/* Payment Mode Selector */}
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Payment Method *</label>
@@ -784,11 +820,10 @@ export default function ProcurementSaleForm({ id, onBack }) {
                         key={method.id}
                         type="button"
                         onClick={() => setBuyerDetails({ ...buyerDetails, billingType: method.id })}
-                        className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition ${
-                          isActive
+                        className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition ${isActive
                             ? "border-emerald-650 bg-emerald-50/50 text-emerald-700"
                             : "border-gray-200 hover:bg-gray-50 text-gray-500 cursor-pointer"
-                        }`}
+                          }`}
                       >
                         {method.icon}
                         {method.label}
@@ -958,13 +993,7 @@ export default function ProcurementSaleForm({ id, onBack }) {
                 Save Procurement Sale
               </button>
 
-              <button
-                type="button"
-                className="w-full py-3 border border-gray-200 hover:bg-gray-50 text-gray-700 font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 transition active:scale-98 cursor-pointer select-none"
-              >
-                <FileText size={13} />
-                Save Draft
-              </button>
+
 
               <button
                 type="button"
@@ -995,7 +1024,7 @@ export default function ProcurementSaleForm({ id, onBack }) {
       {showSuccessModal && createdSale && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-5 shadow-2xl flex flex-col max-h-[92vh] overflow-y-auto text-xs font-semibold text-gray-700 relative">
-            
+
             {/* Close Cross Button */}
             <button
               type="button"

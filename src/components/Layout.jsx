@@ -81,7 +81,7 @@ const menuSections = [
         path: "/purchase",
         isParent: true,
         children: [
-          { label: "Stock Purchase", path: "/purchase/bills", icon: Receipt },
+          { label: "Stock Purchase", path: "/purchase", icon: Receipt },
           { label: "Payments", path: "/purchase/payments", icon: Wallet },
           { label: "Debit Notes", path: "/purchase/debit-notes", icon: RotateCcw },
           { label: "Expenses", path: "/purchase/expenses", icon: ReceiptIndianRupee },
@@ -789,7 +789,7 @@ export default function Layout() {
           </div>
 
           {/* RIGHT ACTIONS */}
-          <div className="flex items-center gap-2.5 ml-auto z-[9999]">
+          <div className="flex items-center gap-2.5 ml-auto relative z-10">
             <GoogleLangPicker />
 
             {/* TENANT DROPDOWN (ONLY SUPER ADMIN) */}

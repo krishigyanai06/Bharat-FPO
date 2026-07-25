@@ -46,6 +46,16 @@ export default function PurchaseCrop() {
     purchaseId: "",
   });
 
+  const VEHICLE_REGEX = /^[A-Z]{2}\s?\d{1,2}\s?[A-Z]{1,3}\s?\d{1,4}$/i;
+
+  const [errors, setErrors] = useState({
+    farmer: "",
+    procurementDate: "",
+    previousDues: "",
+    vehicle: "",
+    crops: [],
+  });
+
   // Load initial resources
   useEffect(() => {
     dispatch(fetchMembers());
@@ -55,24 +65,27 @@ export default function PurchaseCrop() {
   // Set form values if editing
   useEffect(() => {
     if (id && orders.length > 0) {
-      const order = orders.find((o) => o._id === id);
+      const order = orders.find((o) => String(o._id || o.id) === String(id));
       if (order) {
         setPurchaseForm({
-          farmer: order.farmer?._id || order.farmer || "",
+          farmer: String(order.farmer?._id || order.farmer?.id || order.farmer || ""),
           crops: order.crops?.map((c) => ({
-            cropName: c.cropName || "Wheat",
+            cropName: c.cropName || c.crop || "Wheat",
             variety: c.variety || "",
             unit: c.unit || "qtl",
-            rate: c.rate || "",
-            quantity: c.quantity || "",
+            rate: c.rate !== undefined && c.rate !== null ? String(c.rate) : "",
+            quantity: c.quantity !== undefined && c.quantity !== null ? String(c.quantity) : "",
+            ...(c._id && { _id: c._id }),
+            ...(c.id && { id: c.id }),
           })) || [{ cropName: "Wheat", variety: "", unit: "qtl", rate: "", quantity: "" }],
           procurementDate: order.procurementDate ? new Date(order.procurementDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
           procurementCenter: order.procurementCenter || "",
-          previousDues: order.previousDues || "",
+          previousDues: order.previousDues ? String(order.previousDues) : "",
           godown: order.godown || "Main Godown",
           vehicle: order.vehicle || "",
           remarks: order.remarks || "",
           purchaseId: order.purchaseId || "",
+          status: order.status || "pending",
         });
       } else if (!loadingOrders) {
         toast.error("Procurement record not found");
@@ -113,11 +126,36 @@ export default function PurchaseCrop() {
     : "";
 
   const handleCropRowChange = (index, field, value) => {
+    let fieldErr = "";
+    if (field === "quantity") {
+      if (value !== "" && Number(value) < 0) {
+        fieldErr = "Quantity cannot be negative.";
+      } else if (value !== "" && Number(value) === 0) {
+        fieldErr = "Quantity must be > 0.";
+      }
+    } else if (field === "rate") {
+      if (value !== "" && Number(value) < 0) {
+        fieldErr = "Rate cannot be negative.";
+      } else if (value !== "" && Number(value) === 0) {
+        fieldErr = "Rate must be > 0.";
+      }
+    } else if (field === "cropName") {
+      if (!value.trim()) {
+        fieldErr = "Crop name is required.";
+      }
+    }
+
     const updated = purchaseForm.crops.map((c, i) => {
       if (i !== index) return c;
       return { ...c, [field]: value };
     });
     setPurchaseForm({ ...purchaseForm, crops: updated });
+
+    setErrors((prev) => {
+      const nextCrops = [...(prev.crops || [])];
+      nextCrops[index] = { ...(nextCrops[index] || {}), [field]: fieldErr };
+      return { ...prev, crops: nextCrops };
+    });
   };
 
   const addCropRow = () => {
@@ -125,11 +163,19 @@ export default function PurchaseCrop() {
       ...purchaseForm,
       crops: [...purchaseForm.crops, { cropName: "Wheat", variety: "", unit: "qtl", rate: "", quantity: "" }],
     });
+    setErrors((prev) => ({
+      ...prev,
+      crops: [...(prev.crops || []), {}],
+    }));
   };
 
   const removeCropRow = (index) => {
     const updated = purchaseForm.crops.filter((_, i) => i !== index);
     setPurchaseForm({ ...purchaseForm, crops: updated });
+    setErrors((prev) => ({
+      ...prev,
+      crops: (prev.crops || []).filter((_, i) => i !== index),
+    }));
   };
 
   const calculateCropAmount = (quantity, rate, unit = "qtl", rateUnit = "qtl") => {
@@ -159,21 +205,84 @@ export default function PurchaseCrop() {
     return cropsTotal - dues;
   };
 
+  const validateForm = () => {
+    let isValid = true;
+    const newErrors = {
+      farmer: "",
+      procurementDate: "",
+      previousDues: "",
+      vehicle: "",
+      crops: [],
+    };
+
+    if (!purchaseForm.farmer) {
+      newErrors.farmer = "Please select a farmer.";
+      isValid = false;
+    }
+
+    if (!purchaseForm.procurementDate) {
+      newErrors.procurementDate = "Procurement date is required.";
+      isValid = false;
+    }
+
+    if (purchaseForm.previousDues !== "" && Number(purchaseForm.previousDues) < 0) {
+      newErrors.previousDues = "Previous dues cannot be negative.";
+      isValid = false;
+    }
+
+    const cleanVehicle = (purchaseForm.vehicle || "").trim();
+    if (cleanVehicle && !VEHICLE_REGEX.test(cleanVehicle)) {
+      const vehError = "Please enter a valid vehicle number. Example: MH12AB1234";
+      newErrors.vehicle = vehError;
+      toast.error(vehError);
+      isValid = false;
+    }
+
+    const cropErrors = purchaseForm.crops.map((c) => {
+      const rowErr = {};
+      if (!c.cropName || !c.cropName.trim()) {
+        rowErr.cropName = "Crop name is required.";
+        isValid = false;
+      }
+      if (c.quantity === "" || c.quantity === null || c.quantity === undefined) {
+        rowErr.quantity = "Quantity is required.";
+        isValid = false;
+      } else if (Number(c.quantity) < 0) {
+        rowErr.quantity = "Quantity cannot be negative.";
+        isValid = false;
+      } else if (Number(c.quantity) === 0) {
+        rowErr.quantity = "Quantity must be > 0.";
+        isValid = false;
+      }
+
+      if (c.rate === "" || c.rate === null || c.rate === undefined) {
+        rowErr.rate = "Rate is required.";
+        isValid = false;
+      } else if (Number(c.rate) < 0) {
+        rowErr.rate = "Rate cannot be negative.";
+        isValid = false;
+      } else if (Number(c.rate) === 0) {
+        rowErr.rate = "Rate must be > 0.";
+        isValid = false;
+      }
+
+      return rowErr;
+    });
+
+    newErrors.crops = cropErrors;
+    setErrors(newErrors);
+    return isValid;
+  };
+
   const handlePurchaseSubmit = async (e) => {
     e.preventDefault();
-    if (!purchaseForm.farmer) {
-      toast.error("Please select a farmer.");
-      return;
-    }
-    const hasInvalidCrop = purchaseForm.crops.some(
-      (c) => !c.cropName.trim() || Number(c.rate) <= 0 || Number(c.quantity) <= 0
-    );
-    if (hasInvalidCrop) {
-      toast.error("Please fill crop name, rate, and quantity for all crop rows.");
+
+    if (!validateForm()) {
       return;
     }
 
     const payload = {
+      ...(purchaseForm.purchaseId && { purchaseId: purchaseForm.purchaseId }),
       farmer: purchaseForm.farmer,
       crops: purchaseForm.crops.map((c) => ({
         crop: c.cropName || c.crop || "",
@@ -182,6 +291,8 @@ export default function PurchaseCrop() {
         unit: c.unit || "qtl",
         rate: Number(c.rate),
         quantity: Number(c.quantity),
+        ...(c._id && { _id: c._id }),
+        ...(c.id && { id: c.id }),
       })),
       procurementDate: purchaseForm.procurementDate,
       procurementCenter: purchaseForm.procurementCenter || "Main Yard",
@@ -189,15 +300,18 @@ export default function PurchaseCrop() {
       godown: purchaseForm.godown || "Main Godown",
       vehicle: purchaseForm.vehicle || "",
       remarks: purchaseForm.remarks || "",
+      status: purchaseForm.status || "pending",
     };
 
     setSaving(true);
     try {
       if (id) {
         await dispatch(updateOrder({ id, data: payload })).unwrap();
+        dispatch(fetchOrders({ force: true }));
         toast.success("Procurement entry updated successfully!");
       } else {
         await dispatch(createOrder(payload)).unwrap();
+        dispatch(fetchOrders({ force: true }));
         toast.success("Procurement entry recorded successfully!");
       }
       navigate("/procurement");
@@ -239,7 +353,7 @@ export default function PurchaseCrop() {
         </div>
       </div>
 
-      <form onSubmit={handlePurchaseSubmit} className="bg-white border border-gray-200 rounded-3xl shadow-sm text-xs font-semibold text-gray-700 flex flex-col p-6 space-y-6">
+      <form onSubmit={handlePurchaseSubmit} noValidate className="bg-white border border-gray-200 rounded-3xl shadow-sm text-xs font-semibold text-gray-700 flex flex-col p-6 space-y-6">
         {/* Farmer Profile Section */}
         <div className="bg-brand-50/30 border border-brand-100/50 p-5 rounded-2xl space-y-4">
           <h3 className="text-[10px] font-extrabold text-brand-800 uppercase tracking-widest flex items-center gap-1.5 border-b border-brand-100/50 pb-2">
@@ -250,12 +364,20 @@ export default function PurchaseCrop() {
               <SearchableSelect
                 options={farmerOptions}
                 value={purchaseForm.farmer}
-                onChange={(val) => setPurchaseForm({ ...purchaseForm, farmer: val })}
+                onChange={(val) => {
+                  setPurchaseForm({ ...purchaseForm, farmer: val });
+                  if (errors.farmer) setErrors((prev) => ({ ...prev, farmer: "" }));
+                }}
                 placeholder="Type farmer name, phone, or village..."
                 label="Choose Farmer"
                 required
                 icon={User}
+                hasError={!!errors.farmer}
+                error={errors.farmer}
               />
+              {errors.farmer && (
+                <p className="text-[10px] text-red-500 font-extrabold mt-1">{errors.farmer}</p>
+              )}
             </div>
             {purchaseForm.farmer && (
               <div className="px-4 py-3 bg-white border border-gray-100 rounded-xl flex items-center justify-between shadow-xs">
@@ -300,17 +422,20 @@ export default function PurchaseCrop() {
             {/* Crop Rows */}
             {purchaseForm.crops.map((crop, idx) => {
               const rowAmt = calculateCropAmount(crop.quantity, crop.rate, crop.unit, crop.rateUnit || "qtl");
+              const cropErr = errors.crops?.[idx] || {};
               return (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-center border-b border-gray-100/50 pb-3 last:border-b-0 last:pb-0">
+                <div key={idx} className="grid grid-cols-12 gap-2 items-start border-b border-gray-100/50 pb-3 last:border-b-0 last:pb-0">
                   <div className="col-span-3">
                     <input
                       type="text"
-                      required
                       value={crop.cropName}
                       onChange={(e) => handleCropRowChange(idx, "cropName", e.target.value)}
                       placeholder="Crop name (e.g. Wheat)"
-                      className="w-full border border-gray-200 bg-white px-2.5 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 font-semibold text-xs text-gray-800"
+                      className={`w-full border ${cropErr.cropName ? "border-red-500 ring-1 ring-red-500 bg-red-50/30 text-red-900" : "border-gray-200 bg-white"} px-2.5 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 font-semibold text-xs`}
                     />
+                    {cropErr.cropName && (
+                      <span className="text-[10px] text-red-500 font-extrabold block mt-1">{cropErr.cropName}</span>
+                    )}
                   </div>
                   <div className="col-span-2">
                     <input
@@ -334,37 +459,53 @@ export default function PurchaseCrop() {
                   <div className="col-span-2">
                     <input
                       type="number"
-                      required
                       min={0.01}
                       step="any"
+                      onKeyDown={(e) => {
+                        if (e.key === "-" || e.key === "e") {
+                          e.preventDefault();
+                        }
+                      }}
                       value={crop.quantity}
                       onChange={(e) => handleCropRowChange(idx, "quantity", e.target.value)}
                       placeholder="0.00"
-                      className="w-full border border-gray-200 px-2 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 text-right font-bold"
+                      className={`w-full border ${cropErr.quantity ? "border-red-500 ring-1 ring-red-500 bg-red-50/30 text-red-900" : "border-gray-200"} px-2 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 text-right font-bold`}
                     />
+                    {cropErr.quantity && (
+                      <span className="text-[10px] text-red-500 font-extrabold block mt-1 text-right">{cropErr.quantity}</span>
+                    )}
                   </div>
-                  <div className="col-span-2 flex items-center gap-1">
-                    <input
-                      type="number"
-                      required
-                      min={0.01}
-                      step="any"
-                      value={crop.rate}
-                      onChange={(e) => handleCropRowChange(idx, "rate", e.target.value)}
-                      placeholder="0"
-                      className="w-full border border-gray-200 px-2 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 text-right font-bold text-xs"
-                    />
-                    <select
-                      value={crop.rateUnit || "qtl"}
-                      onChange={(e) => handleCropRowChange(idx, "rateUnit", e.target.value)}
-                      className="text-[10px] font-bold border border-gray-200 bg-gray-50 rounded-lg px-1 py-2 text-gray-600 focus:outline-none cursor-pointer"
-                      title="Rate Unit (/qtl or /Kg)"
-                    >
-                      <option value="qtl">/qtl</option>
-                      <option value="Kg">/Kg</option>
-                    </select>
+                  <div className="col-span-2">
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0.01}
+                        step="any"
+                        onKeyDown={(e) => {
+                          if (e.key === "-" || e.key === "e") {
+                            e.preventDefault();
+                          }
+                        }}
+                        value={crop.rate}
+                        onChange={(e) => handleCropRowChange(idx, "rate", e.target.value)}
+                        placeholder="0"
+                        className={`w-full border ${cropErr.rate ? "border-red-500 ring-1 ring-red-500 bg-red-50/30 text-red-900" : "border-gray-200"} px-2 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 text-right font-bold text-xs`}
+                      />
+                      <select
+                        value={crop.rateUnit || "qtl"}
+                        onChange={(e) => handleCropRowChange(idx, "rateUnit", e.target.value)}
+                        className="text-[10px] font-bold border border-gray-200 bg-gray-50 rounded-lg px-1 py-2 text-gray-600 focus:outline-none cursor-pointer"
+                        title="Rate Unit (/qtl or /Kg)"
+                      >
+                        <option value="qtl">/qtl</option>
+                        <option value="Kg">/Kg</option>
+                      </select>
+                    </div>
+                    {cropErr.rate && (
+                      <span className="text-[10px] text-red-500 font-extrabold block mt-1 text-right">{cropErr.rate}</span>
+                    )}
                   </div>
-                  <div className="col-span-1.5 flex items-center justify-end gap-1.5">
+                  <div className="col-span-1.5 flex items-center justify-end gap-1.5 pt-2">
                     <span className="text-xs font-black text-gray-800">{formatCurrency(rowAmt)}</span>
                     {purchaseForm.crops.length > 1 && (
                       <button
@@ -395,11 +536,16 @@ export default function PurchaseCrop() {
               </label>
               <input
                 type="date"
-                required
                 value={purchaseForm.procurementDate}
-                onChange={(e) => setPurchaseForm({ ...purchaseForm, procurementDate: e.target.value })}
-                className="w-full border border-gray-200 px-3 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 font-semibold"
+                onChange={(e) => {
+                  setPurchaseForm({ ...purchaseForm, procurementDate: e.target.value });
+                  if (errors.procurementDate) setErrors((prev) => ({ ...prev, procurementDate: "" }));
+                }}
+                className={`w-full border ${errors.procurementDate ? "border-red-500 ring-1 ring-red-500 bg-red-50/30 text-red-900" : "border-gray-200"} px-3 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 font-semibold`}
               />
+              {errors.procurementDate && (
+                <p className="text-[10px] text-red-500 font-extrabold mt-1">{errors.procurementDate}</p>
+              )}
             </div>
             <div>
               <label className="block text-[10px] font-extrabold text-gray-455 uppercase tracking-wider mb-1.5">
@@ -432,10 +578,39 @@ export default function PurchaseCrop() {
               <input
                 type="text"
                 value={purchaseForm.vehicle}
-                onChange={(e) => setPurchaseForm({ ...purchaseForm, vehicle: e.target.value })}
-                placeholder="e.g. UP53-1234"
-                className="w-full border border-gray-200 px-3 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono font-semibold"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPurchaseForm({ ...purchaseForm, vehicle: val });
+                  if (errors.vehicle) {
+                    const clean = val.trim();
+                    if (!clean || VEHICLE_REGEX.test(clean)) {
+                      setErrors((prev) => ({ ...prev, vehicle: "" }));
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const val = e.target.value.trim();
+                  if (val && !VEHICLE_REGEX.test(val)) {
+                    setErrors((prev) => ({
+                      ...prev,
+                      vehicle: "Please enter a valid vehicle number. Example: MH12AB1234",
+                    }));
+                  } else {
+                    setErrors((prev) => ({ ...prev, vehicle: "" }));
+                  }
+                }}
+                placeholder="e.g. MH12AB1234"
+                className={`w-full border px-3 py-2 rounded-xl focus:outline-none focus:ring-1 font-mono font-semibold transition ${
+                  errors.vehicle
+                    ? "border-red-500 ring-1 ring-red-500 bg-red-50/10 focus:border-red-500 focus:ring-red-500 text-red-700"
+                    : "border-gray-200 focus:ring-brand-500 text-gray-900"
+                }`}
               />
+              {errors.vehicle && (
+                <p className="text-xs text-red-500 font-semibold mt-1 flex items-center gap-1">
+                  <span>⚠️</span> {errors.vehicle}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -462,13 +637,31 @@ export default function PurchaseCrop() {
           </div>
           <div className="flex justify-between items-center text-gray-500 font-semibold pb-2 border-b border-gray-200">
             <span>Previous Dues (Debit):</span>
-            <input
-              type="number"
-              value={purchaseForm.previousDues}
-              onChange={(e) => setPurchaseForm({ ...purchaseForm, previousDues: e.target.value })}
-              placeholder="0"
-              className="w-24 border border-gray-250 bg-white px-2 py-1 rounded-lg text-right focus:outline-none font-bold text-red-500"
-            />
+            <div className="flex flex-col items-end">
+              <input
+                type="number"
+                value={purchaseForm.previousDues}
+                onKeyDown={(e) => {
+                  if (e.key === "-" || e.key === "e") {
+                    e.preventDefault();
+                  }
+                }}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPurchaseForm({ ...purchaseForm, previousDues: val });
+                  if (val !== "" && Number(val) < 0) {
+                    setErrors((prev) => ({ ...prev, previousDues: "Dues cannot be negative." }));
+                  } else {
+                    if (errors.previousDues) setErrors((prev) => ({ ...prev, previousDues: "" }));
+                  }
+                }}
+                placeholder="0"
+                className={`w-24 border ${errors.previousDues ? "border-red-500 ring-1 ring-red-500 bg-red-50/30 text-red-900" : "border-gray-250 bg-white"} px-2 py-1 rounded-lg text-right font-bold text-red-500`}
+              />
+              {errors.previousDues && (
+                <span className="text-[10px] text-red-500 font-extrabold block mt-1 text-right">{errors.previousDues}</span>
+              )}
+            </div>
           </div>
           <div className="flex justify-between items-center text-gray-800 text-sm font-black pt-1">
             <span>Grand Total (Payable):</span>
@@ -480,7 +673,7 @@ export default function PurchaseCrop() {
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
           <button
             type="button"
-            onClick={() => navigate("/sales/procurement")}
+            onClick={() => navigate("/procurement")}
             className="px-6 py-3 border border-gray-250 bg-white rounded-xl hover:bg-gray-50 transition font-black text-gray-600 text-xs cursor-pointer"
           >
             Cancel

@@ -2,11 +2,11 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchPartySalePurchase } from '../../store/thunks/reportsThunk';
 import ErrorState from '../../components/ErrorState';
-import { 
-  RotateCw, 
-  Search, 
-  ArrowLeft, 
-  ArrowRight, 
+import {
+  RotateCw,
+  Search,
+  ArrowLeft,
+  ArrowRight,
   Loader2,
   AlertCircle,
   ShoppingBag,
@@ -44,7 +44,7 @@ const PartySalePurchaseReport = () => {
   const [startDate, setStartDate] = useState(initialDates.start);
   const [endDate, setEndDate] = useState(initialDates.end);
   const [search, setSearch] = useState('');
-  
+
   // UI Dropdowns State
   const [exportOpen, setExportOpen] = useState(false);
   const [openRowActionId, setOpenRowActionId] = useState(null);
@@ -226,7 +226,7 @@ const PartySalePurchaseReport = () => {
         item.saleAmount || 0,
         item.purchaseAmount || 0
       ]);
-      const csvContent = "data:text/csv;charset=utf-8," 
+      const csvContent = "data:text/csv;charset=utf-8,"
         + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
@@ -253,41 +253,11 @@ const PartySalePurchaseReport = () => {
             View total sales and purchases for customers & suppliers.
           </p>
         </div>
-        
+
         {/* Export Dropdown Button */}
-        <div className="relative" ref={exportDropdownRef}>
-          <button
-            onClick={() => setExportOpen(!exportOpen)}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-250 hover:bg-gray-550 rounded-lg text-xs font-bold text-gray-700 bg-white shadow-sm transition-all cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export</span>
-            <ChevronDown className="w-3.5 h-3.5" />
-          </button>
-          
-          {exportOpen && (
-            <div className="absolute right-0 mt-1.5 w-36 bg-white border border-gray-150 rounded-lg shadow-lg py-1 z-50 animate-fade-in text-left">
-              <button
-                onClick={() => {
-                  setExportOpen(false);
-                  handleExport('csv');
-                }}
-                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-semibold"
-              >
-                Export CSV
-              </button>
-              <button
-                onClick={() => {
-                  setExportOpen(false);
-                  handleExport('pdf');
-                }}
-                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-semibold"
-              >
-                Export PDF
-              </button>
-            </div>
-          )}
-        </div>
+
+
+
       </div>
 
       {/* Error alert */}
@@ -422,7 +392,7 @@ const PartySalePurchaseReport = () => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#F8FAFC] border-b border-gray-150">
-                    <th 
+                    <th
                       onClick={() => handleSort('partyName')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-50 select-none"
                     >
@@ -434,7 +404,7 @@ const PartySalePurchaseReport = () => {
                       </div>
                     </th>
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Phone Number</th>
-                    <th 
+                    <th
                       onClick={() => handleSort('saleAmount')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-50 select-none"
                     >
@@ -445,7 +415,7 @@ const PartySalePurchaseReport = () => {
                         </span>
                       </div>
                     </th>
-                    <th 
+                    <th
                       onClick={() => handleSort('purchaseAmount')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-50 select-none"
                     >
@@ -490,26 +460,8 @@ const PartySalePurchaseReport = () => {
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
-                          
-                          {openRowActionId === item.partyId && (
-                            <div 
-                              ref={rowMenuRef}
-                              className="absolute right-6 top-2 w-36 bg-white border border-gray-205 rounded-lg shadow-lg py-1.5 z-30 text-left animate-fade-in"
-                            >
-                              <button
-                                onClick={() => setOpenRowActionId(null)}
-                                className="w-full px-4 py-1.5 text-xs text-gray-700 hover:bg-gray-50 font-semibold"
-                              >
-                                View Ledger
-                              </button>
-                              <button
-                                onClick={() => setOpenRowActionId(null)}
-                                className="w-full px-4 py-1.5 text-xs text-gray-750 hover:bg-gray-50 font-semibold"
-                              >
-                                Party Details
-                              </button>
-                            </div>
-                          )}
+
+
                         </td>
                       </tr>
                     );
@@ -529,7 +481,7 @@ const PartySalePurchaseReport = () => {
                   </span>{' '}
                   of <span className="text-[#15803D] font-bold">{Number(processedData.length).toLocaleString('en-IN')}</span> items
                 </div>
-                
+
                 {/* Center: Current Page Status */}
                 <div className="text-xs font-semibold text-gray-500">
                   Page <span className="text-[#15803D] font-bold">{currentPage}</span> of {Math.ceil(processedData.length / itemsPerPage)}

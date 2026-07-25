@@ -35,8 +35,14 @@ const procurementSlice = createSlice({
         s.lastFetched = null; // Invalidate cache
       })
       .addCase(updateOrder.fulfilled, (s, a) => {
-        const idx = s.orders.findIndex((o) => o._id === a.payload._id);
-        if (idx !== -1) s.orders[idx] = a.payload;
+        const updatedOrder = a.payload;
+        const targetId = updatedOrder?._id || updatedOrder?.id || a.meta?.arg?.id;
+        const idx = s.orders.findIndex((o) => String(o._id || o.id) === String(targetId));
+        if (idx !== -1) {
+          s.orders[idx] = typeof updatedOrder === 'object' && updatedOrder !== null
+            ? { ...s.orders[idx], ...updatedOrder }
+            : s.orders[idx];
+        }
         s.lastFetched = null; // Invalidate cache
       });
   },

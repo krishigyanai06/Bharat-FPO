@@ -77,10 +77,15 @@ const Reports = () => {
 
   // Sync search param tab to openTabs if navigated programmatically (e.g. from Dashboard cards)
   useEffect(() => {
-    if (activeTab && ALL_TABS[activeTab] && !openTabs.includes(activeTab)) {
-      setOpenTabs((prev) => [...prev, activeTab]);
+    if (activeTab && ALL_TABS[activeTab]) {
+      setOpenTabs((prev) => {
+        if (!prev.includes(activeTab)) {
+          return [...prev, activeTab];
+        }
+        return prev;
+      });
     }
-  }, [activeTab, openTabs]);
+  }, [activeTab]);
 
   const handleNavigate = (tabKey) => {
     setSearchParams({ tab: tabKey });
@@ -106,9 +111,12 @@ const Reports = () => {
   };
 
   const handleOpenTab = (tabKey) => {
-    if (!openTabs.includes(tabKey)) {
-      setOpenTabs([...openTabs, tabKey]);
-    }
+    setOpenTabs((prev) => {
+      if (!prev.includes(tabKey)) {
+        return [...prev, tabKey];
+      }
+      return prev;
+    });
     setSearchParams({ tab: tabKey });
   };
 
@@ -207,7 +215,7 @@ const Reports = () => {
           className="flex items-center gap-1.5 overflow-x-auto pb-px no-scrollbar select-none flex-grow"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {openTabs.map((key) => {
+          {Array.from(new Set(openTabs)).map((key) => {
             const t = ALL_TABS[key];
             if (!t) return null;
             const isActive = activeTab === key;
@@ -300,7 +308,7 @@ const Reports = () => {
 
       {/* Pages Container - KeepAlive rendering using display styling to preserve state and scroll position */}
       <div className="p-6 flex-1 flex flex-col overflow-auto bg-[#F8FAFC] relative">
-        {openTabs.map((key) => {
+        {Array.from(new Set(openTabs)).map((key) => {
           const Component = REPORT_COMPONENTS[key];
           if (!Component) return null;
           const isActive = activeTab === key;

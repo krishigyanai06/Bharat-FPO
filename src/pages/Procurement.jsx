@@ -516,29 +516,32 @@ function Procurement() {
                   <th className="px-4 py-3 text-left">Variety</th>
                   <th className="px-4 py-3 text-left">Godown</th>
                   <th className="px-4 py-3 text-right">Available stock</th>
-                  <th className="px-4 py-3 text-right">Estimated Rate (₹)</th>
                   <th className="px-4 py-3 text-center">Unit</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
-                {stock.map((item, index) => (
-                  <tr key={item._id || index} className="hover:bg-gray-50/50 transition">
-                    <td className="px-4 py-3 text-gray-400">{index + 1}</td>
-                    <td className="px-4 py-3 text-gray-900 font-bold">{item.cropName}</td>
-                    <td className="px-4 py-3 text-gray-500">{item.variety || "—"}</td>
-                    <td className="px-4 py-3 text-gray-500">{item.godown || "—"}</td>
-                    <td className="px-4 py-3 text-right font-extrabold text-brand-600">
-                      {item.availableQuantity}
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-800">
-                      {formatCurrency(item.rate)}
-                    </td>
-                    <td className="px-4 py-3 text-center text-gray-450">{item.unit || "qtl"}</td>
-                  </tr>
-                ))}
+                {stock.map((item, index) => {
+                  const rawQty = Number(item.availableQuantity ?? item.quantity ?? 0);
+                  const displayQty = isNaN(rawQty)
+                    ? 0
+                    : (rawQty % 1 === 0 ? rawQty : Number(rawQty.toFixed(2)));
+
+                  return (
+                    <tr key={item._id || index} className="hover:bg-gray-50/50 transition">
+                      <td className="px-4 py-3 text-gray-400">{index + 1}</td>
+                      <td className="px-4 py-3 text-gray-900 font-bold">{item.cropName}</td>
+                      <td className="px-4 py-3 text-gray-500">{item.variety || "—"}</td>
+                      <td className="px-4 py-3 text-gray-500">{item.godown || "—"}</td>
+                      <td className="px-4 py-3 text-right font-extrabold text-brand-600">
+                        {displayQty}
+                      </td>
+                      <td className="px-4 py-3 text-center text-gray-450">{item.unit || "qtl"}</td>
+                    </tr>
+                  );
+                })}
                 {stock.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-gray-400 select-none">
+                    <td colSpan={6} className="px-4 py-10 text-center text-gray-400 select-none">
                       No stock levels found in procurement godown database.
                     </td>
                   </tr>

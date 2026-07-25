@@ -4,8 +4,8 @@ import { fetchExpenses } from '../../store/thunks/purchaseThunk';
 import { fetchParties } from '../../store/thunks/partyThunk';
 import { downloadExpenseReport } from '../../store/thunks/reportsThunk';
 import { generateClientExpenseReportPDF, generateIndividualExpensePDF } from '../../utils/clientPdfGenerator';
-import api from '../../lib/api';
 import ErrorState from '../../components/ErrorState';
+import toast from 'react-hot-toast';
 import { 
   Check, 
   RotateCw, 
@@ -38,6 +38,23 @@ const ExpenseReport = () => {
   const [gstEnabled, setGstEnabled] = useState('');
   const [partyId, setPartyId] = useState('');
   const [search, setSearch] = useState('');
+  const [dateError, setDateError] = useState(null);
+
+  const getTodayString = () => new Date().toISOString().split('T')[0];
+
+  const validateDateRange = (sDate, eDate) => {
+    const today = getTodayString();
+    if (sDate && sDate > today) {
+      return "Future dates are not allowed.\nPlease select today's date or an earlier date.";
+    }
+    if (eDate && eDate > today) {
+      return "Future dates are not allowed.\nPlease select today's date or an earlier date.";
+    }
+    if (sDate && eDate && sDate > eDate) {
+      return "From Date cannot be later than To Date.\nPlease select a valid date range.";
+    }
+    return null;
+  };
 
   // Refs for tracking reactive lifecycle and network requests
   const isMounted = useRef(false);
@@ -106,6 +123,16 @@ const ExpenseReport = () => {
 
   const handleFetchData = (targetFilters = null) => {
     const rawFilters = targetFilters || { startDate, endDate, category, paymentType, gstEnabled, party: partyId };
+    
+    const dateErr = validateDateRange(rawFilters.startDate, rawFilters.endDate);
+    if (dateErr) {
+      setDateError(dateErr);
+      toast.error(dateErr);
+      return;
+    }
+
+    setDateError(null);
+
     const filters = {};
     if (rawFilters.startDate) filters.startDate = rawFilters.startDate;
     if (rawFilters.endDate) filters.endDate = rawFilters.endDate;
@@ -135,6 +162,7 @@ const ExpenseReport = () => {
     setGstEnabled('');
     setPartyId('');
     setSearch('');
+    setDateError(null);
 
     const cleanFilters = { startDate: '', endDate: '', category: '', paymentType: '', gstEnabled: '', party: '' };
 
@@ -146,13 +174,21 @@ const ExpenseReport = () => {
   };
 
   const handleDownloadPDF = async () => {
+    const dateErr = validateDateRange(startDate, endDate);
+    if (dateErr) {
+      setDateError(dateErr);
+      toast.error(dateErr);
+      return;
+    }
+
     const filters = {};
-    if (startDate) filters.startDate = startDate;
-    if (endDate) filters.endDate = endDate;
+    if (partyId) filters.party = partyId;
     if (category) filters.category = category;
     if (paymentType) filters.paymentType = paymentType;
     if (gstEnabled !== '') filters.gstEnabled = gstEnabled === 'true';
-    if (partyId) filters.party = partyId;
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+    if (search) filters.search = search;
 
     const res = await dispatch(downloadExpenseReport(filters));
     
@@ -163,20 +199,20 @@ const ExpenseReport = () => {
   };
 
   const handleDownloadIndividual = async (item) => {
-    try {
-      const expenseNo = item.expenseNo || item._id;
-      const res = await api.get(`/purchase/expense/receipt/${item._id}`, { responseType: 'blob' });
-      const blob = new Blob([res.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `ExpenseVoucher_${expenseNo}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.warn('[ExpenseReport] Individual PDF download failed. Generating client-side PDF...');
+    const itemSearch = item.expenseNo || item.refNo || item._id;
+    const filters = {};
+    if (partyId) filters.party = partyId;
+    if (category) filters.category = category;
+    if (paymentType) filters.paymentType = paymentType;
+    if (gstEnabled !== '') filters.gstEnabled = gstEnabled === 'true';
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+    if (itemSearch) filters.search = itemSearch;
+
+    const res = await dispatch(downloadExpenseReport(filters));
+    
+    if (downloadExpenseReport.rejected.match(res)) {
+      console.warn('[ExpenseReport] Backend PDF failed. Generating client-side PDF...');
       generateIndividualExpensePDF(item);
     }
   };
@@ -328,12 +364,22 @@ const ExpenseReport = () => {
               type={startDate ? "date" : "text"}
               placeholder="📅 From Date"
               value={startDate}
+              max={getTodayString()}
+              onClick={(e) => {
+                e.target.type = "date";
+                e.target.showPicker?.();
+              }}
               onFocus={(e) => (e.target.type = "date")}
               onBlur={(e) => {
                 if (!e.target.value) e.target.type = "text";
               }}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full bg-white border border-gray-200 px-2 py-1.5 h-[38px] rounded-lg text-xs font-medium focus:outline-none focus:border-[#15803D] focus:ring-1 focus:ring-[#15803D] text-gray-700 shadow-sm"
+              onChange={(e) => {
+                const val = e.target.value;
+                setStartDate(val);
+                const err = validateDateRange(val, endDate);
+                setDateError(err);
+              }}
+              className="w-full bg-white border border-gray-200 px-2 py-1.5 h-[38px] rounded-lg text-xs font-medium focus:outline-none focus:border-[#15803D] focus:ring-1 focus:ring-[#15803D] text-gray-700 shadow-sm cursor-pointer"
             />
           </div>
 
@@ -343,12 +389,22 @@ const ExpenseReport = () => {
               type={endDate ? "date" : "text"}
               placeholder="📅 To Date"
               value={endDate}
+              max={getTodayString()}
+              onClick={(e) => {
+                e.target.type = "date";
+                e.target.showPicker?.();
+              }}
               onFocus={(e) => (e.target.type = "date")}
               onBlur={(e) => {
                 if (!e.target.value) e.target.type = "text";
               }}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full bg-white border border-gray-200 px-2 py-1.5 h-[38px] rounded-lg text-xs font-medium focus:outline-none focus:border-[#15803D] focus:ring-1 focus:ring-[#15803D] text-gray-700 shadow-sm"
+              onChange={(e) => {
+                const val = e.target.value;
+                setEndDate(val);
+                const err = validateDateRange(startDate, val);
+                setDateError(err);
+              }}
+              className="w-full bg-white border border-gray-200 px-2 py-1.5 h-[38px] rounded-lg text-xs font-medium focus:outline-none focus:border-[#15803D] focus:ring-1 focus:ring-[#15803D] text-gray-700 shadow-sm cursor-pointer"
             />
           </div>
 
@@ -487,12 +543,20 @@ const ExpenseReport = () => {
             <span>Loading report...</span>
           </div>
         ) : processedData.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-            <span className="text-4xl mb-3 select-none">🔍</span>
-            <h3 className="text-sm font-bold text-gray-800">No records found</h3>
-            <p className="text-xs text-gray-400 mt-1 select-none">
-              Try changing the selected filters or date range.
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+              <FileText className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900">No Transactions Found</h3>
+            <p className="text-xs text-gray-500 mt-1 max-w-sm font-medium leading-relaxed">
+              No transactions are available for the selected date range. Try selecting a different date range or adjusting your filters.
             </p>
+            <button
+              onClick={handleResetFilters}
+              className="mt-4 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-xs font-bold text-gray-700 rounded-lg shadow-sm transition-all cursor-pointer"
+            >
+              Reset Filters
+            </button>
           </div>
         ) : (
           <>
@@ -588,37 +652,19 @@ const ExpenseReport = () => {
 
                             {/* Dropdown Floating Options Menu */}
                             {openDropdownId === (item._id || index) && (
-                              <div className={`absolute right-0 w-28 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-30 text-left animate-fade-in ${
+                              <div className={`absolute right-0 w-32 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-30 text-left animate-fade-in ${
                                 index >= paginatedData.length - 2 && paginatedData.length > 2
                                   ? 'bottom-full mb-1'
                                   : 'top-full mt-1'
                               }`}>
                                 <button
                                   onClick={() => {
-                                    alert(`Viewing expense details for ${item.expenseNo || item._id}`);
-                                    setOpenDropdownId(null);
-                                  }}
-                                  className="block w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 font-medium cursor-pointer"
-                                >
-                                  View
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    alert(`Opening print dialog for expense ${item.expenseNo || item._id}`);
-                                    setOpenDropdownId(null);
-                                  }}
-                                  className="block w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 font-medium cursor-pointer"
-                                >
-                                  Print
-                                </button>
-                                <button
-                                  onClick={() => {
                                     handleDownloadIndividual(item);
                                     setOpenDropdownId(null);
                                   }}
-                                  className="block w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 font-medium cursor-pointer"
+                                  className="block w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 font-semibold cursor-pointer"
                                 >
-                                  Download
+                                  Download PDF
                                 </button>
                               </div>
                             )}

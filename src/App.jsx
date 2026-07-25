@@ -57,20 +57,26 @@ function App() {
       <NetworkProvider>
         <Toaster
           position="top-right"
+          containerStyle={{
+            top: 75,
+            right: 20,
+            zIndex: 99999,
+          }}
           toastOptions={{
             duration: 3500,
             style: {
               background: "#ffffff",
               color: "#1e293b",
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.02)",
+              boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
               borderRadius: "12px",
               padding: "12px 16px",
-              minHeight: "56px",
-              maxWidth: "360px",
-              minWidth: "320px",
+              minHeight: "50px",
+              maxWidth: "380px",
+              minWidth: "300px",
               borderLeft: "4px solid #16A34A",
               fontSize: "13px",
-              fontWeight: "600"
+              fontWeight: "600",
+              zIndex: 99999,
             },
             success: {
               style: {
@@ -136,7 +142,7 @@ function App() {
               <Route path="sell/invoice/edit/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterInvoiceForm /></Suspense></ProtectedRoute>} />
               <Route path="sell/compliance/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><GovernmentCompliancePage /></Suspense></ProtectedRoute>} />
               <Route path="sales/procurement" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><ProcurementSales /></Suspense></ProtectedRoute>} />
-              <Route path="purchase" element={<Navigate to="/purchase/bills" replace />} />
+              <Route path="purchase" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
               <Route path="purchase/bills" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
               <Route path="purchase/orders" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
               <Route path="purchase/payments" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />

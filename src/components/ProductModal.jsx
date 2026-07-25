@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef, Fragment } from "react";
+import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
 import {
   X,
@@ -122,7 +123,7 @@ function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemov
               />
             </FIELD>
           </div>
- 
+
           {/* Row 2 (4 items) */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <FIELD label="Purchase Price" required helperText="Cost price per unit paid">
@@ -162,7 +163,7 @@ function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemov
               />
             </FIELD>
           </div>
- 
+
           {/* Row 3 (4 items) */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <FIELD label="Sale Price" required helperText="Retail selling price per unit">
@@ -206,7 +207,7 @@ function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemov
               </select>
             </FIELD>
           </div>
- 
+
           {/* Row 4 (3 items) */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="md:col-span-2">
@@ -242,7 +243,7 @@ function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemov
               />
             </FIELD>
           </div>
- 
+
           {/* Row 5 (4 items) */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <FIELD label="Opening Stock Price" helperText="Cost valuation at initialization date">
@@ -288,7 +289,30 @@ function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemov
   );
 }
 
-export function ProductModal({ initial, onClose, onSave, saving }) {
+export function ProductModal({ initial, onClose, onSave, saving, existingProducts }) {
+  const reduxProducts = useSelector((s) => s.inventory?.products || []);
+  const allProducts = existingProducts || reduxProducts;
+
+  const [nameError, setNameError] = useState("");
+
+  const checkDuplicateName = (name) => {
+    if (!name || typeof name !== "string" || !name.trim()) return false;
+    const cleanName = name.trim().toLowerCase();
+    const currentId = initial?._id || initial?.id;
+    const currentInitialName = (initial?.productName || initial?.name || "").trim().toLowerCase();
+
+    return (allProducts || []).some((p) => {
+      if (currentId && (p._id === currentId || p.id === currentId)) {
+        return false;
+      }
+      const existingName = (p.productName || p.name || "").trim().toLowerCase();
+      if (currentId && existingName === currentInitialName) {
+        return false;
+      }
+      return existingName === cleanName;
+    });
+  };
+
   const p0 = initial?.products?.[0];
 
   const getInitialCategory = (initial) => {
@@ -301,29 +325,29 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
   const [form, setForm] = useState(
     initial
       ? {
-          productName: initial.productName ?? "",
-          description: initial.description ?? "",
-          brand: initial.brand ?? "",
-          productCategory: getInitialCategory(initial),
-          productTechnicalDetails: initial.productTechnicalDetails ?? "",
-          howToUse: initial.howToUse ?? "",
-          productBenefits: initial.productBenefits ?? "",
-          itemType: initial.itemType ?? "PRODUCT",
-          hsnCode: initial.hsnCode ?? "",
-          taxRate: initial.taxRate ?? "",
-        }
+        productName: initial.productName ?? "",
+        description: initial.description ?? "",
+        brand: initial.brand ?? "",
+        productCategory: getInitialCategory(initial),
+        productTechnicalDetails: initial.productTechnicalDetails ?? "",
+        howToUse: initial.howToUse ?? "",
+        productBenefits: initial.productBenefits ?? "",
+        itemType: initial.itemType ?? "PRODUCT",
+        hsnCode: initial.hsnCode ?? "",
+        taxRate: initial.taxRate ?? "",
+      }
       : {
-          productName: "",
-          description: "",
-          brand: "",
-          productCategory: "",
-          productTechnicalDetails: "",
-          howToUse: "",
-          productBenefits: "",
-          itemType: "PRODUCT",
-          hsnCode: "",
-          taxRate: "",
-        },
+        productName: "",
+        description: "",
+        brand: "",
+        productCategory: "",
+        productTechnicalDetails: "",
+        howToUse: "",
+        productBenefits: "",
+        itemType: "PRODUCT",
+        hsnCode: "",
+        taxRate: "",
+      },
   );
 
   // Product variants state
@@ -472,41 +496,41 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
       setHsnSuggestions([]);
       return;
     }
-    
+
     // Check in-memory cache first
     if (hsnCache.current[query]) {
       setHsnSuggestions(hsnCache.current[query]);
       setShowSuggestions(true);
       return;
     }
-    
+
     const timer = setTimeout(async () => {
       setLoadingSuggestions(true);
       try {
         const res = await api.get(`/hsn/list?search=${query}&limit=50`); // fetch larger set to allow client-side filtering/ranking
         const list = res.data?.data || res.data || [];
-        
+
         // 1. Filter out detailed child categories unless the user is specifically typing a long code
         const isNumericLongCode = /^\d+$/.test(query) && query.length >= 6;
         let filtered = list;
         if (!isNumericLongCode) {
-          filtered = list.filter(item => 
-            String(item.code).length <= 4 || 
+          filtered = list.filter(item =>
+            String(item.code).length <= 4 ||
             item.isParentCategory === true
           );
         }
-        
+
         // 2. Rank results by exact code match, category relevance, and description match strength
         const scoreResult = (item, queryText, productCategory) => {
           let score = 0;
           const code = String(item.code);
           const desc = String(item.description).toLowerCase();
           const q = queryText.toLowerCase();
-          
+
           // Exact code match
           if (code === q) score += 1000;
           else if (code.startsWith(q)) score += 500;
-          
+
           // Category keyword match (e.g. insecticides, fertilizers, etc.)
           if (productCategory) {
             // Map common display categories to descriptions keywords
@@ -524,23 +548,23 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
             const hasKeyword = keywords.some(k => desc.includes(k));
             if (hasKeyword) score += 200;
           }
-          
+
           // Description match strength
           if (desc === q) score += 50;
           else if (desc.startsWith(q)) score += 30;
           else if (desc.includes(q)) score += 10;
-          
+
           return score;
         };
-        
-        filtered.sort((a, b) => 
-          scoreResult(b, query, form.productCategory) - 
+
+        filtered.sort((a, b) =>
+          scoreResult(b, query, form.productCategory) -
           scoreResult(a, query, form.productCategory)
         );
-        
+
         // Take top 8 ranked suggestions
         const topResults = filtered.slice(0, 8);
-        
+
         // Cache results
         hsnCache.current[query] = topResults;
         setHsnSuggestions(topResults);
@@ -558,14 +582,14 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
   // 3. Debounce HSN query for Browse Modal
   useEffect(() => {
     if (!showBrowseModal) return;
-    
+
     const query = browseSearchVal.trim();
-    
+
     if (query.length < 3 && !browseCategory) {
       setBrowseResults([]);
       return;
     }
-    
+
     const searchParam = query || browseCategory;
     const timer = setTimeout(async () => {
       setLoadingBrowse(true);
@@ -579,7 +603,7 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
         setLoadingBrowse(false);
       }
     }, 350);
-    
+
     return () => clearTimeout(timer);
   }, [browseSearchVal, browseCategory, showBrowseModal]);
 
@@ -635,14 +659,42 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
     );
   };
 
+  const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+  const ALLOWED_IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp"];
+
   const handleImagesSelect = (filesList) => {
-    if (!filesList) return;
+    if (!filesList || filesList.length === 0) return;
     const array = Array.from(filesList);
-    if (images.length + array.length > 5) {
+
+    const validFiles = [];
+    let hasInvalid = false;
+
+    for (const file of array) {
+      const ext = file.name ? file.name.split(".").pop().toLowerCase() : "";
+      const mime = file.type ? file.type.toLowerCase() : "";
+
+      const isValidMime = ALLOWED_IMAGE_TYPES.includes(mime);
+      const isValidExt = ALLOWED_IMAGE_EXTENSIONS.includes(ext);
+
+      if (isValidMime || isValidExt) {
+        validFiles.push(file);
+      } else {
+        hasInvalid = true;
+      }
+    }
+
+    if (hasInvalid) {
+      toast.error("Unsupported file format. Only JPG, JPEG, PNG, and WEBP images are allowed.");
+    }
+
+    if (validFiles.length === 0) return;
+
+    if (images.length + validFiles.length > 5) {
       toast.error("Maximum 5 images allowed");
       return;
     }
-    const newItems = array.map((file) => ({
+
+    const newItems = validFiles.map((file) => ({
       url: URL.createObjectURL(file),
       file,
     }));
@@ -682,10 +734,23 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
   };
 
   const [customCropText, setCustomCropText] = useState("");
-  const [cropOptions, setCropOptions] = useState(["Cotton", "Wheat", "Soybean", "Maize", "Rice"]);
+  const [cropOptions, setCropOptions] = useState(() => {
+    const defaultCrops = ["Cotton", "Wheat", "Soybean", "Maize", "Rice"];
+    if (initial?.targetCrops && Array.isArray(initial.targetCrops)) {
+      const merged = [...defaultCrops];
+      initial.targetCrops.forEach((c) => {
+        if (c && typeof c === "string" && !merged.some((item) => item.toLowerCase() === c.trim().toLowerCase())) {
+          merged.push(c.trim());
+        }
+      });
+      return merged;
+    }
+    return defaultCrops;
+  });
+
   const [selectedCrops, setSelectedCrops] = useState(() => {
-    if (initial?.targetCrops?.length > 0) {
-      return initial.targetCrops;
+    if (initial?.targetCrops && Array.isArray(initial.targetCrops) && initial.targetCrops.length > 0) {
+      return initial.targetCrops.filter((c) => c && typeof c === "string").map((c) => c.trim());
     }
     return ["Cotton", "Wheat"];
   });
@@ -697,25 +762,50 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
   };
 
   const addCustomCrop = () => {
-    if (!customCropText.trim()) return;
     const cleanCrop = customCropText.trim();
-    if (!cropOptions.includes(cleanCrop)) {
-      setCropOptions((prev) => [...prev, cleanCrop]);
+    if (!cleanCrop) {
+      toast.error("Unable to add custom crop. Please try again.");
+      return;
     }
-    if (!selectedCrops.includes(cleanCrop)) {
-      setSelectedCrops((prev) => [...prev, cleanCrop]);
+
+    // Case-insensitive duplicate check
+    const existingIndex = cropOptions.findIndex(
+      (c) => c.toLowerCase() === cleanCrop.toLowerCase()
+    );
+
+    if (existingIndex !== -1) {
+      const existingCrop = cropOptions[existingIndex];
+      if (!selectedCrops.some((c) => c.toLowerCase() === cleanCrop.toLowerCase())) {
+        setSelectedCrops((prev) => [...prev, existingCrop]);
+      }
+      setCustomCropText("");
+      toast.success("Custom crop added successfully.");
+      return;
     }
+
+    setCropOptions((prev) => [...prev, cleanCrop]);
+    setSelectedCrops((prev) => [...prev, cleanCrop]);
     setCustomCropText("");
+    toast.success("Custom crop added successfully.");
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const isEdit = !!initial;
+
+    // Check for duplicate product name before submitting
+    if (checkDuplicateName(form.productName)) {
+      const duplicateMsg = "A product with this name already exists. Please use a different product name.";
+      setNameError(duplicateMsg);
+      toast.error(duplicateMsg);
+      return;
+    }
+
     const missing = [];
     if (!form.productName.trim()) missing.push("Product Name");
     if (!form.brand.trim()) missing.push("Brand");
     if (!form.productCategory) missing.push("Category");
-    
+
     if (!isEdit && images.length === 0) {
       missing.push("Product Image");
     }
@@ -753,7 +843,7 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
     onSave(form, variants, images, videos, selectedCrops);
   };
 
-  const isEdit = !!initial;  return (
+  const isEdit = !!initial; return (
     <div className="w-full bg-[#F8FAFC] h-[calc(100vh-140px)] lg:h-[calc(100vh-112px)] flex flex-col border border-slate-200 rounded-3xl overflow-hidden shadow-sm animate-in fade-in duration-200">
       <div className="bg-white w-full flex-1 flex flex-col overflow-hidden">
         {/* Header */}
@@ -781,7 +871,7 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Left Column (spans 2) */}
               <div className="lg:col-span-2 space-y-6">
-                
+
                 {/* Product Information Card */}
                 <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
                   <div className="flex items-center gap-2 border-b pb-3 border-gray-100">
@@ -789,13 +879,35 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                     <h3 className="font-semibold text-gray-800 text-sm">Product Information</h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FIELD label="Product Name" required helperText="The common or commercial name of the product">
+                    <FIELD label="Product Name" required helperText={nameError || "The common or commercial name of the product"}>
                       <input
                         value={form.productName}
-                        onChange={(e) => setF("productName", e.target.value)}
-                        className={inputCls}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setF("productName", val);
+                          if (nameError) {
+                            if (!checkDuplicateName(val)) {
+                              setNameError("");
+                            }
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const val = e.target.value;
+                          if (checkDuplicateName(val)) {
+                            setNameError("A product with this name already exists. Please use a different product name.");
+                          } else {
+                            setNameError("");
+                          }
+                        }}
+                        className={`${inputCls} ${nameError ? "!border-red-500 !ring-red-200 focus:!border-red-500 focus:!ring-red-500 bg-red-50/10" : ""
+                          }`}
                         placeholder="Enter product name (e.g. Urea, Neem Oil)"
                       />
+                      {nameError && (
+                        <p className="text-xs text-red-500 font-semibold mt-1 flex items-center gap-1">
+                          <span>⚠️</span> {nameError}
+                        </p>
+                      )}
                     </FIELD>
                     <FIELD label="Brand" required helperText="Manufacturer or brand owner name">
                       <input
@@ -894,7 +1006,7 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                     </div>
                     <p className="text-xs text-gray-400 pl-6.5">Select HSN code to auto-fill GST rate</p>
                   </div>
-                  
+
                   {/* Category Pre-filter Chips */}
                   <div>
                     <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-2">
@@ -931,7 +1043,7 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                           <Info size={12} className="text-gray-400 ml-1 cursor-pointer" title="Search by HSN code or description text" />
                         </label>
                       </div>
-                      
+
                       <div className="flex items-center border border-gray-200 rounded-xl bg-white focus-within:ring-2 focus-within:ring-green-600 focus-within:border-transparent transition overflow-hidden min-h-[42px] pr-1.5 pl-3">
                         <Search size={16} className="text-gray-400 mr-2 flex-shrink-0" />
                         <input
@@ -975,7 +1087,7 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                       <p className="text-[10px] text-gray-400 mt-1 leading-normal">
                         Search by HSN code or description (min 3 characters)
                       </p>
-                      
+
                       {/* View Detailed Classifications link */}
                       {selectedHsnRecord && String(selectedHsnRecord.code).length <= 4 && (
                         <button
@@ -1015,7 +1127,7 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                             <span>Suggestions</span>
                             <span>{hsnSuggestions.length} results found</span>
                           </div>
-                          
+
                           {loadingSuggestions ? (
                             <div className="px-4 py-4 text-xs text-slate-400 font-bold flex items-center justify-center gap-2">
                               <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
@@ -1047,10 +1159,10 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                                   };
                                   return chapters[prefix] || "Agricultural Goods";
                                 };
-                                const shortDesc = item.description.length > 70 
-                                  ? item.description.substring(0, 67) + "..." 
+                                const shortDesc = item.description.length > 70
+                                  ? item.description.substring(0, 67) + "..."
                                   : item.description;
-                                  
+
                                 return (
                                   <div
                                     key={item.code}
@@ -1074,7 +1186,7 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                               })}
                             </div>
                           )}
-                          
+
                           {/* Suggestions Footer Action button */}
                           <div
                             onClick={() => {
@@ -1118,11 +1230,10 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                             key={rate}
                             type="button"
                             onClick={() => setF("taxRate", String(rate))}
-                            className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition ${
-                              String(form.taxRate) === String(rate)
+                            className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition ${String(form.taxRate) === String(rate)
                                 ? "bg-emerald-600 text-white border-emerald-650"
                                 : "bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-600"
-                            }`}
+                              }`}
                           >
                             {rate}%
                           </button>
@@ -1143,14 +1254,13 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                     <Image size={16} className="text-brand-600" />
                     <h3 className="font-semibold text-gray-800 text-sm">Product Media</h3>
                   </div>
-                  
+
                   {/* Images Section */}
                   <div className="space-y-3">
                     <p className="text-xs font-semibold text-gray-500">Product Images (Max 5)</p>
                     <div
-                      className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${
-                        dragOver ? "border-brand-500 bg-brand-50/20" : "border-gray-200 hover:border-brand-400 hover:bg-gray-50/50"
-                      }`}
+                      className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${dragOver ? "border-brand-500 bg-brand-50/20" : "border-gray-200 hover:border-brand-400 hover:bg-gray-50/50"
+                        }`}
                       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                       onDragLeave={() => setDragOver(false)}
                       onDrop={(e) => {
@@ -1164,15 +1274,18 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                         id="multi-img-input"
                         type="file"
                         multiple
-                        accept="image/*"
+                        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                         className="hidden"
-                        onChange={(e) => handleImagesSelect(e.target.files)}
+                        onChange={(e) => {
+                          handleImagesSelect(e.target.files);
+                          e.target.value = "";
+                        }}
                       />
                       <Download size={20} className="text-brand-600" />
                       <p className="text-xs font-semibold text-brand-600 mt-1">Upload Images</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">or drag and drop files here</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Supports JPG, JPEG, PNG, WEBP (or drag & drop)</p>
                     </div>
-                    
+
                     {images.length > 0 && (
                       <div className="grid grid-cols-5 gap-2 pt-2">
                         {images.map((img, idx) => (
@@ -1200,9 +1313,8 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                   <div className="space-y-3">
                     <p className="text-xs font-semibold text-gray-500">Product Videos (Max 3)</p>
                     <div
-                      className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${
-                        videoDragOver ? "border-brand-500 bg-brand-50/20" : "border-gray-200 hover:border-brand-400 hover:bg-gray-50/50"
-                      }`}
+                      className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${videoDragOver ? "border-brand-500 bg-brand-50/20" : "border-gray-200 hover:border-brand-400 hover:bg-gray-50/50"
+                        }`}
                       onDragOver={(e) => { e.preventDefault(); setVideoDragOver(true); }}
                       onDragLeave={() => setVideoDragOver(false)}
                       onDrop={(e) => {
@@ -1224,7 +1336,7 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                       <p className="text-xs font-semibold text-brand-600 mt-1">Upload Videos</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">or drag and drop files here</p>
                     </div>
-                    
+
                     {videos.length > 0 && (
                       <div className="grid grid-cols-3 gap-2 pt-2">
                         {videos.map((vid, idx) => (
@@ -1256,37 +1368,52 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                     <Sprout size={16} className="text-brand-600" />
                     <h3 className="font-semibold text-gray-800 text-sm">Target Crops</h3>
                   </div>
-                  
+
                   <div className="space-y-3">
                     <div className="flex gap-2">
                       <input
+                        type="text"
                         value={customCropText}
                         onChange={(e) => setCustomCropText(e.target.value)}
                         className={inputCls}
-                        placeholder="Select crops"
-                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomCrop())}
+                        placeholder="Enter custom crop (e.g. Tomato)"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addCustomCrop();
+                          }
+                        }}
                       />
                       <button
                         type="button"
                         onClick={addCustomCrop}
-                        className="px-3 py-2 border border-brand-500 text-brand-600 rounded-lg hover:bg-brand-50 text-xs font-semibold whitespace-nowrap transition"
+                        className="px-3 py-2 bg-brand-50 border border-brand-500 text-brand-600 hover:bg-brand-100 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer"
                       >
                         + Add Custom Crop
                       </button>
                     </div>
 
-                    <div className="flex flex-col gap-2 pt-1 max-h-40 overflow-y-auto">
-                      {cropOptions.map((crop) => (
-                        <label key={crop} className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={selectedCrops.includes(crop)}
-                            onChange={() => toggleCrop(crop)}
-                            className="rounded text-brand-600 focus:ring-brand-500 w-3.5 h-3.5"
-                          />
-                          {crop}
-                        </label>
-                      ))}
+                    <div className="flex flex-wrap gap-2 pt-2 max-h-48 overflow-y-auto">
+                      {cropOptions.map((crop) => {
+                        const isSelected = selectedCrops.includes(crop);
+                        return (
+                          <button
+                            key={crop}
+                            type="button"
+                            onClick={() => toggleCrop(crop)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border cursor-pointer ${isSelected
+                                ? "bg-brand-600 text-white border-brand-600 shadow-xs"
+                                : "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200"
+                              }`}
+                          >
+                            <span className={`w-3.5 h-3.5 rounded-md flex items-center justify-center border text-[9px] ${isSelected ? "bg-white text-brand-600 border-white font-black" : "border-gray-300 bg-white"
+                              }`}>
+                              {isSelected ? "✓" : ""}
+                            </span>
+                            {crop}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -1335,14 +1462,7 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
               Cancel
             </button>
             <div className="flex gap-3">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={handleSubmit}
-                className="px-5 py-2 border border-brand-500 text-brand-600 rounded-lg text-sm font-semibold hover:bg-brand-50 disabled:opacity-50 transition flex items-center gap-1.5"
-              >
-                <Save size={14} className="text-brand-600 mr-1.5" /> Save Draft
-              </button>
+
               <button
                 type="submit"
                 disabled={saving}
@@ -1362,7 +1482,7 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
             </div>
           </div>
         </form>
-        
+
         {showBrowseModal && (
           <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh] border border-gray-100">
@@ -1428,11 +1548,10 @@ export function ProductModal({ initial, onClose, onSave, saving }) {
                               setBrowseSearchVal(""); // clear text input
                             }
                           }}
-                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition ${
-                            isSelected
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition ${isSelected
                               ? "bg-brand-600 text-white border-brand-700 shadow-sm"
                               : "bg-white hover:bg-gray-50 border-gray-200 text-gray-600"
-                          }`}
+                            }`}
                         >
                           {chip.label}
                         </button>

@@ -42,7 +42,7 @@ export const updateListing = createAsyncThunk(
   async ({ id, data }, { rejectWithValue, getState }) => {
     try {
       const userId = getState().auth.user?._id;
-      const res = await api.put(`/sell-crop/update/${id}`, { ...data, userId });
+      const res = await api.patch(`/sell-crop/update/${id}`, { ...data, userId });
       return res.data?.data ?? res.data;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to update listing');
@@ -55,7 +55,7 @@ export const approveListing = createAsyncThunk(
   async (id, { rejectWithValue, getState }) => {
     try {
       const userId = getState().auth.user?._id;
-      const res = await api.put(`/sell-crop/update/${id}`, { userId, status: 'approved' });
+      const res = await api.patch(`/sell-crop/update/${id}`, { userId, status: 'approved' });
       return res.data?.data ?? { _id: id, status: 'approved' };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to approve listing');
@@ -68,7 +68,7 @@ export const rejectListing = createAsyncThunk(
   async (id, { rejectWithValue, getState }) => {
     try {
       const userId = getState().auth.user?._id;
-      const res = await api.put(`/sell-crop/update/${id}`, { userId, status: 'rejected' });
+      const res = await api.patch(`/sell-crop/update/${id}`, { userId, status: 'rejected' });
       return res.data?.data ?? { _id: id, status: 'rejected' };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to reject listing');

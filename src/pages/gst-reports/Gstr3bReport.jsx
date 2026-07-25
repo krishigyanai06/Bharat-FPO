@@ -68,8 +68,23 @@ const Gstr3bReport = () => {
     };
   }, [dispatch]);
 
+  // Dynamic current date bounds
+  const currentDate = useMemo(() => new Date(), []);
+  const currentYear = useMemo(() => currentDate.getFullYear(), [currentDate]);
+  const currentMonth = useMemo(() => currentDate.getMonth() + 1, [currentDate]);
+
   // Fetch JSON data whenever filters change
   const handleFetchPreview = () => {
+    const selYr = Number(year);
+    const selMo = Number(month);
+    if (periodMode === 'monthly' && (selYr > currentYear || (selYr === currentYear && selMo > currentMonth))) {
+      return;
+    }
+    if (periodMode === 'custom') {
+      if (!startDate || !endDate || new Date(startDate) > new Date(endDate)) return;
+      const endD = new Date(endDate);
+      if (endD.getFullYear() > currentYear || (endD.getFullYear() === currentYear && (endD.getMonth() + 1) > currentMonth)) return;
+    }
     const filters = {};
     if (periodMode === 'monthly') {
       filters.month = month;
@@ -88,16 +103,26 @@ const Gstr3bReport = () => {
 
   // Date validation helper
   const validationError = useMemo(() => {
-    if (periodMode === 'custom') {
+    if (periodMode === 'monthly') {
+      const selYear = Number(year);
+      const selMonth = Number(month);
+      if (selYear > currentYear || (selYear === currentYear && selMonth > currentMonth)) {
+        return 'Future reporting periods are not allowed.\nPlease select the current month or an earlier period.';
+      }
+    } else if (periodMode === 'custom') {
       if (!startDate || !endDate) {
         return 'Please select both start and end dates.';
       }
       if (new Date(startDate) > new Date(endDate)) {
         return 'Start date cannot be after end date.';
       }
+      const endD = new Date(endDate);
+      if (endD.getFullYear() > currentYear || (endD.getFullYear() === currentYear && (endD.getMonth() + 1) > currentMonth)) {
+        return 'Future reporting periods are not allowed.\nPlease select the current month or an earlier period.';
+      }
     }
     return null;
-  }, [periodMode, startDate, endDate]);
+  }, [periodMode, month, year, startDate, endDate, currentYear, currentMonth]);
 
   // Display month name helper for summary
   const selectedMonthName = useMemo(() => {
@@ -467,11 +492,14 @@ const Gstr3bReport = () => {
                       onChange={(e) => setMonth(e.target.value)}
                       className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer appearance-none animate-fade-in"
                     >
-                      {MONTHS.map((m) => (
-                        <option key={m.value} value={m.value}>
-                          {m.label}
-                        </option>
-                      ))}
+                      {MONTHS.map((m) => {
+                        const isFutureMonth = Number(year) > currentYear || (Number(year) === currentYear && Number(m.value) > currentMonth);
+                        return (
+                          <option key={m.value} value={m.value} disabled={isFutureMonth}>
+                            {m.label}
+                          </option>
+                        );
+                      })}
                     </select>
                     <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
                       ▼
@@ -487,11 +515,14 @@ const Gstr3bReport = () => {
                       onChange={(e) => setYear(e.target.value)}
                       className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer appearance-none animate-fade-in"
                     >
-                      {YEARS.map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
-                      ))}
+                      {YEARS.map((y) => {
+                        const isFutureYear = Number(y) > currentYear;
+                        return (
+                          <option key={y} value={y} disabled={isFutureYear}>
+                            {y}
+                          </option>
+                        );
+                      })}
                     </select>
                     <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
                       ▼
@@ -661,7 +692,7 @@ const Gstr3bReport = () => {
             {validationError && (
               <div className="p-3 bg-red-50 text-red-700 rounded-xl flex gap-2 text-xs border border-red-100">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                <span className="font-semibold leading-relaxed">{validationError}</span>
+                <span className="font-semibold leading-relaxed whitespace-pre-line">{validationError}</span>
               </div>
             )}
 

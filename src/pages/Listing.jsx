@@ -55,8 +55,18 @@ const STATUS_TABS = [
   },
 ];
 
+const normalizeStatus = (status) => {
+  if (!status) return "pending";
+  const s = String(status).trim().toLowerCase();
+  if (s === "reject" || s === "rejected") return "rejected";
+  if (s === "approve" || s === "approved") return "approved";
+  if (s === "pending") return "pending";
+  return s;
+};
+
 const statusBadge = (status) => {
-  const cfg = STATUS_TABS.find((s) => s.value === status);
+  const norm = normalizeStatus(status);
+  const cfg = STATUS_TABS.find((s) => s.value === norm);
   if (!cfg || cfg.value === "all") return null;
   const Icon = cfg.icon;
   return (
@@ -96,7 +106,8 @@ function Listing() {
 
   const stats = products.reduce(
     (acc, p) => {
-      acc[p.status] = (acc[p.status] || 0) + 1;
+      const st = normalizeStatus(p.status);
+      acc[st] = (acc[st] || 0) + 1;
       return acc;
     },
     { pending: 0, approved: 0, rejected: 0 },
@@ -114,7 +125,7 @@ function Listing() {
       p.userId?.firstName?.toLowerCase().includes(term) ||
       p.userId?.lastName?.toLowerCase().includes(term);
     const matchesCrop = selectedCrop === "all" || p.cropName === selectedCrop;
-    const matchesStatus = statusFilter === "all" || p.status === statusFilter;
+    const matchesStatus = statusFilter === "all" || normalizeStatus(p.status) === statusFilter;
     return matchesSearch && matchesCrop && matchesStatus;
   });
 
@@ -326,7 +337,7 @@ function Listing() {
                         approved: "Listed for sale",
                         rejected: "Not approved",
                         pending: "Awaiting review",
-                      }[p.status] ?? p.status}
+                      }[normalizeStatus(p.status)] ?? p.status}
                     </p>
                   </td>
 
@@ -337,7 +348,7 @@ function Listing() {
                         onClick={() => { setViewProduct(p); setActiveImg(0); }}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-green-500 text-green-600 rounded-lg hover:bg-green-50 transition font-medium"
                       >
-                        <Eye size={12} /> {p.status === "pending" ? "Review" : "View"}
+                        <Eye size={12} /> {normalizeStatus(p.status) === "pending" ? "Review" : "View"}
                       </button>
                       <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition">
                         <MoreVertical size={14} />
@@ -429,12 +440,13 @@ function Listing() {
         const state = viewProduct.location?.state ?? member?.state ?? null;
         const locationStr = [city, state].filter(Boolean).join(", ");
         const totalValue = (viewProduct.quantity * viewProduct.price).toLocaleString("en-IN");
+        const normSt = normalizeStatus(viewProduct.status);
         const statusColors = {
           approved: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", dot: "bg-emerald-500" },
           rejected: { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", dot: "bg-red-500" },
           pending:  { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", dot: "bg-amber-400" },
         };
-        const sc = statusColors[viewProduct.status] ?? statusColors.pending;
+        const sc = statusColors[normSt] ?? statusColors.pending;
         return (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -460,7 +472,7 @@ function Listing() {
                 <div className="flex items-center gap-3">
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${sc.bg} ${sc.border} ${sc.text}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                    {viewProduct.status?.charAt(0).toUpperCase() + viewProduct.status?.slice(1) || "Pending"}
+                    {normSt === "rejected" ? "Rejected" : normSt === "approved" ? "Approved" : "Pending"}
                   </span>
                   <button onClick={() => setViewProduct(null)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition">
                     <X size={16} />
@@ -587,24 +599,24 @@ function Listing() {
                   {!isReadOnly && (
                     <div className="border rounded-xl p-4 bg-gray-50">
                       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Update Approval Status</p>
-                      {viewProduct.status !== "pending" ? (
+                      {normSt !== "pending" ? (
                         <div className={`flex items-center gap-3 px-4 py-3.5 rounded-xl border ${
-                          viewProduct.status === "approved"
+                          normSt === "approved"
                             ? "bg-emerald-50 border-emerald-200"
                             : "bg-red-50 border-red-200"
                         }`}>
                           <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            viewProduct.status === "approved" ? "bg-emerald-100" : "bg-red-100"
+                            normSt === "approved" ? "bg-emerald-100" : "bg-red-100"
                           }`}>
-                            {viewProduct.status === "approved"
+                            {normSt === "approved"
                               ? <CheckCircle size={18} className="text-emerald-600" />
                               : <XCircle size={18} className="text-red-500" />}
                           </div>
                           <div>
                             <p className={`text-sm font-bold capitalize ${
-                              viewProduct.status === "approved" ? "text-emerald-700" : "text-red-600"
+                              normSt === "approved" ? "text-emerald-700" : "text-red-600"
                             }`}>
-                              {viewProduct.status === "approved" ? "✓ Listing Approved" : "✕ Listing Rejected"}
+                              {normSt === "approved" ? "✓ Listing Approved" : "✕ Listing Rejected"}
                             </p>
                             <p className="text-xs text-gray-400 mt-0.5">No further changes allowed</p>
                           </div>

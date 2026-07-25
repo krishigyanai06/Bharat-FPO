@@ -14,6 +14,7 @@ import {
   Search,
   SlidersHorizontal,
   ChevronDown,
+  ChevronLeft,
   MoreVertical,
   Leaf,
   ClipboardList,
@@ -24,6 +25,7 @@ import {
   X,
   Video,
   Info,
+  ArrowRight,
 } from "lucide-react";
 import {
   BarChart,
@@ -370,6 +372,24 @@ function Inventory() {
   const [brandFilter, setBrandFilter] = useState("all");
   const [selectedProductDetailId, setSelectedProductDetailId] = useState(null);
 
+  const productsContainerRef = useRef(null);
+  const [highlightPage, setHighlightPage] = useState(false);
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
+      setCurrentPage(newPage);
+      setHighlightPage(true);
+      setTimeout(() => setHighlightPage(false), 1200);
+
+      if (productsContainerRef.current) {
+        productsContainerRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    }
+  };
+
   const { user } = useSelector((s) => s.auth);
   const { selectedTenantId } = useSelector((s) => s.layout);
   const normalizeRole = (role) =>
@@ -404,27 +424,92 @@ function Inventory() {
     });
   }, [products, stockSummary, user]);
 
+  // merged rows: each product + its stock entry joined
+  const mergedRows = useMemo(() => {
+    console.log("[Inventory] Merging products with stock data...");
+    console.log("   Products to merge:", products.length);
+    console.log("   Stock items available:", stockSummary.length);
+
+    return products.map((p, index) => {
+      // Find all stock records for this product
+      const productStocks = (stockSummary || []).filter(
+        (s) => s.item?.sourceRef === p._id || s.productId === p._id
+      );
+      
+      // Calculate total available quantity across all variants of this product
+      let stock = null;
+      if (productStocks.length > 0) {
+        const totalQty = productStocks.reduce((sum, s) => sum + (s.availableQuantity ?? 0), 0);
+        const baseStock = productStocks[0];
+        stock = { ...baseStock, availableQuantity: totalQty };
+      }
+
+      // Method 2: If no match, try direct ID matching (in case structure is different)
+      if (!stock) {
+        stock = stockSummary.find(
+          (s) => s._id === p._id || s.productId === p._id,
+        );
+      }
+
+      // Method 3: Try name-based matching as fallback
+      if (!stock && p.productName) {
+        stock = stockSummary.find(
+          (s) =>
+            s.item?.itemName === p.productName ||
+            s.productName === p.productName,
+        );
+      }
+
+      // Method 4: Fallback to variant product quantity if not found in stockSummary
+      if (!stock && p.products && p.products.length > 0) {
+        const fallbackQty = p.products.reduce(
+          (sum, v) => sum + (Number(v.quantity) || 0),
+          0
+        );
+        stock = { availableQuantity: fallbackQty, isFallback: true };
+      }
+
+      if (index < 3) {
+        // Log first 3 for debugging
+        console.log(`   Product ${index + 1}:`, {
+          productId: p._id,
+          productName: p.productName,
+          foundStock: !!stock,
+          stockData: stock
+            ? {
+                availableQuantity: stock.availableQuantity,
+                purchasePrice: stock.item?.purchasePrice || stock.purchasePrice,
+                sourceRef: stock.item?.sourceRef || stock.sourceRef,
+              }
+            : null,
+        });
+      }
+
+      return { ...p, _stock: stock };
+    });
+  }, [products, stockSummary]);
+
   const kpi = useMemo(() => {
     const totalProducts = products.length;
     const activeProducts = products.filter((p) => p.isActive).length;
     const inactiveProducts = totalProducts - activeProducts;
-    const getStockEntry = (p) =>
-      stockSummary.find((s) => s.item?.sourceRef === p._id);
-    const outOfStock = products.filter((p) => {
-      const s = getStockEntry(p);
-      return s && (s.availableQuantity ?? 0) === 0;
+
+    const outOfStock = mergedRows.filter((p) => {
+      const q = p._stock?.availableQuantity;
+      return q !== undefined && q !== null && q === 0;
     }).length;
-    const lowStock = products.filter((p) => {
-      const s = getStockEntry(p);
-      if (!s) return false;
-      const q = s.availableQuantity ?? 0;
-      return q > 0 && q <= 5;
+
+    const lowStock = mergedRows.filter((p) => {
+      const q = p._stock?.availableQuantity;
+      return q !== undefined && q !== null && q > 0 && q <= 5;
     }).length;
+
     const stockValue = stockSummary.reduce(
       (sum, s) =>
-        sum + (s.availableQuantity ?? 0) * (s.item?.purchasePrice ?? 0),
+        sum + (s.availableQuantity ?? 0) * (s.item?.purchasePrice ?? s.purchasePrice ?? s.item?.price ?? s.price ?? 0),
       0,
     );
+
     const now = new Date();
     const expiringSoon = stockSummary.filter((s) => {
       const d = s.item?.expiryDate;
@@ -432,6 +517,7 @@ function Inventory() {
       const diff = Math.ceil((new Date(d) - now) / (1000 * 60 * 60 * 24));
       return diff >= 0 && diff <= 30;
     }).length;
+
     return {
       totalProducts,
       activeProducts,
@@ -441,7 +527,7 @@ function Inventory() {
       stockValue,
       expiringSoon,
     };
-  }, [products, stockSummary]);
+  }, [products, stockSummary, mergedRows]);
 
   const monthlyStockData = useMemo(() => {
     return stockSummary
@@ -462,70 +548,6 @@ function Inventory() {
     });
     return map;
   }, [stockSummary]);
-
-  // merged rows: each product + its stock entry joined
-  const mergedRows = useMemo(() => {
-    console.log("[Inventory] Merging products with stock data...");
-    console.log("   Products to merge:", products.length);
-    console.log("   Stock items available:", stockSummary.length);
-
-    return products.map((p, index) => {
-      // Find all stock records for this product
-      const productStocks = (stockSummary || []).filter((s) => s.item?.sourceRef === p._id);
-      
-      // Calculate total available quantity across all variants of this product
-      const totalQty = productStocks.reduce((sum, s) => sum + (s.availableQuantity ?? 0), 0);
-      
-      // Find a base stock summary record for price / details if available
-      const baseStock = productStocks[0] || null;
-      
-      // Create a merged stock object with total available quantity
-      let stock = baseStock ? { ...baseStock, availableQuantity: totalQty } : null;
-
-      // Method 2: If no match, try direct ID matching (in case structure is different)
-      if (!stock) {
-        stock = stockSummary.find(
-          (s) => s._id === p._id || s.productId === p._id,
-        );
-      }
-
-      // Method 3: Try name-based matching as fallback
-      if (!stock && p.productName) {
-        stock = stockSummary.find(
-          (s) =>
-            s.item?.itemName === p.productName ||
-            s.productName === p.productName,
-        );
-      }
-
-      if (index < 3) {
-        // Log first 3 for debugging
-        console.log(`   Product ${index + 1}:`, {
-          productId: p._id,
-          productName: p.productName,
-          foundStock: !!stock,
-          stockMethod: stock
-            ? stockSummary.find((s) => s.item?.sourceRef === p._id)
-              ? "sourceRef"
-              : stockSummary.find(
-                    (s) => s._id === p._id || s.productId === p._id,
-                  )
-                ? "directId"
-                : "nameMatch"
-            : "none",
-          stockData: stock
-            ? {
-                availableQuantity: stock.availableQuantity,
-                purchasePrice: stock.item?.purchasePrice || stock.purchasePrice,
-                sourceRef: stock.item?.sourceRef || stock.sourceRef,
-              }
-            : null,
-        });
-      }
-
-      return { ...p, _stock: stock };
-    });
-  }, [products, stockSummary]);
 
   const uniqueBrands = useMemo(() => {
     const brands = products.map((p) => p.brand).filter(Boolean);
@@ -576,6 +598,30 @@ function Inventory() {
   }, [mergedRows, search, statusFilter, selectedCategoryFilter, brandFilter]);
 
   const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
+
+  const paginationPages = useMemo(() => {
+    const pages = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push("...");
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) {
+        if (i !== 1 && i !== totalPages && pages[pages.length - 1] !== i) {
+          pages.push(i);
+        }
+      }
+      if (currentPage < totalPages - 2 && pages[pages.length - 1] !== "...") {
+        pages.push("...");
+      }
+      if (pages[pages.length - 1] !== totalPages) {
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  }, [totalPages, currentPage]);
   const paginatedData = filteredData.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE,
@@ -773,6 +819,7 @@ function Inventory() {
     return (
       <ProductModal
         initial={editRow ?? null}
+        existingProducts={products}
         onClose={() => {
           setShowModal(false);
           setEditRow(null);
@@ -846,7 +893,12 @@ function Inventory() {
         {/* Stats Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full max-w-5xl z-10 mt-2">
           {/* Stat Card 1: Total */}
-          <div className="bg-white rounded-2xl border border-gray-150 shadow-xs p-4 flex items-center gap-4 hover:shadow-md transition duration-200">
+          <div 
+            onClick={() => { setStatusFilter("all"); setCurrentPage(1); }}
+            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer ${
+              statusFilter === "all" ? "border-green-500 ring-2 ring-green-400 bg-green-50/10 shadow-sm" : "border-gray-150 shadow-xs"
+            }`}
+          >
             <div className="w-12 h-12 rounded-full bg-[#f4fbf7] text-[#16a34a] border border-[#e8f5e9] flex items-center justify-center flex-shrink-0">
               <Sprout size={20} className="text-[#16a34a]" />
             </div>
@@ -860,7 +912,12 @@ function Inventory() {
           </div>
 
           {/* Stat Card 2: Active */}
-          <div className="bg-white rounded-2xl border border-gray-150 shadow-xs p-4 flex items-center gap-4 hover:shadow-md transition duration-200">
+          <div 
+            onClick={() => { setStatusFilter(statusFilter === "active" ? "all" : "active"); setCurrentPage(1); }}
+            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer ${
+              statusFilter === "active" ? "border-green-500 ring-2 ring-green-400 bg-green-50/20 shadow-sm" : "border-gray-150 shadow-xs"
+            }`}
+          >
             <div className="w-12 h-12 rounded-full bg-[#f4fbf7] text-[#16a34a] border border-[#e8f5e9] flex items-center justify-center flex-shrink-0">
               <CheckCircle size={20} className="text-[#16a34a]" />
             </div>
@@ -875,8 +932,11 @@ function Inventory() {
 
           {/* Stat Card 3: Low Stock */}
           <div 
-            className="bg-white rounded-2xl border border-gray-150 shadow-xs p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer relative"
-            onClick={() => setStatusFilter("lowstock")}
+            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer relative ${
+              statusFilter === "lowstock" ? "border-amber-500 ring-2 ring-amber-400 bg-amber-50/30 shadow-sm" : "border-gray-150 shadow-xs"
+            }`}
+            onClick={() => { setStatusFilter(statusFilter === "lowstock" ? "all" : "lowstock"); setCurrentPage(1); }}
+            title={statusFilter === "lowstock" ? "Click to view all products" : "Click to view low stock items"}
           >
             <div className="w-12 h-12 rounded-full bg-[#fffbeb] text-[#d97706] border border-[#fef3c7] flex items-center justify-center flex-shrink-0">
               <AlertTriangle size={20} className="text-[#d97706]" />
@@ -884,17 +944,22 @@ function Inventory() {
             <div className="min-w-0">
               <p className="text-xs font-semibold text-gray-400">Low Stock</p>
               <p className="text-3xl font-extrabold text-[#d97706] leading-tight mt-0.5">{kpi.lowStock}</p>
-              <p className="text-xs text-gray-400 mt-0.5 font-medium">Need attention</p>
+              <p className="text-xs text-gray-400 mt-0.5 font-medium">
+                {statusFilter === "lowstock" ? "Active filter (Click to reset)" : "Need attention"}
+              </p>
             </div>
-            <svg className="absolute top-4 right-4 w-4 h-4 text-[#d97706]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className={`absolute top-4 right-4 w-4 h-4 text-[#d97706] transition-transform ${statusFilter === "lowstock" ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
             </svg>
           </div>
 
           {/* Stat Card 4: Expiring */}
           <div 
-            className="bg-white rounded-2xl border border-gray-150 shadow-xs p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer"
-            onClick={() => setStatusFilter("expiring")}
+            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer ${
+              statusFilter === "expiring" ? "border-purple-500 ring-2 ring-purple-400 bg-purple-50/30 shadow-sm" : "border-gray-150 shadow-xs"
+            }`}
+            onClick={() => { setStatusFilter(statusFilter === "expiring" ? "all" : "expiring"); setCurrentPage(1); }}
+            title={statusFilter === "expiring" ? "Click to view all products" : "Click to view expiring items"}
           >
             <div className="w-12 h-12 rounded-full bg-[#faf5ff] text-[#7c3aed] border border-[#f3e8ff] flex items-center justify-center flex-shrink-0">
               <svg className="w-5.5 h-5.5 text-[#7c3aed]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -930,10 +995,13 @@ function Inventory() {
             </div>
           </div>
           <button
-            onClick={() => setStatusFilter("outofstock")}
+            onClick={() => {
+              setStatusFilter(statusFilter === "outofstock" ? "all" : "outofstock");
+              setCurrentPage(1);
+            }}
             className="text-xs font-medium text-red-600 hover:text-red-700 whitespace-nowrap border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100 transition"
           >
-            View all →
+            {statusFilter === "outofstock" ? "Show All Products ←" : "View all →"}
           </button>
         </div>
       )}
@@ -987,6 +1055,7 @@ function Inventory() {
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
               <option value="lowstock">Low Stock</option>
+              <option value="outofstock">Out of Stock</option>
               <option value="expiring">Expiring Soon</option>
             </select>
             <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -1007,10 +1076,22 @@ function Inventory() {
             <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
 
-          {/* More Filters */}
-          <button className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-xs font-bold text-[#15803d] hover:bg-green-50/30 transition bg-white">
-            <SlidersHorizontal size={14} className="text-[#15803d]" /> More Filters
-          </button>
+          {/* Clear / Reset All Filters Button */}
+          {(statusFilter !== "all" || selectedCategoryFilter !== "all" || brandFilter !== "all" || search) && (
+            <button
+              onClick={() => {
+                setStatusFilter("all");
+                setSelectedCategoryFilter("all");
+                setBrandFilter("all");
+                setSearch("");
+                setCurrentPage(1);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition shadow-xs"
+              title="Clear all filters and view all products"
+            >
+              <X size={14} /> Clear Filters
+            </button>
+          )}
         </div>
 
         {/* Toggle View (Grid/List) */}
@@ -1045,6 +1126,59 @@ function Inventory() {
           </button>
         </div>
       </div>
+
+      {/* ACTIVE FILTERS CHIP BAR */}
+      {(statusFilter !== "all" || selectedCategoryFilter !== "all" || brandFilter !== "all" || search) && (
+        <div className="flex items-center justify-between gap-3 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl px-5 py-3 text-xs shadow-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-emerald-900">Active Filters:</span>
+            {statusFilter !== "all" && (
+              <span className="inline-flex items-center gap-1.5 bg-white border border-emerald-300 text-emerald-800 px-3 py-1 rounded-xl font-semibold shadow-xs">
+                Status: {statusFilter === "lowstock" ? "Low Stock" : statusFilter === "expiring" ? "Expiring Soon" : statusFilter === "outofstock" ? "Out of Stock" : statusFilter.toUpperCase()}
+                <button onClick={() => setStatusFilter("all")} className="hover:text-red-500 p-0.5 rounded-full hover:bg-gray-100 transition">
+                  <X size={13} />
+                </button>
+              </span>
+            )}
+            {selectedCategoryFilter !== "all" && (
+              <span className="inline-flex items-center gap-1.5 bg-white border border-emerald-300 text-emerald-800 px-3 py-1 rounded-xl font-semibold shadow-xs">
+                Category: {selectedCategoryFilter}
+                <button onClick={() => setSelectedCategoryFilter("all")} className="hover:text-red-500 p-0.5 rounded-full hover:bg-gray-100 transition">
+                  <X size={13} />
+                </button>
+              </span>
+            )}
+            {brandFilter !== "all" && (
+              <span className="inline-flex items-center gap-1.5 bg-white border border-emerald-300 text-emerald-800 px-3 py-1 rounded-xl font-semibold shadow-xs">
+                Brand: {brandFilter}
+                <button onClick={() => setBrandFilter("all")} className="hover:text-red-500 p-0.5 rounded-full hover:bg-gray-100 transition">
+                  <X size={13} />
+                </button>
+              </span>
+            )}
+            {search && (
+              <span className="inline-flex items-center gap-1.5 bg-white border border-emerald-300 text-emerald-800 px-3 py-1 rounded-xl font-semibold shadow-xs">
+                Search: "{search}"
+                <button onClick={() => setSearch("")} className="hover:text-red-500 p-0.5 rounded-full hover:bg-gray-100 transition">
+                  <X size={13} />
+                </button>
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => {
+              setStatusFilter("all");
+              setSelectedCategoryFilter("all");
+              setBrandFilter("all");
+              setSearch("");
+              setCurrentPage(1);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition shadow-xs whitespace-nowrap ml-auto"
+          >
+            ← Show All Products
+          </button>
+        </div>
+      )}
 
       {/* STOCK LEVELS CHART
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -1100,6 +1234,12 @@ function Inventory() {
       */}
 
       {/* MAIN PRODUCTS CONTENT */}
+      <div 
+        ref={productsContainerRef}
+        className={`transition-all duration-500 rounded-2xl ${
+          highlightPage ? "ring-4 ring-emerald-500/50 bg-emerald-50/20 p-2 shadow-lg" : ""
+        }`}
+      >
       {viewMode === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {paginatedData.map((row, i) => (
@@ -1156,13 +1296,26 @@ function Inventory() {
                 </div>
                 <p className="text-sm font-medium">No products found</p>
                 <p className="text-xs text-gray-305">Try adjusting your search or filter options</p>
+                <button
+                  onClick={() => {
+                    setStatusFilter("all");
+                    setSelectedCategoryFilter("all");
+                    setBrandFilter("all");
+                    setSearch("");
+                    setCurrentPage(1);
+                  }}
+                  className="mt-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 transition shadow-sm"
+                >
+                  Show All Products
+                </button>
               </div>
             </div>
           )}
         </div>
       ) : (
-        /* TABLE LIST VIEW */
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <Fragment>
+          {/* TABLE LIST VIEW */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/30">
             <h2 className="font-bold text-gray-800 text-sm">Products & Live Stock</h2>
           </div>
@@ -1509,60 +1662,63 @@ function Inventory() {
             </table>
           </div>
         </div>
+
+      </Fragment>
       )}
+      </div>
 
-      {/* PAGINATION BAR */}
+      {/* COMPACT GREEN FOOTER PAGINATION CARD */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between px-5 py-3.5 bg-white rounded-2xl border border-gray-150 shadow-xs mt-4">
-          <p className="text-xs font-medium text-gray-555">
-            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–
-            {Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} of{" "}
-            {filteredData.length} products
-          </p>
-          <div className="flex items-center gap-1.5">
-            <button
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => p - 1)}
-              className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 disabled:opacity-30 hover:border-gray-300 hover:bg-gray-50 transition cursor-pointer"
-              title="Prev"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            
-            {(() => {
-              const pages = [];
-              if (totalPages <= 6) {
-                for (let i = 1; i <= totalPages; i++) pages.push(i);
-              } else {
-                pages.push(1);
-                if (currentPage > 3) {
-                  pages.push("...");
-                }
-                const start = Math.max(2, currentPage - 1);
-                const end = Math.min(totalPages - 1, currentPage + 1);
-                for (let i = start; i <= end; i++) {
-                  if (i !== 1 && i !== totalPages) {
-                    if (pages[pages.length - 1] !== i) {
-                      pages.push(i);
-                    }
-                  }
-                }
-                if (currentPage < totalPages - 2) {
-                  if (pages[pages.length - 1] !== "...") {
-                    pages.push("...");
-                  }
-                }
-                if (pages[pages.length - 1] !== totalPages) {
-                  pages.push(totalPages);
-                }
-              }
+        <div className="mt-6 bg-gradient-to-r from-[#14532d] via-[#15803d] to-emerald-900 text-white rounded-2xl p-3.5 sm:p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-md hover:shadow-lg transition-all duration-300 relative overflow-hidden border border-emerald-700/50">
+          {/* Decorative background glow */}
+          <div className="absolute -right-6 -bottom-6 w-36 h-36 bg-white/5 rounded-full pointer-events-none" />
 
-              return pages.map((p, idx) => {
+          {/* Left Info Section */}
+          <div className="flex items-center gap-3 text-left z-10 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 text-emerald-300 flex items-center justify-center flex-shrink-0 shadow-inner">
+              <Package size={20} className="text-emerald-300" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-extrabold tracking-tight text-white flex items-center gap-1.5 whitespace-nowrap">
+                  <span>📦</span> More Products Available
+                </h3>
+                <span className="bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full whitespace-nowrap">
+                  Page {currentPage} of {totalPages}
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-100 font-medium mt-0.5 truncate">
+                Showing <span className="font-extrabold text-white underline decoration-emerald-400 underline-offset-2">{(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} of {filteredData.length} Products</span>
+                {currentPage < totalPages && (
+                  <span>
+                    <span className="mx-1.5 opacity-60">•</span>
+                    <span className="font-bold text-emerald-300">{filteredData.length - Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} more products</span> waiting to be viewed.
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* Right Controls: Prev, Page Numbers, Next */}
+          <div className="flex items-center gap-1.5 z-10 flex-shrink-0 self-center">
+            {/* Previous Button */}
+            <button
+              type="button"
+              disabled={currentPage === 1}
+              onClick={() => handlePageChange(currentPage - 1)}
+              className="h-9 px-3 flex items-center gap-1 rounded-xl border border-white/20 bg-white/10 text-xs font-bold text-white hover:bg-white/20 disabled:opacity-40 disabled:hover:bg-white/10 transition cursor-pointer disabled:cursor-not-allowed"
+              title="Previous Page"
+            >
+              <ChevronLeft size={14} />
+              <span className="hidden sm:inline">Prev</span>
+            </button>
+
+            {/* Numbered Page Buttons */}
+            <div className="flex items-center gap-1">
+              {paginationPages.map((p, idx) => {
                 if (p === "...") {
                   return (
-                    <span key={`ellipsis-${idx}`} className="w-9 h-9 flex items-center justify-center text-xs text-gray-400 font-semibold select-none">
+                    <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-xs text-emerald-200 font-bold select-none">
                       ...
                     </span>
                   );
@@ -1570,28 +1726,30 @@ function Inventory() {
                 return (
                   <button
                     key={p}
-                    onClick={() => setCurrentPage(p)}
-                    className={`w-9 h-9 flex items-center justify-center rounded-xl text-xs font-bold transition-all duration-150 border cursor-pointer ${
+                    type="button"
+                    onClick={() => handlePageChange(p)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-xl text-xs font-extrabold transition-all duration-150 cursor-pointer ${
                       p === currentPage
-                        ? "bg-brand-700 border-brand-700 !text-white shadow-md shadow-brand-100 scale-105"
-                        : "border-gray-250 hover:border-gray-350 hover:bg-gray-50 text-gray-700 bg-white"
+                        ? "bg-emerald-400 text-gray-950 shadow-md scale-105"
+                        : "bg-white/10 hover:bg-white/20 text-white border border-white/15"
                     }`}
                   >
                     {p}
                   </button>
                 );
-              });
-            })()}
+              })}
+            </div>
 
+            {/* Next Button / Load Next Products */}
             <button
+              type="button"
               disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage((p) => p - 1 + 2)}
-              className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 disabled:opacity-30 hover:border-gray-300 hover:bg-gray-50 transition cursor-pointer"
-              title="Next"
+              onClick={() => handlePageChange(currentPage + 1)}
+              className="h-9 px-3.5 flex items-center gap-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-gray-950 font-extrabold text-xs shadow-sm hover:shadow-md disabled:opacity-40 disabled:hover:bg-emerald-400 transition cursor-pointer disabled:cursor-not-allowed group/btn"
+              title="Next Page"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-              </svg>
+              <span>Next</span>
+              <ArrowRight size={14} className="group-hover/btn:translate-x-0.5 transition-transform" />
             </button>
           </div>
         </div>

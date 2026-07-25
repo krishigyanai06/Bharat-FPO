@@ -6,6 +6,7 @@ import SearchableSelect from "../components/common/SearchableSelect";
 import {
   fetchAllLedgers,
   fetchLedgerByType,
+  fetchLedgerByParty,
 } from "../store/thunks/ledgerThunk";
 import { fetchParties } from "../store/thunks/partyThunk";
 import { fetchMembers } from "../store/thunks/membersThunk";
@@ -278,6 +279,46 @@ const getPartyOrUser = (entry, partyMap = {}) => {
         };
       }
     }
+  }
+
+  // 5. Check partyId or userId field on entry
+  const extraId = entry.partyId || entry.userId || entry.farmerId || entry.buyerId || entry.supplierId;
+  if (extraId) {
+    const extraIdStr = String(extraId);
+    const matched = partyMap[extraIdStr];
+    if (matched) {
+      const name =
+        matched.partyName ||
+        matched.name ||
+        `${matched.firstName || ""} ${matched.lastName || ""}`.trim();
+      const phone = matched.phone || matched.mobile || matched.phoneNumber || "—";
+      const role = matched.partyType || matched.role || matched.type || "Party";
+      return {
+        _id: extraIdStr,
+        name,
+        phone,
+        role,
+        initials: getInitials(name),
+        raw: matched,
+        isDeleted: false,
+      };
+    }
+  }
+
+  // 6. Direct text fields on entry
+  const directName = entry.partyName || entry.buyerName || entry.supplierName || entry.farmerName || entry.customerName;
+  if (directName) {
+    const phone = entry.phone || entry.mobile || entry.phoneNumber || "—";
+    const role = entry.partyType || entry.type || "Party";
+    return {
+      _id: String(extraId || entry.party || entry.user || entry._id || "direct"),
+      name: directName,
+      phone,
+      role,
+      initials: getInitials(directName),
+      raw: entry,
+      isDeleted: false,
+    };
   }
 
   const fallbackId = entry.party
@@ -563,16 +604,28 @@ export default function Ledger() {
 
   // Active Workspace Tab: 'transactions' | 'party' | 'farmer'
   const [activeWorkspace, setActiveWorkspace] = useState("transactions");
+  const [selectedPartyId, setSelectedPartyId] = useState("");
+  const [selectedFarmerId, setSelectedFarmerId] = useState("");
 
   // Sync workspace and filters with URL search parameters
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     const refTypeParam = searchParams.get("refType");
+    const partyIdParam = searchParams.get("partyId");
+    const farmerIdParam = searchParams.get("farmerId");
 
     if (tabParam === "party") {
       setActiveWorkspace("party");
+      if (partyIdParam) {
+        setSelectedPartyId(partyIdParam);
+        dispatch(fetchLedgerByParty(partyIdParam));
+      }
     } else if (tabParam === "farmer") {
       setActiveWorkspace("farmer");
+      if (farmerIdParam) {
+        setSelectedFarmerId(farmerIdParam);
+        dispatch(fetchLedgerByParty(farmerIdParam));
+      }
     } else if (tabParam === "transactions" || (!tabParam && !refTypeParam)) {
       setActiveWorkspace("transactions");
     }
@@ -581,11 +634,13 @@ export default function Ledger() {
       setActiveWorkspace("transactions");
       setTxnRefType(refTypeParam.toUpperCase());
     }
-  }, [searchParams]);
+  }, [searchParams, dispatch]);
 
   // Redux Selectors
   const {
     entries: rawEntries = [],
+    partyBalanceDetails,
+    partyInfo,
     loading: ledgerLoading,
     error: ledgerError,
   } = useSelector((s) => s.ledger || {});
@@ -599,10 +654,16 @@ export default function Ledger() {
 
   // Load Data on Mount
   const loadData = useCallback(() => {
-    dispatch(fetchAllLedgers());
+    if (activeWorkspace === "party" && selectedPartyId) {
+      dispatch(fetchLedgerByParty(selectedPartyId));
+    } else if (activeWorkspace === "farmer" && selectedFarmerId) {
+      dispatch(fetchLedgerByParty(selectedFarmerId));
+    } else {
+      dispatch(fetchAllLedgers());
+    }
     dispatch(fetchParties());
     dispatch(fetchMembers());
-  }, [dispatch]);
+  }, [dispatch, activeWorkspace, selectedPartyId, selectedFarmerId]);
 
   useEffect(() => {
     loadData();
@@ -804,26 +865,132 @@ export default function Ledger() {
   // ---------------------------------------------------------------------------
   // WORKSPACE 2: PARTY LEDGER STATE
   // ---------------------------------------------------------------------------
-  const [selectedPartyId, setSelectedPartyId] = useState("");
   const [partyRefFilter, setPartyRefFilter] = useState("ALL");
   const [partyFromDate, setPartyFromDate] = useState("");
   const [partyToDate, setPartyToDate] = useState("");
 
+  const handleSelectParty = (id) => {
+    setSelectedPartyId(id);
+    if (id) {
+      dispatch(fetchLedgerByParty(id));
+    } else {
+      dispatch(fetchAllLedgers());
+    }
+  };
+
   const selectedPartyObj = useMemo(() => {
     if (!selectedPartyId) return null;
-    return (
+    const base =
       partyMap[selectedPartyId] ||
       parties.find((p) => String(p._id || p.id) === selectedPartyId) ||
-      null
-    );
-  }, [selectedPartyId, partyMap, parties]);
+      {};
+    if (
+      partyInfo &&
+      (String(partyInfo._id || partyInfo.id) === String(selectedPartyId) ||
+        !base.phone ||
+        base.phone === "—")
+    ) {
+      return {
+        ...base,
+        ...partyInfo,
+        partyName:
+          partyInfo.name || partyInfo.partyName || base.partyName || base.name,
+        phone:
+          partyInfo.phoneNumber ||
+          partyInfo.phone ||
+          base.phone ||
+          base.mobile ||
+          "—",
+        partyType:
+          partyInfo.partyType || base.partyType || base.role || "Party",
+      };
+    }
+    return Object.keys(base).length > 0 ? base : partyInfo || null;
+  }, [selectedPartyId, partyMap, parties, partyInfo]);
 
   const partyTransactions = useMemo(() => {
     if (!selectedPartyId) return [];
-    return resolvedTransactions.filter(
-      (e) => e.partyOrUser?._id === selectedPartyId,
-    );
-  }, [resolvedTransactions, selectedPartyId]);
+    if (resolvedTransactions.length === 0) return [];
+
+    const targetId = String(selectedPartyId).toLowerCase();
+    const selPartyObj =
+      partyMap[selectedPartyId] ||
+      parties.find((p) => String(p._id || p.id) === selectedPartyId);
+
+    const selGstin = (
+      selPartyObj?.gstin ||
+      selPartyObj?.gstNumber ||
+      ""
+    ).toLowerCase();
+    const selPhone = (
+      selPartyObj?.phone ||
+      selPartyObj?.mobile ||
+      ""
+    ).trim();
+    const selName = (
+      selPartyObj?.partyName ||
+      selPartyObj?.name ||
+      `${selPartyObj?.firstName || ""} ${selPartyObj?.lastName || ""}`
+    ).trim().toLowerCase();
+
+    // If fetched specifically for party via fetchLedgerByParty, include all entries
+    if (partyInfo || (partyBalanceDetails && Object.keys(partyBalanceDetails).length > 0)) {
+      return resolvedTransactions;
+    }
+
+    return resolvedTransactions.filter((e) => {
+      // 1. Direct ID match on resolved partyOrUser ID
+      const puId = String(e.partyOrUser?._id || "").toLowerCase();
+      if (puId && puId !== "unknown" && puId === targetId) return true;
+
+      // 2. Direct ID match on raw entry fields
+      const ePartyId = String(
+        e.party?._id || e.party || e.partyId || "",
+      ).toLowerCase();
+      const eUserId = String(
+        e.user?._id || e.user || e.userId || e.farmerId || e.buyerId || e.supplierId || "",
+      ).toLowerCase();
+      if ((ePartyId && ePartyId === targetId) || (eUserId && eUserId === targetId))
+        return true;
+
+      // 3. Match on GSTIN if available
+      if (selGstin) {
+        const eGstin = String(
+          e.gstin ||
+            e.partyGstin ||
+            e.buyerGstin ||
+            e.partyOrUser?.raw?.gstin ||
+            e.partyOrUser?.raw?.gstNumber ||
+            "",
+        ).toLowerCase();
+        if (eGstin && eGstin === selGstin) return true;
+      }
+
+      // 4. Match on Phone if available
+      if (selPhone && selPhone !== "—") {
+        const ePhone = String(
+          e.phone || e.mobile || e.partyOrUser?.phone || "",
+        ).trim();
+        if (ePhone && ePhone === selPhone) return true;
+      }
+
+      // 5. Match on Name if available
+      if (selName) {
+        const eName = String(
+          e.partyName ||
+            e.buyerName ||
+            e.supplierName ||
+            e.farmerName ||
+            e.customerName ||
+            e.partyOrUser?.name ||
+            "",
+        ).trim().toLowerCase();
+        if (eName && (eName === selName || eName.includes(selName) || selName.includes(eName))) return true;
+      }
+
+      return true;
+    });
+  }, [resolvedTransactions, selectedPartyId, partyMap, parties, partyInfo, partyBalanceDetails]);
 
   const filteredPartyTxns = useMemo(() => {
     return partyTransactions.filter((e) => {
@@ -840,10 +1007,18 @@ export default function Ledger() {
   // ---------------------------------------------------------------------------
   // WORKSPACE 3: FARMER LEDGER STATE
   // ---------------------------------------------------------------------------
-  const [selectedFarmerId, setSelectedFarmerId] = useState("");
   const [farmerRefFilter, setFarmerRefFilter] = useState("ALL");
   const [farmerFromDate, setFarmerFromDate] = useState("");
   const [farmerToDate, setFarmerToDate] = useState("");
+
+  const handleSelectFarmer = (id) => {
+    setSelectedFarmerId(id);
+    if (id) {
+      dispatch(fetchLedgerByParty(id));
+    } else {
+      dispatch(fetchAllLedgers());
+    }
+  };
 
   const selectedFarmerObj = useMemo(() => {
     if (!selectedFarmerId) return null;
@@ -856,10 +1031,77 @@ export default function Ledger() {
 
   const farmerTransactions = useMemo(() => {
     if (!selectedFarmerId) return [];
-    return resolvedTransactions.filter(
-      (e) => e.partyOrUser?._id === selectedFarmerId,
-    );
-  }, [resolvedTransactions, selectedFarmerId]);
+    if (resolvedTransactions.length === 0) return [];
+
+    const targetId = String(selectedFarmerId).toLowerCase();
+    const selFarmerObj =
+      partyMap[selectedFarmerId] ||
+      farmerList.find((f) => String(f._id || f.id) === selectedFarmerId);
+
+    const selPhone = (
+      selFarmerObj?.phone ||
+      selFarmerObj?.mobile ||
+      ""
+    ).trim();
+    const selName = (
+      selFarmerObj?.partyName ||
+      selFarmerObj?.name ||
+      `${selFarmerObj?.firstName || ""} ${selFarmerObj?.lastName || ""}`
+    ).trim().toLowerCase();
+    const selMemberId = String(selFarmerObj?.memberId || "").toLowerCase();
+
+    // If fetched specifically for party/farmer via fetchLedgerByParty, include all entries
+    if (partyInfo || (partyBalanceDetails && Object.keys(partyBalanceDetails).length > 0)) {
+      return resolvedTransactions;
+    }
+
+    return resolvedTransactions.filter((e) => {
+      // 1. Direct ID match on resolved partyOrUser ID
+      const puId = String(e.partyOrUser?._id || "").toLowerCase();
+      if (puId && puId !== "unknown" && puId === targetId) return true;
+
+      // 2. Direct ID match on raw entry fields
+      const ePartyId = String(
+        e.party?._id || e.party || e.partyId || "",
+      ).toLowerCase();
+      const eUserId = String(
+        e.user?._id || e.user || e.userId || e.farmerId || "",
+      ).toLowerCase();
+      if ((ePartyId && ePartyId === targetId) || (eUserId && eUserId === targetId))
+        return true;
+
+      // 3. Match on Phone if available
+      if (selPhone && selPhone !== "—") {
+        const ePhone = String(
+          e.phone || e.mobile || e.partyOrUser?.phone || "",
+        ).trim();
+        if (ePhone && ePhone === selPhone) return true;
+      }
+
+      // 4. Match on Member ID if available
+      if (selMemberId) {
+        const eMemberId = String(
+          e.memberId || e.farmerMemberId || e.partyOrUser?.raw?.memberId || "",
+        ).toLowerCase();
+        if (eMemberId && eMemberId === selMemberId) return true;
+      }
+
+      // 5. Match on Name if available
+      if (selName) {
+        const eName = String(
+          e.partyName ||
+            e.farmerName ||
+            e.buyerName ||
+            e.supplierName ||
+            e.partyOrUser?.name ||
+            "",
+        ).trim().toLowerCase();
+        if (eName && (eName === selName || eName.includes(selName) || selName.includes(eName))) return true;
+      }
+
+      return true;
+    });
+  }, [resolvedTransactions, selectedFarmerId, partyMap, farmerList, partyInfo, partyBalanceDetails]);
 
   const filteredFarmerTxns = useMemo(() => {
     return farmerTransactions.filter((e) => {
@@ -896,7 +1138,16 @@ export default function Ledger() {
           ].map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => setActiveWorkspace(id)}
+              onClick={() => {
+                setActiveWorkspace(id);
+                if (id === "party" && selectedPartyId) {
+                  dispatch(fetchLedgerByParty(selectedPartyId));
+                } else if (id === "farmer" && selectedFarmerId) {
+                  dispatch(fetchLedgerByParty(selectedFarmerId));
+                } else if (id === "transactions") {
+                  dispatch(fetchAllLedgers());
+                }
+              }}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeWorkspace === id
                   ? "bg-white text-brand-700 shadow-xs border border-gray-200"
@@ -1402,7 +1653,7 @@ export default function Ledger() {
                 <SearchableSelect
                   options={partyOptions}
                   value={selectedPartyId}
-                  onChange={setSelectedPartyId}
+                  onChange={handleSelectParty}
                   placeholder="Type name, phone, or GST to search party..."
                   label={`Select Party / Vendor / Customer (${partyOptions.length} available)`}
                   icon={Building2}
@@ -1497,6 +1748,74 @@ export default function Ledger() {
                     .filter(Boolean)
                     .join(", ")}
                 </p>
+              )}
+
+              {/* Financial Balance Summary Cards from API balanceDetails */}
+              {partyBalanceDetails && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                      Total Credit
+                    </span>
+                    <span className="text-base font-extrabold text-emerald-600 mt-0.5 block">
+                      {fmt(partyBalanceDetails.totalCredit)}
+                    </span>
+                  </div>
+
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                      Total Debit
+                    </span>
+                    <span className="text-base font-extrabold text-rose-600 mt-0.5 block">
+                      {fmt(partyBalanceDetails.totalDebit)}
+                    </span>
+                  </div>
+
+                  <div className="bg-brand-50/60 border border-brand-200 rounded-xl p-3">
+                    <span className="text-[10px] font-bold text-brand-700 uppercase tracking-wider block">
+                      Current Balance
+                    </span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-base font-extrabold text-brand-900">
+                        {fmt(
+                          partyBalanceDetails.currentBalance?.amount ??
+                            partyBalanceDetails.currentBalance,
+                        )}
+                      </span>
+                      {partyBalanceDetails.currentBalance?.balanceType && (
+                        <span className="text-[10px] font-bold bg-brand-200 text-brand-800 px-1.5 py-0.2 rounded">
+                          {partyBalanceDetails.currentBalance.balanceType}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                      Due / Status
+                    </span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-base font-extrabold text-gray-900">
+                        {fmt(
+                          partyBalanceDetails.dueAmount ||
+                            partyBalanceDetails.advanceAmount ||
+                            0,
+                        )}
+                      </span>
+                      {partyBalanceDetails.dueStatus && (
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                            partyBalanceDetails.dueStatus === "PAYABLE"
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-blue-100 text-blue-800"
+                          }`}
+                        >
+                          {partyBalanceDetails.dueStatus}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* Statement Table */}
@@ -1645,7 +1964,7 @@ export default function Ledger() {
                 <SearchableSelect
                   options={farmerOptions}
                   value={selectedFarmerId}
-                  onChange={setSelectedFarmerId}
+                  onChange={handleSelectFarmer}
                   placeholder="Type farmer name, village, or phone to search..."
                   label={`Search & Select Farmer / Member (${farmerOptions.length} available)`}
                   icon={User}

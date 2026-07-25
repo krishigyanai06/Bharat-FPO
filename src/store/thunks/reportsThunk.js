@@ -133,15 +133,32 @@ export const downloadExpenseReport = createAsyncThunk(
   async (filters, { rejectWithValue }) => {
     try {
       console.log('[reportsThunk] Downloading expense PDF with filters:', filters);
-      const blob = await reportService.downloadExpenseReport(filters);
-      const startDateStr = filters.startDate || 'start';
-      const endDateStr = filters.endDate || 'end';
-      const filename = `Expense_Report_${startDateStr}_to_${endDateStr}.pdf`;
+      const res = await reportService.downloadExpenseReport(filters);
+      const blob = res.data;
+      
+      if (blob && (blob.type?.includes('html') || blob.type?.includes('json'))) {
+        return rejectWithValue('Unable to download Expense Report.\nPlease try again.');
+      }
+
+      // Check Content-Disposition header for filename from backend
+      let filename = 'Expense_Report.pdf';
+      const contentDisposition = res.headers?.['content-disposition'];
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) {
+          filename = match[1];
+        }
+      } else if (filters.startDate || filters.endDate) {
+        const startDateStr = filters.startDate || 'start';
+        const endDateStr = filters.endDate || 'end';
+        filename = `Expense_Report_${startDateStr}_to_${endDateStr}.pdf`;
+      }
+
       downloadBlob(blob, filename);
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadExpenseReport error:', err);
-      const msg = await parseBlobError(err, 'Failed to download Expense Report PDF');
+      const msg = await parseBlobError(err, 'Unable to download Expense Report.\nPlease try again.');
       return rejectWithValue(msg);
     }
   }

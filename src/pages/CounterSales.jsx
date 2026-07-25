@@ -281,6 +281,50 @@ export default function CounterSales() {
     }
   };
 
+  // PDF Sales Return Receipt download/preview handler
+  const handleDownloadReturnReceipt = async (id) => {
+    try {
+      toast.loading("Generating sales return receipt PDF...", { id: "return-pdf-download" });
+      let res;
+      try {
+        res = await api.get(`/sell/sell-return/receipt/${id}`, { responseType: "blob" });
+      } catch (err) {
+        if (err.response?.status === 404) {
+          res = await api.get(`/sell/return/receipt/${id}`, { responseType: "blob" });
+        } else {
+          throw err;
+        }
+      }
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const printWindow = window.open(url, "_blank");
+      if (!printWindow || printWindow.closed || typeof printWindow.closed === "undefined") {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `credit_note_${id}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success("Credit note downloaded successfully", { id: "return-pdf-download" });
+      } else {
+        toast.success("Sales return receipt opened in print preview", { id: "return-pdf-download" });
+      }
+    } catch (err) {
+      console.error(err);
+      let errorMsg = "Failed to open sales return receipt PDF";
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const json = JSON.parse(text);
+          if (json.message) errorMsg = json.message;
+        } catch (_) {}
+      } else if (err.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      }
+      toast.error(errorMsg, { id: "return-pdf-download" });
+    }
+  };
+
   // Convert estimate to sale
   const handleConvertEstimate = async (id) => {
     const loadingToast = toast.loading("Converting estimate to sale...");
@@ -918,6 +962,14 @@ export default function CounterSales() {
                                   <Eye className="w-3.5 h-3.5 text-gray-400" />
                                   View Details
                                 </button>
+
+                                <button
+                                  onClick={() => handleDownloadReturnReceipt(r._id)}
+                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                >
+                                  <Download className="w-3.5 h-3.5 text-gray-400" />
+                                  Download Receipt
+                                </button>
                                 
                                 {!isReadOnly && (
                                   <>
@@ -1037,6 +1089,7 @@ export default function CounterSales() {
           }}
           handleDownloadReceipt={handleDownloadReceipt}
           handleDownloadPaymentReceipt={handleDownloadPaymentReceipt}
+          handleDownloadReturnReceipt={handleDownloadReturnReceipt}
         />
       )}
 
@@ -1767,7 +1820,7 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
 // ─────────────────────────────────────────────────────────────
 // COMPONENT: Transaction Details Modal
 // ─────────────────────────────────────────────────────────────
-function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownloadPaymentReceipt }) {
+function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownloadPaymentReceipt, handleDownloadReturnReceipt }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [overrideSupplyType, setOverrideSupplyType] = useState(item.supplyType || "Tax Invoice");
@@ -2144,6 +2197,8 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
               onClick={() => {
                 if (isPayment) {
                   handleDownloadPaymentReceipt(item._id);
+                } else if (isReturn) {
+                  handleDownloadReturnReceipt(item._id);
                 } else {
                   handleDownloadReceipt(item._id, item.invoiceNo || "Invoice", overrideSupplyType);
                 }

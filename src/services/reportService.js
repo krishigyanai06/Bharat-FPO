@@ -88,7 +88,7 @@ const reportService = {
       params: filters,
       responseType: 'blob',
     });
-    return res.data;
+    return res;
   },
 
   /**

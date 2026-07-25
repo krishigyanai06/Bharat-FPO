@@ -2,7 +2,7 @@
   position: relative;
   display: inline-block;
   font-family: inherit;
-  z-index: 9999;
+  z-index: 20;
 }
 
 .lang-trigger {
@@ -61,7 +61,7 @@
   margin: 0;
   padding: 6px;
   min-width: 190px;
-  z-index: 999999 !important;
+  z-index: 30 !important;
   max-height: 280px;
   overflow-y: auto;
   scrollbar-width: thin;
