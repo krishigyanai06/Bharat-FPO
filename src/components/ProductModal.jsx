@@ -20,25 +20,35 @@ import {
 } from "lucide-react";
 import api from "../lib/api";
 
-const FIELD = ({ label, required, helperText, children }) => (
+const FIELD = ({ label, required, helperText, error, children }) => (
   <div>
     <label className="block text-xs font-medium text-gray-500 mb-1.5">
       {label}
       {required && <span className="text-red-500 ml-0.5">*</span>}
     </label>
     {children}
-    {helperText && (
+    {error ? (
+      <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150 flex items-center gap-1">
+        <span>⚠️</span> {error}
+      </p>
+    ) : helperText ? (
       <p className="text-[10px] text-gray-400 mt-1 leading-normal">
         {helperText}
       </p>
-    )}
+    ) : null}
   </div>
 );
 
-const inputCls =
-  "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition";
+const getInputCls = (hasError) =>
+  `w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none transition ${
+    hasError
+      ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+      : "border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white"
+  }`;
 
-function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemove }) {
+const inputCls = getInputCls(false);
+
+function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemove, errors = {} }) {
   const [isOpen, setIsOpen] = useState(true);
 
   return (
@@ -71,19 +81,19 @@ function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemov
         <div className="p-4 space-y-4">
           {/* Row 1 (5 items) */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <FIELD label="Size / Measure" required helperText="Numeric measure (e.g. 500, 1)">
+            <FIELD label="Size / Measure" required error={errors.parameter} helperText="Numeric measure (e.g. 500, 1)">
               <input
                 value={variant.parameter}
                 onChange={(e) => onUpdate("parameter", e.target.value)}
-                className={inputCls}
+                className={getInputCls(!!errors.parameter)}
                 placeholder="e.g. 500"
               />
             </FIELD>
-            <FIELD label="Unit" required helperText="Measurement unit (e.g. ml, kg)">
+            <FIELD label="Unit" required error={errors.unit} helperText="Measurement unit (e.g. ml, kg)">
               <select
                 value={variant.unit}
                 onChange={(e) => onUpdate("unit", e.target.value)}
-                className={inputCls}
+                className={getInputCls(!!errors.unit)}
               >
                 <option value="">Select unit</option>
                 <option value="ml">ml</option>
@@ -94,31 +104,31 @@ function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemov
                 <option value="box">box</option>
               </select>
             </FIELD>
-            <FIELD label="MRP" required helperText="Max printed retail price">
+            <FIELD label="MRP" required error={errors.mrp} helperText="Max printed retail price">
               <input
                 type="number"
                 min="0"
                 value={variant.mrp}
                 onChange={(e) => onUpdate("mrp", e.target.value)}
-                className={inputCls}
+                className={getInputCls(!!errors.mrp)}
                 placeholder="Enter MRP"
               />
             </FIELD>
-            <FIELD label="Stock Quantity" required helperText="Available unit count">
+            <FIELD label="Stock Quantity" required error={errors.quantity} helperText="Available unit count">
               <input
                 type="number"
                 min="0"
                 value={variant.quantity}
                 onChange={(e) => onUpdate("quantity", e.target.value)}
-                className={inputCls}
+                className={getInputCls(!!errors.quantity)}
                 placeholder="Enter quantity"
               />
             </FIELD>
-            <FIELD label="Item Code / SKU" required helperText="Unique barcode identifier">
+            <FIELD label="Item Code / SKU" required error={errors.itemCode} helperText="Unique barcode identifier">
               <input
                 value={variant.itemCode}
                 onChange={(e) => onUpdate("itemCode", e.target.value)}
-                className={inputCls}
+                className={getInputCls(!!errors.itemCode)}
                 placeholder="Enter item code"
               />
             </FIELD>
@@ -126,61 +136,61 @@ function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemov
 
           {/* Row 2 (4 items) */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <FIELD label="Purchase Price" required helperText="Cost price per unit paid">
+            <FIELD label="Purchase Price" required error={errors.purchasePrice} helperText="Cost price per unit paid">
               <input
                 type="number"
                 min="0"
                 value={variant.purchasePrice}
                 onChange={(e) => onUpdate("purchasePrice", e.target.value)}
-                className={inputCls}
+                className={getInputCls(!!errors.purchasePrice)}
                 placeholder="Purchase price"
               />
             </FIELD>
-            <FIELD label="Purchase Tax Type" required helperText="Tax inclusion details">
+            <FIELD label="Purchase Tax Type" required error={errors.purchasePriceTaxType} helperText="Tax inclusion details">
               <select
                 value={variant.purchasePriceTaxType}
                 onChange={(e) => onUpdate("purchasePriceTaxType", e.target.value)}
-                className={inputCls}
+                className={getInputCls(!!errors.purchasePriceTaxType)}
               >
                 <option value="Without Tax">Without Tax</option>
                 <option value="With Tax">With Tax</option>
               </select>
             </FIELD>
-            <FIELD label="Purchase Date" required helperText="Date stock was acquired">
+            <FIELD label="Purchase Date" required error={errors.purchaseDate} helperText="Date stock was acquired">
               <input
                 type="date"
                 value={variant.purchaseDate}
                 onChange={(e) => onUpdate("purchaseDate", e.target.value)}
-                className={inputCls}
+                className={getInputCls(!!errors.purchaseDate)}
               />
             </FIELD>
-            <FIELD label="Expiry Date" required helperText="Variant shelf life limit">
+            <FIELD label="Expiry Date" helperText="Variant shelf life limit">
               <input
                 type="date"
                 value={variant.expiryDate}
                 onChange={(e) => onUpdate("expiryDate", e.target.value)}
-                className={inputCls}
+                className={getInputCls(false)}
               />
             </FIELD>
           </div>
 
           {/* Row 3 (4 items) */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <FIELD label="Sale Price" required helperText="Retail selling price per unit">
+            <FIELD label="Sale Price" required error={errors.salePrice} helperText="Retail selling price per unit">
               <input
                 type="number"
                 min="0"
                 value={variant.salePrice}
                 onChange={(e) => onUpdate("salePrice", e.target.value)}
-                className={inputCls}
+                className={getInputCls(!!errors.salePrice)}
                 placeholder="Sale price"
               />
             </FIELD>
-            <FIELD label="Sale Tax Type" required helperText="Tax inclusion details">
+            <FIELD label="Sale Tax Type" required error={errors.salePriceTaxType} helperText="Tax inclusion details">
               <select
                 value={variant.salePriceTaxType}
                 onChange={(e) => onUpdate("salePriceTaxType", e.target.value)}
-                className={inputCls}
+                className={getInputCls(!!errors.salePriceTaxType)}
               >
                 <option value="Without Tax">Without Tax</option>
                 <option value="With Tax">With Tax</option>
@@ -294,6 +304,8 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
   const allProducts = existingProducts || reduxProducts;
 
   const [nameError, setNameError] = useState("");
+  const [formErrors, setFormErrors] = useState({});
+  const [variantErrors, setVariantErrors] = useState([]);
 
   const checkDuplicateName = (name) => {
     if (!name || typeof name !== "string" || !name.trim()) return false;
@@ -445,7 +457,12 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
     }
   }, [initial]);
 
-  const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const setF = (k, v) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    if (formErrors[k]) {
+      setFormErrors((prev) => ({ ...prev, [k]: "" }));
+    }
+  };
 
   // HSN and GST integration states
   const [gstSlabs, setGstSlabs] = useState([0, 5, 12, 18, 28]);
@@ -657,6 +674,13 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
         i === index ? { ...variant, [field]: value } : variant,
       ),
     );
+    if (variantErrors[index]?.[field]) {
+      setVariantErrors((prev) =>
+        prev.map((errObj, i) =>
+          i === index ? { ...errObj, [field]: "" } : errObj,
+        ),
+      );
+    }
   };
 
   const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -664,6 +688,9 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
 
   const handleImagesSelect = (filesList) => {
     if (!filesList || filesList.length === 0) return;
+    if (formErrors.images) {
+      setFormErrors((prev) => ({ ...prev, images: "" }));
+    }
     const array = Array.from(filesList);
 
     const validFiles = [];
@@ -793,38 +820,46 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
     e.preventDefault();
     const isEdit = !!initial;
 
-    // Check for duplicate product name before submitting
-    if (checkDuplicateName(form.productName)) {
-      const duplicateMsg = "A product with this name already exists. Please use a different product name.";
-      setNameError(duplicateMsg);
-      toast.error(duplicateMsg);
-      return;
+    const fErrs = {};
+    if (!form.productName.trim()) {
+      fErrs.productName = "Product Name is required.";
+    } else if (checkDuplicateName(form.productName)) {
+      fErrs.productName = "A product with this name already exists.";
+      setNameError("A product with this name already exists.");
     }
 
-    const missing = [];
-    if (!form.productName.trim()) missing.push("Product Name");
-    if (!form.brand.trim()) missing.push("Brand");
-    if (!form.productCategory) missing.push("Category");
+    if (!form.brand.trim()) {
+      fErrs.brand = "Brand name is required.";
+    }
+
+    if (!form.productCategory) {
+      fErrs.productCategory = "Category is required.";
+    }
 
     if (!isEdit && images.length === 0) {
-      missing.push("Product Image");
+      fErrs.images = "At least 1 product image is required.";
     }
 
-    // Validate variants
-    variants.forEach((variant, index) => {
-      if (variant.mrp === "" || variant.mrp === null)
-        missing.push(`Variant ${index + 1} MRP`);
-      if (variant.quantity === "" || variant.quantity === null)
-        missing.push(`Variant ${index + 1} Quantity`);
-      if (!variant.unit.trim()) missing.push(`Variant ${index + 1} Unit`);
-      if (variant.purchasePrice === "" || variant.purchasePrice === null)
-        missing.push(`Variant ${index + 1} Purchase Price`);
-      if (!variant.purchaseDate)
-        missing.push(`Variant ${index + 1} Purchase Date`);
+    const vErrs = variants.map((variant) => {
+      const errs = {};
+      if (!variant.parameter?.trim()) errs.parameter = "Size/Measure parameter is required.";
+      if (!variant.unit?.trim()) errs.unit = "Unit is required.";
+      if (variant.mrp === "" || variant.mrp === null || isNaN(variant.mrp)) errs.mrp = "Valid MRP is required.";
+      if (variant.quantity === "" || variant.quantity === null || isNaN(variant.quantity)) errs.quantity = "Stock quantity is required.";
+      if (!variant.itemCode?.trim()) errs.itemCode = "Item Code / SKU is required.";
+      if (variant.purchasePrice === "" || variant.purchasePrice === null || isNaN(variant.purchasePrice)) errs.purchasePrice = "Purchase price is required.";
+      if (!variant.purchaseDate) errs.purchaseDate = "Purchase date is required.";
+      if (variant.salePrice === "" || variant.salePrice === null || isNaN(variant.salePrice)) errs.salePrice = "Sale price is required.";
+      return errs;
     });
 
-    if (missing.length) {
-      toast.error(`Required: ${missing.join(", ")}`);
+    const hasFormErrs = Object.keys(fErrs).length > 0;
+    const hasVariantErrs = vErrs.some((errObj) => Object.keys(errObj).length > 0);
+
+    setFormErrors(fErrs);
+    setVariantErrors(vErrs);
+
+    if (hasFormErrs || hasVariantErrs) {
       return;
     }
 
@@ -879,7 +914,7 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
                     <h3 className="font-semibold text-gray-800 text-sm">Product Information</h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FIELD label="Product Name" required helperText={nameError || "The common or commercial name of the product"}>
+                    <FIELD label="Product Name" required error={formErrors.productName || nameError} helperText="The common or commercial name of the product">
                       <input
                         value={form.productName}
                         onChange={(e) => {
@@ -899,29 +934,23 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
                             setNameError("");
                           }
                         }}
-                        className={`${inputCls} ${nameError ? "!border-red-500 !ring-red-200 focus:!border-red-500 focus:!ring-red-500 bg-red-50/10" : ""
-                          }`}
+                        className={getInputCls(!!(formErrors.productName || nameError))}
                         placeholder="Enter product name (e.g. Urea, Neem Oil)"
                       />
-                      {nameError && (
-                        <p className="text-xs text-red-500 font-semibold mt-1 flex items-center gap-1">
-                          <span>⚠️</span> {nameError}
-                        </p>
-                      )}
                     </FIELD>
-                    <FIELD label="Brand" required helperText="Manufacturer or brand owner name">
+                    <FIELD label="Brand" required error={formErrors.brand} helperText="Manufacturer or brand owner name">
                       <input
                         value={form.brand}
                         onChange={(e) => setF("brand", e.target.value)}
-                        className={inputCls}
+                        className={getInputCls(!!formErrors.brand)}
                         placeholder="Enter brand (e.g. IFFCO, Tata)"
                       />
                     </FIELD>
-                    <FIELD label="Category" required helperText="Primary category classification">
+                    <FIELD label="Category" required error={formErrors.productCategory} helperText="Primary category classification">
                       <select
                         value={form.productCategory}
                         onChange={(e) => setF("productCategory", e.target.value)}
-                        className={inputCls}
+                        className={getInputCls(!!formErrors.productCategory)}
                       >
                         <option value="">Select category</option>
                         <option value="fertilizers">Fertilizers</option>
@@ -1257,10 +1286,15 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
 
                   {/* Images Section */}
                   <div className="space-y-3">
-                    <p className="text-xs font-semibold text-gray-500">Product Images (Max 5)</p>
+                    <p className="text-xs font-semibold text-gray-500">Product Images (Max 5) {!isEdit && <span className="text-red-500">*</span>}</p>
                     <div
-                      className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${dragOver ? "border-brand-500 bg-brand-50/20" : "border-gray-200 hover:border-brand-400 hover:bg-gray-50/50"
-                        }`}
+                      className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${
+                        formErrors.images
+                          ? "border-red-500 bg-red-50/20"
+                          : dragOver
+                          ? "border-brand-500 bg-brand-50/20"
+                          : "border-gray-200 hover:border-brand-400 hover:bg-gray-50/50"
+                      }`}
                       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                       onDragLeave={() => setDragOver(false)}
                       onDrop={(e) => {
@@ -1281,10 +1315,16 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
                           e.target.value = "";
                         }}
                       />
-                      <Download size={20} className="text-brand-600" />
-                      <p className="text-xs font-semibold text-brand-600 mt-1">Upload Images</p>
+                      <Download size={20} className={formErrors.images ? "text-red-500" : "text-brand-600"} />
+                      <p className={`text-xs font-semibold mt-1 ${formErrors.images ? "text-red-600" : "text-brand-600"}`}>Upload Images</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">Supports JPG, JPEG, PNG, WEBP (or drag & drop)</p>
                     </div>
+
+                    {formErrors.images && (
+                      <p className="text-[11px] text-red-600 font-medium animate-in fade-in duration-150 flex items-center gap-1">
+                        <span>⚠️</span> {formErrors.images}
+                      </p>
+                    )}
 
                     {images.length > 0 && (
                       <div className="grid grid-cols-5 gap-2 pt-2">
@@ -1446,6 +1486,7 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
                     onUpdate={(field, val) => updateVariant(index, field, val)}
                     onRemove={() => removeVariant(index)}
                     showRemove={variants.length > 1}
+                    errors={variantErrors[index] || {}}
                   />
                 ))}
               </div>
