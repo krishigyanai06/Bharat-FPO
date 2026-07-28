@@ -2791,8 +2791,13 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
       toast.success("Party added successfully");
 
       // Reload overall lists in Redux
-      const refreshedParties = await dispatch(fetchParties({ partyType: "BUYER" })).unwrap();
-      const match = refreshedParties.find(
+      let refreshedParties = parties || [];
+      try {
+        refreshedParties = await dispatch(fetchParties({ partyType: "BUYER", force: true })).unwrap();
+      } catch (e) {
+        if (!String(e?.message || e).includes("condition callback")) throw e;
+      }
+      const match = (refreshedParties || []).find(
         p => p.name === payload.name || p._id === res._id || p._id === res.data?._id
       );
 
@@ -3369,11 +3374,20 @@ function QuickAddProductModal({ onClose, onSuccess }) {
       toast.success("Product variant created successfully!");
 
       // Refresh product lists in store
-      const refreshedProds = await dispatch(fetchProducts()).unwrap();
-      await dispatch(fetchStockSummary()).unwrap();
+      let refreshedProds = products || [];
+      try {
+        refreshedProds = await dispatch(fetchProducts({ force: true })).unwrap();
+      } catch (e) {
+        if (!String(e?.message || e).includes("condition callback")) throw e;
+      }
+      try {
+        await dispatch(fetchStockSummary({ force: true })).unwrap();
+      } catch (e) {
+        if (!String(e?.message || e).includes("condition callback")) throw e;
+      }
 
       // Find match to select newly created product
-      const match = refreshedProds.find(
+      const match = (refreshedProds || []).find(
         (p) => p.productName?.toLowerCase() === payload.productName.toLowerCase() || p._id === resData?._id || p._id === resData?.productId
       );
 
