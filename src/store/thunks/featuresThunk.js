@@ -19,7 +19,7 @@ export const fetchMyFeatures = createAsyncThunk(
 
       const res = await api.get('/tenant/my-features', config);
       const d = res.data?.data || res.data;
-      return { tier: d.tier || 'FREE', features: d.features || [] };
+      return { tier: d.tier || 'BASIC', features: d.features || [] };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to load features');
     }
@@ -31,7 +31,7 @@ export const updateTierFeatures = createAsyncThunk(
   async ({ tenantId, tier, features }, { rejectWithValue }) => {
     try {
       console.log('[updateTierFeatures] Sending:', { tenantId, tier, features });
-      const res = await api.put(
+      const res = await api.patch(
         `/superadmin/tenants/${tenantId}/tier-features`,
         { tier, features }
       );
