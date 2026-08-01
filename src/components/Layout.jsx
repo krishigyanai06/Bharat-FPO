@@ -38,6 +38,9 @@ import {
   Wallet,
   Zap,
   Sprout,
+  Check,
+  Plus,
+  Sliders,
 } from "lucide-react";
 import { fetchMe, fetchTenants } from "../store/thunks/layoutThunk";
 import { setSelectedTenant } from "../store/slices/layoutSlice";
@@ -211,6 +214,10 @@ export default function Layout() {
   const searchRef = useRef(null);
   const notifRef = useRef(null);
   const userRef = useRef(null);
+  const tenantRef = useRef(null);
+
+  const [showTenantMenu, setShowTenantMenu] = useState(false);
+  const [tenantSearchQuery, setTenantSearchQuery] = useState("");
 
   const searchFetchedRef = useRef(false);
 
@@ -377,6 +384,8 @@ export default function Layout() {
         setShowNotifications(false);
       if (userRef.current && !userRef.current.contains(e.target))
         setShowUserMenu(false);
+      if (tenantRef.current && !tenantRef.current.contains(e.target))
+        setShowTenantMenu(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -767,19 +776,21 @@ export default function Layout() {
       {/* ===================== MAIN ===================== */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* ===== HEADER ===== */}
-        <header className="h-[72px] bg-white border-b border-gray-200 px-6 flex items-center gap-4 shadow-sm">
+        <header className="h-[68px] bg-white border-b border-gray-100 px-6 flex items-center gap-4 shadow-2xs sticky top-0 z-30">
           {/* Mobile hamburger */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition"
+            className="lg:hidden p-2 rounded-xl hover:bg-emerald-50 text-gray-600 transition"
           >
-            <Menu className="w-5 h-5 text-gray-600" />
+            <Menu className="w-5 h-5" />
           </button>
 
           {/* PAGE TITLE */}
           <div className="hidden lg:block">
-            <p className="text-sm font-semibold text-gray-800">{currentPage}</p>
-            <p className="text-xs text-gray-400">
+            <h1 className="text-base font-bold text-gray-900 leading-tight tracking-tight">
+              {currentPage}
+            </h1>
+            <p className="text-xs text-gray-400 font-medium">
               {new Date().toLocaleDateString("en-IN", {
                 weekday: "long",
                 day: "numeric",
@@ -789,43 +800,181 @@ export default function Layout() {
           </div>
 
           {/* RIGHT ACTIONS */}
-          <div className="flex items-center gap-2.5 ml-auto relative z-10">
+          <div className="flex items-center gap-3 ml-auto relative z-10">
             <GoogleLangPicker />
 
-            {/* TENANT DROPDOWN (ONLY SUPER ADMIN) */}
+            {/* TENANT DROPDOWN (ONLY SUPER ADMIN - CUSTOM PREMIUM POPOVER) */}
             {isSuperAdmin && (
-              <div className="flex items-center mr-2">
-                <span className="text-xs font-semibold text-gray-500 mr-2 uppercase tracking-wider">
-                  Tenant:
-                </span>
-                {tenants.length > 0 ? (
-                  <select
-                    value={selectedTenantId || ""}
-                    onChange={(e) => {
-                      const newTenantId = e.target.value;
-                      console.log("[Layout] Tenant changed to:", newTenantId);
-                      dispatch(setSelectedTenant(newTenantId));
-                      // Only reload if switching to a different tenant
-                      if (newTenantId !== selectedTenantId) {
-                        window.location.reload(); // Reload to fetch new tenant's data
-                      }
-                    }}
-                    className="bg-brand-50 border border-brand-200 text-brand-800 text-sm font-semibold rounded-xl focus:ring-brand-500 focus:border-brand-500 block px-3 py-2 transition duration-150 cursor-pointer shadow-sm hover:bg-brand-100"
-                  >
-                    {!selectedTenantId && (
-                      <option value="">Select Tenant...</option>
-                    )}
-                    {tenants.map((t) => (
-                      <option key={t._id} value={t._id}>
-                        {t.name || t.businessName || "Unnamed Tenant"} -{" "}
-                        {t.tenantCode}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className="text-xs text-gray-400 italic">
-                    Loading tenants...
+              <div className="relative" ref={tenantRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTenantMenu((v) => !v);
+                    setShowNotifications(false);
+                    setShowUserMenu(false);
+                  }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${
+                    showTenantMenu
+                      ? "bg-emerald-50 border-emerald-300 ring-2 ring-emerald-500/20 text-emerald-950"
+                      : "bg-emerald-50/80 border-emerald-200/80 hover:border-emerald-300 hover:bg-emerald-100/60 text-emerald-900 shadow-2xs"
+                  }`}
+                >
+                  <div className="p-1 rounded-lg bg-emerald-100 text-emerald-700 flex-shrink-0">
+                    <Building2 className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 hidden sm:inline flex-shrink-0">
+                    TENANT:
                   </span>
+                  <span className="text-xs font-extrabold text-emerald-950 max-w-[150px] sm:max-w-[210px] truncate">
+                    {(() => {
+                      const cur = tenants.find((t) => t._id === selectedTenantId);
+                      if (!cur) return selectedTenantId ? "Active Tenant" : "Select Tenant...";
+                      return `${cur.name || cur.businessName || "Unnamed"} (${cur.tenantCode || "N/A"})`;
+                    })()}
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-emerald-600 transition-transform duration-200 ml-0.5 flex-shrink-0 ${
+                      showTenantMenu ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {showTenantMenu && (
+                  <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white border border-emerald-100 shadow-2xl rounded-2xl p-3 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                    {/* Header with Search */}
+                    <div className="pb-2.5 mb-2 border-b border-gray-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-extrabold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Select Active Tenant
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {tenants.length} Tenants
+                        </span>
+                      </div>
+
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="Search tenant by name or code..."
+                          value={tenantSearchQuery}
+                          onChange={(e) => setTenantSearchQuery(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
+                        />
+                        {tenantSearchQuery && (
+                          <button
+                            onClick={() => setTenantSearchQuery("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Tenant List */}
+                    <div className="max-h-64 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                      {(() => {
+                        const filtered = tenants.filter((t) => {
+                          if (!tenantSearchQuery.trim()) return true;
+                          const q = tenantSearchQuery.toLowerCase();
+                          const bName = (t.name || t.businessName || "").toLowerCase();
+                          const code = (t.tenantCode || t.code || "").toLowerCase();
+                          return bName.includes(q) || code.includes(q);
+                        });
+
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="py-6 text-center text-xs text-gray-400 italic">
+                              No tenants found matching "{tenantSearchQuery}"
+                            </div>
+                          );
+                        }
+
+                        return filtered.map((t) => {
+                          const isSelected = selectedTenantId === t._id;
+                          const bName = t.name || t.businessName || "Unnamed Tenant";
+                          const code = t.tenantCode || t.code || "N/A";
+                          const tierVal = (t.tier || "BASIC").toUpperCase();
+
+                          return (
+                            <button
+                              key={t._id}
+                              type="button"
+                              onClick={() => {
+                                console.log("[Layout] Tenant selected from custom dropdown:", t._id);
+                                dispatch(setSelectedTenant(t._id));
+                                setShowTenantMenu(false);
+                                if (t._id !== selectedTenantId) {
+                                  window.location.reload();
+                                }
+                              }}
+                              className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
+                                isSelected
+                                  ? "bg-emerald-50 border-emerald-300 text-emerald-950 font-bold shadow-xs"
+                                  : "bg-white border-transparent hover:bg-emerald-50/50 hover:border-emerald-200/60 text-gray-700"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                <div
+                                  className={`p-1.5 rounded-lg flex-shrink-0 ${
+                                    isSelected
+                                      ? "bg-emerald-600 text-white shadow-2xs"
+                                      : "bg-gray-100 text-gray-500"
+                                  }`}
+                                >
+                                  <Building2 className="w-3.5 h-3.5" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-bold truncate block">
+                                      {bName}
+                                    </span>
+                                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 border border-gray-200 flex-shrink-0">
+                                      {code}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-emerald-700 font-semibold block">
+                                    Tier: {tierVal}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {isSelected && (
+                                <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                                  <Check className="w-3 h-3 stroke-[3]" />
+                                </div>
+                              )}
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+                      <button
+                        onClick={() => {
+                          setShowTenantMenu(false);
+                          navigate("/create-tenant");
+                        }}
+                        className="text-emerald-700 font-bold hover:text-emerald-800 flex items-center gap-1 hover:underline"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Register Tenant
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowTenantMenu(false);
+                          navigate("/tier-features");
+                        }}
+                        className="text-gray-500 font-semibold hover:text-emerald-700 flex items-center gap-1 hover:underline"
+                      >
+                        <Sliders className="w-3.5 h-3.5" /> Tier Features
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
@@ -838,7 +987,11 @@ export default function Layout() {
                   setShowNotifications((v) => !v);
                   setShowUserMenu(false);
                 }}
-                className={`relative p-2 rounded-xl transition ${showNotifications ? "bg-brand-50 text-brand-700" : "hover:bg-gray-100 text-gray-600"}`}
+                className={`relative p-2 rounded-xl transition ${
+                  showNotifications
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "hover:bg-emerald-50/60 text-gray-600 hover:text-emerald-700"
+                }`}
               >
                 <Bell className="w-5 h-5" />
                 {broadcasts.length > 0 && (
@@ -849,9 +1002,9 @@ export default function Layout() {
               {showNotifications && (
                 <div className="absolute right-0 top-full mt-2 w-96 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
                   {/* NOTIF HEADER */}
-                  <div className="flex justify-between items-center px-5 py-4 border-b bg-gray-50">
+                  <div className="flex justify-between items-center px-5 py-4 border-b bg-emerald-50/50">
                     <div>
-                      <p className="font-semibold text-gray-800">
+                      <p className="font-bold text-gray-900 text-sm">
                         Notifications
                       </p>
                       <p className="text-xs text-gray-500">
@@ -864,7 +1017,7 @@ export default function Layout() {
                         navigate("/broadcast");
                         setShowNotifications(false);
                       }}
-                      className="text-xs text-white bg-brand-600 hover:bg-brand-700 px-3 py-1.5 rounded-lg transition"
+                      className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-xl transition shadow-2xs"
                     >
                       View All
                     </button>
@@ -883,23 +1036,23 @@ export default function Layout() {
                       broadcasts.slice(0, 8).map((b) => (
                         <div
                           key={b._id}
-                          className="flex gap-3 px-5 py-4 hover:bg-gray-50 transition cursor-pointer"
+                          className="flex gap-3 px-5 py-4 hover:bg-emerald-50/30 transition cursor-pointer"
                         >
-                          <div className="w-9 h-9 rounded-xl bg-brand-100 flex items-center justify-center flex-shrink-0">
-                            <Megaphone className="w-4 h-4 text-brand-600" />
+                          <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                            <Megaphone className="w-4 h-4 text-emerald-700" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800 truncate">
+                            <p className="text-sm font-semibold text-gray-900 truncate">
                               {b.title}
                             </p>
                             <p className="text-xs text-gray-500 truncate mt-0.5">
                               {b.description}
                             </p>
-                            <p className="text-xs text-gray-400 mt-1">
+                            <p className="text-[11px] text-gray-400 mt-1">
                               {timeAgo(b.createdAt)}
                             </p>
                           </div>
-                          <span className="text-xs text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full h-fit flex-shrink-0">
+                          <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full h-fit flex-shrink-0 border border-emerald-200">
                             {b.targetRole || "All"}
                           </span>
                         </div>
@@ -915,7 +1068,7 @@ export default function Layout() {
                           navigate("/broadcast");
                           setShowNotifications(false);
                         }}
-                        className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+                        className="text-xs font-bold text-emerald-600 hover:text-emerald-700"
                       >
                         See all {broadcasts.length} notifications →
                       </button>
@@ -932,29 +1085,35 @@ export default function Layout() {
                   setShowUserMenu((v) => !v);
                   setShowNotifications(false);
                 }}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl transition ${showUserMenu ? "bg-brand-50" : "hover:bg-gray-100"}`}
+                className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all ${
+                  showUserMenu
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-950"
+                    : "bg-white border-gray-200/80 hover:border-emerald-300 hover:bg-emerald-50/50 text-gray-800 shadow-2xs"
+                }`}
               >
-                <div className="w-8 h-8 rounded-full bg-brand-700 text-white flex items-center justify-center text-sm font-bold">
-                  {me?.firstName?.charAt(0)?.toUpperCase() || "A"}
+                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs font-extrabold shadow-2xs">
+                  {me?.firstName?.charAt(0)?.toUpperCase() || user?.firstName?.charAt(0)?.toUpperCase() || "B"}
                 </div>
-                <div className="hidden sm:block text-left leading-tight">
-                  <p className="text-sm font-medium text-gray-800">
+                <div className="hidden sm:block text-left leading-tight pr-1">
+                  <p className="text-xs font-bold text-gray-900 truncate">
                     {me?.firstName || user?.firstName
                       ? `${me?.firstName || user?.firstName} ${me?.lastName || user?.lastName}`
-                      : "..."}
+                      : "Bharat-FPO"}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-[10px] font-semibold text-emerald-700 capitalize truncate">
                     {me?.tenant?.businessName ||
                       me?.businessName ||
                       user?.tenant?.businessName ||
                       user?.businessName ||
                       user?.role ||
                       me?.role ||
-                      ""}
+                      "SuperAdmin"}
                   </p>
                 </div>
                 <ChevronDown
-                  className={`w-4 h-4 text-gray-400 transition-transform ${showUserMenu ? "rotate-180" : ""}`}
+                  className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${
+                    showUserMenu ? "rotate-180 text-emerald-600" : ""
+                  }`}
                 />
               </button>
 
