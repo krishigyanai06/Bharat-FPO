@@ -16,19 +16,26 @@ import {
   ExternalLink,
   RefreshCw,
   Sliders,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import api from "../lib/api";
-import { fetchTenants } from "../store/thunks/layoutThunk";
+import { fetchTenants, fetchAllTenants } from "../store/thunks/layoutThunk";
 import { setSelectedTenant } from "../store/slices/layoutSlice";
 
 function CreateTenant() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const { tenants = [], loading: tenantsLoading, selectedTenantId } = useSelector(
-    (state) => state.layout
-  );
+  const {
+    tenants = [],
+    currentPage = 1,
+    totalPages = 1,
+    totalTenants = 0,
+    loading: tenantsLoading,
+    selectedTenantId,
+  } = useSelector((state) => state.layout);
 
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -41,9 +48,26 @@ function CreateTenant() {
     businessName: "",
   });
 
+  // Fetch tenant list on searchQuery change (reset to page 1) or initial mount
   useEffect(() => {
-    dispatch(fetchTenants());
-  }, [dispatch]);
+    const timer = setTimeout(() => {
+      dispatch(fetchTenants({ page: 1, search: searchQuery, force: true }));
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, dispatch]);
+
+  const handlePrevPage = () => {
+    if (currentPage > 1 && !tenantsLoading) {
+      dispatch(fetchTenants({ page: currentPage - 1, search: searchQuery, force: true }));
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages && !tenantsLoading) {
+      dispatch(fetchTenants({ page: currentPage + 1, search: searchQuery, force: true }));
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -117,8 +141,9 @@ function CreateTenant() {
       });
       setSelectedTier("BASIC");
 
-      // Refresh existing tenants list immediately
-      dispatch(fetchTenants());
+      // Refresh existing tenants list immediately for page 1 & top navbar dropdown
+      dispatch(fetchTenants({ page: 1, force: true }));
+      dispatch(fetchAllTenants({ force: true }));
 
       // Launch SweetAlert2 Notification
       Swal.fire({
@@ -263,7 +288,7 @@ function CreateTenant() {
           {/* Quick Summary Badges */}
           <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
             <span className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-semibold">
-              Total Tenants: <strong>{tenants.length}</strong>
+              Total Tenants: <strong>{totalTenants || tenants.length}</strong>
             </span>
             <span className="px-3 py-1 bg-blue-50 text-blue-800 border border-blue-200 rounded-xl text-xs font-semibold">
               Basic: <strong>{basicCount}</strong>
@@ -439,7 +464,7 @@ function CreateTenant() {
             <div>
               <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
                 <Layers className="w-4 h-4 text-emerald-600" />
-                Existing Tenants Directory ({tenants.length})
+                Existing Tenants Directory ({totalTenants || tenants.length})
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
                 All registered organizations currently present in system
@@ -448,7 +473,7 @@ function CreateTenant() {
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => dispatch(fetchTenants())}
+                onClick={() => dispatch(fetchTenants({ page: currentPage, search: searchQuery, force: true }))}
                 className="p-2 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 border border-gray-200 rounded-xl transition"
                 title="Refresh Tenants"
               >
@@ -577,6 +602,31 @@ function CreateTenant() {
               })}
             </div>
           )}
+
+          {/* Pagination UI Controls */}
+          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+            <button
+              onClick={handlePrevPage}
+              disabled={currentPage <= 1 || tenantsLoading}
+              className="px-3.5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-700 transition-all flex items-center gap-1.5 shadow-xs"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Previous</span>
+            </button>
+
+            <span className="text-xs font-bold text-gray-700 bg-emerald-50/60 px-3.5 py-1.5 rounded-xl border border-emerald-100/80">
+              Page {currentPage} of {totalPages}
+            </span>
+
+            <button
+              onClick={handleNextPage}
+              disabled={currentPage >= totalPages || tenantsLoading}
+              className="px-3.5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-700 transition-all flex items-center gap-1.5 shadow-xs"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -170,6 +170,7 @@ api.interceptors.request.use(
       // Only skip tenant context for these specific routes
       const skipTenantContext = url.includes('/superadmin/tenants') || 
                                 url.includes('/tenant/getAllTenants') ||
+                                url.includes('/tenant/list') ||
                                 url.includes('/tenant/my-features');
       
       if (!skipTenantContext && selectedTenantId && selectedTenantId.trim().length > 0) {

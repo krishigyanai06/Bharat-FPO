@@ -42,7 +42,7 @@ import {
   Plus,
   Sliders,
 } from "lucide-react";
-import { fetchMe, fetchTenants } from "../store/thunks/layoutThunk";
+import { fetchMe, fetchTenants, fetchAllTenants } from "../store/thunks/layoutThunk";
 import { setSelectedTenant } from "../store/slices/layoutSlice";
 import { fetchBroadcastHistory } from "../store/thunks/broadcastThunk";
 import { fetchMembers } from "../store/thunks/membersThunk";
@@ -222,7 +222,8 @@ export default function Layout() {
   const searchFetchedRef = useRef(false);
 
 
-  const { me, tenants, selectedTenantId } = useSelector((s) => s.layout);
+  const { me, tenants = [], allTenants = [], selectedTenantId } = useSelector((s) => s.layout);
+  const displayTenants = allTenants.length > 0 ? allTenants : tenants;
   const { user, token: authToken } = useSelector((s) => s.auth);
   const normalizeRole = (role) =>
     String(role || "")
@@ -235,7 +236,7 @@ export default function Layout() {
   // Debug logging
   console.log(
     "[Layout] Render - tenants:",
-    tenants.length,
+    displayTenants.length,
     "selectedTenantId:",
     selectedTenantId,
     "isSuperAdmin:",
@@ -258,15 +259,8 @@ export default function Layout() {
 
   // Fetch user details and broadcast history on mount (only if we have auth token)
   useEffect(() => {
-    if (!authToken) {
-      console.warn("[Layout] Skipping fetchMe - no auth token available yet");
-      return;
-    }
-
-    dispatch(fetchMe());
-
-    // For non-SuperAdmins, fetch broadcast history immediately
-    if (!isSuperAdmin) {
+    if (authToken) {
+      dispatch(fetchMe());
       dispatch(fetchBroadcastHistory());
     }
 
@@ -274,11 +268,10 @@ export default function Layout() {
   }, [authToken, dispatch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch tenants only when we confirm user is SuperAdmin and have a valid token
-  // Only fetch if we haven't tried before (tenants is empty array, not null/undefined from error)
   useEffect(() => {
-    if (isSuperAdmin && Array.isArray(tenants) && tenants.length === 0) {
-      console.log("[Layout] Fetching tenants (from user role superadmin)");
-      dispatch(fetchTenants());
+    if (isSuperAdmin) {
+      console.log("[Layout] Fetching all tenants for selector dropdown");
+      dispatch(fetchAllTenants());
 
       // Set a timeout to prevent infinite loading
       const timeoutId = setTimeout(() => {
@@ -305,31 +298,23 @@ export default function Layout() {
 
       return () => clearTimeout(timeoutId);
     }
-  }, [isSuperAdmin, tenants, dispatch, me, user]);
-
-  // Also fetch tenants when me loads and reveals a superadmin role
-  useEffect(() => {
-    if (isSuperAdmin && Array.isArray(tenants) && tenants.length === 0) {
-      console.log("[Layout] Fetching tenants (from me role superadmin)");
-      dispatch(fetchTenants());
-    }
-  }, [isSuperAdmin, tenants, dispatch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isSuperAdmin, dispatch, me, user]);
 
   // Auto-select the default tenant when tenants load (NO reload — just update state)
   useEffect(() => {
     console.log("[Layout] Auto-select effect:", {
       isSuperAdmin,
-      tenantsLength: tenants.length,
+      tenantsLength: displayTenants.length,
       selectedTenantId,
       storedTenantId: localStorage.getItem("selectedTenantId"),
     });
 
-    if (isSuperAdmin && tenants.length > 0) {
+    if (isSuperAdmin && displayTenants.length > 0) {
       const storedTenantId = localStorage.getItem("selectedTenantId");
 
       // First, try to use stored tenantId if it's valid
       if (storedTenantId && !selectedTenantId) {
-        const storedTenant = tenants.find((t) => t._id === storedTenantId);
+        const storedTenant = displayTenants.find((t) => t._id === storedTenantId);
         if (storedTenant) {
           console.log(
             "[Layout] ✅ Using stored tenant:",
@@ -352,11 +337,11 @@ export default function Layout() {
       if (!selectedTenantId) {
         console.log(
           "[Layout] Auto-selecting default tenant from",
-          tenants.length,
+          displayTenants.length,
           "tenants",
         );
         const defaultTenant =
-          tenants.find((t) => t.tenantCode === "MAR4UP") || tenants[0];
+          displayTenants.find((t) => t.tenantCode === "MAR4UP") || displayTenants[0];
         console.log(
           "[Layout] Selected tenant:",
           defaultTenant?._id,
@@ -366,7 +351,7 @@ export default function Layout() {
         setTenantLoadTimeout(false); // Clear timeout flag
       }
     }
-  }, [isSuperAdmin, tenants, selectedTenantId, dispatch]);
+  }, [isSuperAdmin, displayTenants, selectedTenantId, dispatch]);
 
   // Fetch broadcasts for SuperAdmin AFTER tenant is selected
   useEffect(() => {
@@ -809,9 +794,13 @@ export default function Layout() {
                 <button
                   type="button"
                   onClick={() => {
-                    setShowTenantMenu((v) => !v);
+                    const nextState = !showTenantMenu;
+                    setShowTenantMenu(nextState);
                     setShowNotifications(false);
                     setShowUserMenu(false);
+                    if (nextState) {
+                      dispatch(fetchAllTenants({ force: true }));
+                    }
                   }}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${
                     showTenantMenu
@@ -827,7 +816,7 @@ export default function Layout() {
                   </span>
                   <span className="text-xs font-extrabold text-emerald-950 max-w-[150px] sm:max-w-[210px] truncate">
                     {(() => {
-                      const cur = tenants.find((t) => t._id === selectedTenantId);
+                      const cur = displayTenants.find((t) => t._id === selectedTenantId);
                       if (!cur) return selectedTenantId ? "Active Tenant" : "Select Tenant...";
                       return `${cur.name || cur.businessName || "Unnamed"} (${cur.tenantCode || "N/A"})`;
                     })()}
@@ -849,7 +838,7 @@ export default function Layout() {
                           Select Active Tenant
                         </span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {tenants.length} Tenants
+                          {displayTenants.length} Tenants
                         </span>
                       </div>
 
@@ -876,7 +865,7 @@ export default function Layout() {
                     {/* Tenant List */}
                     <div className="max-h-64 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
                       {(() => {
-                        const filtered = tenants.filter((t) => {
+                        const filtered = displayTenants.filter((t) => {
                           if (!tenantSearchQuery.trim()) return true;
                           const q = tenantSearchQuery.toLowerCase();
                           const bName = (t.name || t.businessName || "").toLowerCase();
