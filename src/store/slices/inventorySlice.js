@@ -6,6 +6,7 @@ import {
   addProduct,
   updateProduct,
   deleteProduct,
+  toggleProductStatus,
 } from '../thunks/inventoryThunk';
 
 const initialState = {
@@ -61,6 +62,17 @@ const inventorySlice = createSlice({
         state.products = state.products.filter((i) => i._id !== action.payload);
         state.lastFetchedProducts = null;
         state.lastFetchedStocks = null;
+      })
+      .addCase(toggleProductStatus.fulfilled, (state, action) => {
+        const payload = action.payload;
+        if (!payload) return;
+        const targetId = payload.id || payload.response?._id || payload.response?.product?._id;
+        const newStatus = payload.response?.isActive !== undefined ? payload.response?.isActive : payload.isActive;
+        const product = state.products.find((p) => p._id === targetId);
+        if (product && newStatus !== undefined) {
+          product.isActive = newStatus;
+        }
+        state.lastFetchedProducts = null;
       });
   },
 });

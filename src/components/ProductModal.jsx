@@ -16,7 +16,8 @@ import {
   Sprout,
   Save,
   Download,
-  Package
+  Package,
+  ChevronLeft
 } from "lucide-react";
 import api from "../lib/api";
 
@@ -40,10 +41,9 @@ const FIELD = ({ label, required, helperText, error, children }) => (
 );
 
 const getInputCls = (hasError) =>
-  `w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none transition ${
-    hasError
-      ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
-      : "border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white"
+  `w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none transition ${hasError
+    ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+    : "border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white"
   }`;
 
 const inputCls = getInputCls(false);
@@ -124,7 +124,7 @@ function VariantFormItem({ variant, index, isEdit, onUpdate, onRemove, showRemov
                 placeholder="Enter quantity"
               />
             </FIELD>
-            <FIELD label="Item Code / SKU" required error={errors.itemCode} helperText="Unique barcode identifier">
+            <FIELD label="Item Code / SKU" error={errors.itemCode} helperText="Unique barcode identifier">
               <input
                 value={variant.itemCode}
                 onChange={(e) => onUpdate("itemCode", e.target.value)}
@@ -559,7 +559,7 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
               "animal_feed": ["feed", "fodder", "bran", "cake", "straw"],
               "fungicides": ["fungicide", "disinfectant"],
               "herbicides": ["herbicide", "weedicide"],
-              "tools": ["tool", "implement", "machinery", "tractor", "plow"]
+
             };
             const keywords = categoryKeywords[String(productCategory).toLowerCase()] || [String(productCategory).toLowerCase().substring(0, 5)];
             const hasKeyword = keywords.some(k => desc.includes(k));
@@ -846,7 +846,6 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
       if (!variant.unit?.trim()) errs.unit = "Unit is required.";
       if (variant.mrp === "" || variant.mrp === null || isNaN(variant.mrp)) errs.mrp = "Valid MRP is required.";
       if (variant.quantity === "" || variant.quantity === null || isNaN(variant.quantity)) errs.quantity = "Stock quantity is required.";
-      if (!variant.itemCode?.trim()) errs.itemCode = "Item Code / SKU is required.";
       if (variant.purchasePrice === "" || variant.purchasePrice === null || isNaN(variant.purchasePrice)) errs.purchasePrice = "Purchase price is required.";
       if (!variant.purchaseDate) errs.purchaseDate = "Purchase date is required.";
       if (variant.salePrice === "" || variant.salePrice === null || isNaN(variant.salePrice)) errs.salePrice = "Sale price is required.";
@@ -878,26 +877,48 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
     onSave(form, variants, images, videos, selectedCrops);
   };
 
-  const isEdit = !!initial; return (
-    <div className="w-full bg-[#F8FAFC] h-[calc(100vh-140px)] lg:h-[calc(100vh-112px)] flex flex-col border border-slate-200 rounded-3xl overflow-hidden shadow-sm animate-in fade-in duration-200">
+  const isEdit = !!initial; 
+  return (
+    <div className="fixed inset-0 z-50 w-screen h-screen bg-[#F8FAFC] flex flex-col overflow-hidden animate-in fade-in duration-200">
       <div className="bg-white w-full flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-8 py-4 border-b border-slate-100 bg-white">
-          <div>
-            <h2 className="text-xl font-extrabold text-gray-900 leading-tight">
-              {isEdit ? "Edit Product" : "Add New Product"}
-            </h2>
-            <p className="text-xs text-gray-500 mt-0.5 font-medium">
-              Add product details, variants, images and other information.
-            </p>
+        <div className="flex items-center justify-between px-8 py-4 border-b border-slate-200 bg-white shadow-xs z-10 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition"
+              title="Close Form"
+            >
+              <ChevronLeft size={22} />
+            </button>
+            <div>
+              <h2 className="text-xl font-extrabold text-gray-900 leading-tight">
+                {isEdit ? "Edit Product" : "Add New Product"}
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                {isEdit ? "Update product details, variants, images and pricing" : "Add product details, variants, images and other information"}
+              </p>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-sm transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-sm shadow-md transition disabled:opacity-50"
+            >
+              <Save size={16} />
+              {saving ? "Saving..." : isEdit ? "Update Product" : "Save Product"}
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
@@ -961,7 +982,7 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
                         <option value="animal_feed">Animal Feed</option>
                         <option value="fungicides">Fungicides</option>
                         <option value="herbicides">Herbicides</option>
-                        <option value="tools">Tools</option>
+
                         <option value="other">Other</option>
                       </select>
                     </FIELD>
@@ -1260,8 +1281,8 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
                             type="button"
                             onClick={() => setF("taxRate", String(rate))}
                             className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition ${String(form.taxRate) === String(rate)
-                                ? "bg-emerald-600 text-white border-emerald-650"
-                                : "bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-600"
+                              ? "bg-emerald-600 text-white border-emerald-650"
+                              : "bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-600"
                               }`}
                           >
                             {rate}%
@@ -1288,13 +1309,12 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
                   <div className="space-y-3">
                     <p className="text-xs font-semibold text-gray-500">Product Images (Max 5) {!isEdit && <span className="text-red-500">*</span>}</p>
                     <div
-                      className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${
-                        formErrors.images
+                      className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${formErrors.images
                           ? "border-red-500 bg-red-50/20"
                           : dragOver
-                          ? "border-brand-500 bg-brand-50/20"
-                          : "border-gray-200 hover:border-brand-400 hover:bg-gray-50/50"
-                      }`}
+                            ? "border-brand-500 bg-brand-50/20"
+                            : "border-gray-200 hover:border-brand-400 hover:bg-gray-50/50"
+                        }`}
                       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                       onDragLeave={() => setDragOver(false)}
                       onDrop={(e) => {
@@ -1442,8 +1462,8 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
                             type="button"
                             onClick={() => toggleCrop(crop)}
                             className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border cursor-pointer ${isSelected
-                                ? "bg-brand-600 text-white border-brand-600 shadow-xs"
-                                : "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200"
+                              ? "bg-brand-600 text-white border-brand-600 shadow-xs"
+                              : "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200"
                               }`}
                           >
                             <span className={`w-3.5 h-3.5 rounded-md flex items-center justify-center border text-[9px] ${isSelected ? "bg-white text-brand-600 border-white font-black" : "border-gray-300 bg-white"
@@ -1590,8 +1610,8 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
                             }
                           }}
                           className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition ${isSelected
-                              ? "bg-brand-600 text-white border-brand-700 shadow-sm"
-                              : "bg-white hover:bg-gray-50 border-gray-200 text-gray-600"
+                            ? "bg-brand-600 text-white border-brand-700 shadow-sm"
+                            : "bg-white hover:bg-gray-50 border-gray-200 text-gray-600"
                             }`}
                         >
                           {chip.label}

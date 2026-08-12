@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, Fragment, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import toast from "react-hot-toast";
+import Swal from "sweetalert2";
 import {
   AlertTriangle,
   Package,
@@ -10,7 +11,6 @@ import {
   Pencil,
   CheckCircle,
   ImageOff,
-  Trash2,
   Search,
   SlidersHorizontal,
   ChevronDown,
@@ -112,10 +112,10 @@ function ExpiryCell({ date }) {
   const diff = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
   const label = d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
   if (diff < 0)
-    return <span className="text-red-600 font-medium">{label}<br/><span className="text-red-400">(Expired)</span></span>;
+    return <span className="text-red-600 font-medium">{label}<br /><span className="text-red-400">(Expired)</span></span>;
   if (diff <= 30)
     return (
-      <span className="text-gray-700">{label}<br/>
+      <span className="text-gray-700">{label}<br />
         <span className="text-orange-500 font-medium">({diff}d left)</span>
       </span>
     );
@@ -151,15 +151,15 @@ const getMockRating = (name) => {
   return { rating, reviews };
 };
 
-function ProductGridCard({ p, isReadOnly, expandedRowId, setExpandedRowId, setEditRow, setShowModal, setConfirmId, setConfirmType, setSelectedProductDetailId }) {
+function ProductGridCard({ p, isReadOnly, expandedRowId, setExpandedRowId, setEditRow, setShowModal, setConfirmId, setConfirmType, setSelectedProductDetailId, onToggleStatus }) {
   const dispatch = useDispatch();
   const { stockSummary } = useSelector((s) => s.inventory);
-  
+
   const [activeVariantIdx, setActiveVariantIdx] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
 
   const activeVariant = p.products?.[activeVariantIdx] || p.products?.[0];
-  
+
   const mrp = Number(activeVariant?.mrp ?? 0);
   const salePrice = Number(activeVariant?.salePrice ?? 0);
   const saveAmount = mrp > salePrice ? mrp - salePrice : 0;
@@ -167,9 +167,9 @@ function ProductGridCard({ p, isReadOnly, expandedRowId, setExpandedRowId, setEd
 
   const variantStock = (stockSummary || []).find(
     (s) => s.item?.variantId === activeVariant?._id || s.item?._id === activeVariant?._id || (
-           s.item?.sourceRef === p._id &&
-           String(s.item?.parameter).trim().toLowerCase() === String(activeVariant?.parameter).trim().toLowerCase() &&
-           String(s.item?.unit).trim().toLowerCase() === String(activeVariant?.unit).trim().toLowerCase()
+      s.item?.sourceRef === p._id &&
+      String(s.item?.parameter).trim().toLowerCase() === String(activeVariant?.parameter).trim().toLowerCase() &&
+      String(s.item?.unit).trim().toLowerCase() === String(activeVariant?.unit).trim().toLowerCase()
     )
   );
   const qty = variantStock ? (variantStock.availableQuantity ?? 0) : (activeVariant?.quantity ?? 0);
@@ -180,9 +180,17 @@ function ProductGridCard({ p, isReadOnly, expandedRowId, setExpandedRowId, setEd
     <div className="bg-white border border-gray-150 rounded-2xl p-4 shadow-sm flex flex-col justify-between relative hover:shadow-md hover:-translate-y-1 transition-all duration-300 ease-in-out w-full group/card min-h-[360px]">
       {/* Top Left Badge: Inactive or Discount */}
       {!p.isActive ? (
-        <div className="absolute top-3 left-0 bg-gray-500 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-r-lg shadow-sm z-10">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleStatus && onToggleStatus(p);
+          }}
+          className="absolute top-3 left-0 bg-gray-500 hover:bg-gray-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-r-lg shadow-sm z-10 cursor-pointer transition"
+          title="Click to Activate Product"
+        >
           INACTIVE
-        </div>
+        </button>
       ) : discountPercentage > 0 ? (
         <div className="absolute top-3 left-0 bg-[#ff8f17] text-white text-[10px] font-extrabold px-2.5 py-1 rounded-r-lg shadow-sm z-10">
           {discountPercentage}% OFF
@@ -192,32 +200,18 @@ function ProductGridCard({ p, isReadOnly, expandedRowId, setExpandedRowId, setEd
       {/* Floating Action Buttons */}
       <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
         {!isReadOnly && (
-          <>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditRow(p);
-                setShowModal(true);
-              }}
-              className="w-7 h-7 rounded-full bg-white/90 hover:bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-brand-600 shadow-xs transition"
-              title="Edit Product"
-            >
-              <Pencil size={12} />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setConfirmId(p._id);
-                setConfirmType("product");
-              }}
-              className="w-7 h-7 rounded-full bg-white/90 hover:bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-red-500 shadow-xs transition"
-              title="Delete Product"
-            >
-              <Trash2 size={12} />
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditRow(p);
+              setShowModal(true);
+            }}
+            className="w-7 h-7 rounded-full bg-white/90 hover:bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-brand-600 shadow-xs transition"
+            title="Edit Product"
+          >
+            <Pencil size={12} />
+          </button>
         )}
         <button
           type="button"
@@ -225,9 +219,8 @@ function ProductGridCard({ p, isReadOnly, expandedRowId, setExpandedRowId, setEd
             e.stopPropagation();
             setIsFavorite(!isFavorite);
           }}
-          className={`w-7 h-7 rounded-full bg-white/90 hover:bg-white border border-gray-200 flex items-center justify-center shadow-xs transition ${
-            isFavorite ? "text-red-500" : "text-gray-400 hover:text-red-500"
-          }`}
+          className={`w-7 h-7 rounded-full bg-white/90 hover:bg-white border border-gray-200 flex items-center justify-center shadow-xs transition ${isFavorite ? "text-red-500" : "text-gray-400 hover:text-red-500"
+            }`}
           title="Favorite"
         >
           <svg className={`w-3.5 h-3.5 ${isFavorite ? "fill-current" : "fill-none stroke-current"}`} viewBox="0 0 24 24">
@@ -390,6 +383,60 @@ function Inventory() {
     }
   };
 
+  const handleToggleProductStatus = (prod) => {
+    if (!prod || isReadOnly) return;
+    const nextStatus = !prod.isActive;
+    dispatch(toggleProductStatus({ id: prod._id, isActive: nextStatus }))
+      .unwrap()
+      .then((res) => {
+        const serverResponse = res?.response || res;
+        const msg =
+          res?.message ||
+          serverResponse?.message ||
+          (nextStatus ? "Product activated successfully" : "Product deactivated successfully");
+
+        const isNowActive = serverResponse?.isActive !== undefined ? serverResponse?.isActive : nextStatus;
+
+        Swal.fire({
+          icon: isNowActive ? "success" : "info",
+          title: isNowActive ? "Product Activated" : "Product Deactivated",
+          text: msg,
+          toast: true,
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 3000,
+          timerProgressBar: true,
+          background: isNowActive ? "#ECFDF5" : "#F8FAFC",
+          iconColor: isNowActive ? "#059669" : "#64748B",
+          customClass: {
+            popup: `border-l-4 ${isNowActive ? "border-emerald-500" : "border-slate-400"} shadow-lg rounded-xl`,
+            title: `${isNowActive ? "text-emerald-900" : "text-slate-800"} font-bold text-sm`,
+            htmlContainer: `${isNowActive ? "text-emerald-800" : "text-slate-600"} text-xs`,
+          },
+        });
+      })
+      .catch((err) => {
+        const errorMsg = typeof err === "string" ? err : err?.message || "Failed to update status";
+        Swal.fire({
+          icon: "error",
+          title: "Status Update Failed",
+          text: errorMsg,
+          toast: true,
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 3000,
+          timerProgressBar: true,
+          background: "#FEF2F2",
+          iconColor: "#DC2626",
+          customClass: {
+            popup: "border-l-4 border-red-500 shadow-lg rounded-xl",
+            title: "text-red-900 font-bold text-sm",
+            htmlContainer: "text-red-800 text-xs",
+          },
+        });
+      });
+  };
+
   const { user } = useSelector((s) => s.auth);
   const { selectedTenantId } = useSelector((s) => s.layout);
   const normalizeRole = (role) =>
@@ -435,7 +482,7 @@ function Inventory() {
       const productStocks = (stockSummary || []).filter(
         (s) => s.item?.sourceRef === p._id || s.productId === p._id
       );
-      
+
       // Calculate total available quantity across all variants of this product
       let stock = null;
       if (productStocks.length > 0) {
@@ -477,10 +524,10 @@ function Inventory() {
           foundStock: !!stock,
           stockData: stock
             ? {
-                availableQuantity: stock.availableQuantity,
-                purchasePrice: stock.item?.purchasePrice || stock.purchasePrice,
-                sourceRef: stock.item?.sourceRef || stock.sourceRef,
-              }
+              availableQuantity: stock.availableQuantity,
+              purchasePrice: stock.item?.purchasePrice || stock.purchasePrice,
+              sourceRef: stock.item?.sourceRef || stock.sourceRef,
+            }
             : null,
         });
       }
@@ -560,7 +607,7 @@ function Inventory() {
         (p.productName ?? "").toLowerCase().includes(search.toLowerCase()) ||
         (p.brand ?? "").toLowerCase().includes(search.toLowerCase()) ||
         (p.productCategory ?? p.category ?? "").toLowerCase().includes(search.toLowerCase());
-      
+
       const qty = p._stock?.availableQuantity ?? null;
       let matchStatus = true;
       if (statusFilter === "active") matchStatus = p.isActive === true;
@@ -855,7 +902,7 @@ function Inventory() {
 
   return (
     <div className="space-y-6">
-      <div 
+      <div
         className="relative overflow-hidden rounded-2xl border border-gray-150 shadow-sm p-6 md:p-8 flex flex-col justify-between min-h-[260px] gap-6 bg-cover bg-no-repeat bg-[position:85%_center] sm:bg-right-center"
         style={{ backgroundImage: `url('/agricultural_banner_bg.png')` }}
       >
@@ -868,7 +915,7 @@ function Inventory() {
             <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Products</h1>
             <p className="text-sm text-gray-505 mt-1">Manage all your agricultural products & inventory</p>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <button
               onClick={() => exportCSV(filteredData)}
@@ -893,11 +940,10 @@ function Inventory() {
         {/* Stats Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full max-w-5xl z-10 mt-2">
           {/* Stat Card 1: Total */}
-          <div 
+          <div
             onClick={() => { setStatusFilter("all"); setCurrentPage(1); }}
-            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer ${
-              statusFilter === "all" ? "border-green-500 ring-2 ring-green-400 bg-green-50/10 shadow-sm" : "border-gray-150 shadow-xs"
-            }`}
+            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer ${statusFilter === "all" ? "border-green-500 ring-2 ring-green-400 bg-green-50/10 shadow-sm" : "border-gray-150 shadow-xs"
+              }`}
           >
             <div className="w-12 h-12 rounded-full bg-[#f4fbf7] text-[#16a34a] border border-[#e8f5e9] flex items-center justify-center flex-shrink-0">
               <Sprout size={20} className="text-[#16a34a]" />
@@ -912,11 +958,10 @@ function Inventory() {
           </div>
 
           {/* Stat Card 2: Active */}
-          <div 
+          <div
             onClick={() => { setStatusFilter(statusFilter === "active" ? "all" : "active"); setCurrentPage(1); }}
-            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer ${
-              statusFilter === "active" ? "border-green-500 ring-2 ring-green-400 bg-green-50/20 shadow-sm" : "border-gray-150 shadow-xs"
-            }`}
+            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer ${statusFilter === "active" ? "border-green-500 ring-2 ring-green-400 bg-green-50/20 shadow-sm" : "border-gray-150 shadow-xs"
+              }`}
           >
             <div className="w-12 h-12 rounded-full bg-[#f4fbf7] text-[#16a34a] border border-[#e8f5e9] flex items-center justify-center flex-shrink-0">
               <CheckCircle size={20} className="text-[#16a34a]" />
@@ -931,10 +976,9 @@ function Inventory() {
           </div>
 
           {/* Stat Card 3: Low Stock */}
-          <div 
-            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer relative ${
-              statusFilter === "lowstock" ? "border-amber-500 ring-2 ring-amber-400 bg-amber-50/30 shadow-sm" : "border-gray-150 shadow-xs"
-            }`}
+          <div
+            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer relative ${statusFilter === "lowstock" ? "border-amber-500 ring-2 ring-amber-400 bg-amber-50/30 shadow-sm" : "border-gray-150 shadow-xs"
+              }`}
             onClick={() => { setStatusFilter(statusFilter === "lowstock" ? "all" : "lowstock"); setCurrentPage(1); }}
             title={statusFilter === "lowstock" ? "Click to view all products" : "Click to view low stock items"}
           >
@@ -954,10 +998,9 @@ function Inventory() {
           </div>
 
           {/* Stat Card 4: Expiring */}
-          <div 
-            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer ${
-              statusFilter === "expiring" ? "border-purple-500 ring-2 ring-purple-400 bg-purple-50/30 shadow-sm" : "border-gray-150 shadow-xs"
-            }`}
+          <div
+            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition duration-200 cursor-pointer ${statusFilter === "expiring" ? "border-purple-500 ring-2 ring-purple-400 bg-purple-50/30 shadow-sm" : "border-gray-150 shadow-xs"
+              }`}
             onClick={() => { setStatusFilter(statusFilter === "expiring" ? "all" : "expiring"); setCurrentPage(1); }}
             title={statusFilter === "expiring" ? "Click to view all products" : "Click to view expiring items"}
           >
@@ -1099,11 +1142,10 @@ function Inventory() {
           <button
             type="button"
             onClick={() => setViewMode("grid")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition duration-150 ${
-              viewMode === "grid"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition duration-150 ${viewMode === "grid"
                 ? "bg-[#14532d] text-white shadow-sm"
                 : "text-gray-500 hover:bg-gray-50"
-            }`}
+              }`}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -1113,11 +1155,10 @@ function Inventory() {
           <button
             type="button"
             onClick={() => setViewMode("list")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition duration-150 ${
-              viewMode === "list"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition duration-150 ${viewMode === "list"
                 ? "bg-[#14532d] text-white shadow-sm"
                 : "text-gray-500 hover:bg-gray-50"
-            }`}
+              }`}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -1234,437 +1275,432 @@ function Inventory() {
       */}
 
       {/* MAIN PRODUCTS CONTENT */}
-      <div 
+      <div
         ref={productsContainerRef}
-        className={`transition-all duration-500 rounded-2xl ${
-          highlightPage ? "ring-4 ring-emerald-500/50 bg-emerald-50/20 p-2 shadow-lg" : ""
-        }`}
+        className={`transition-all duration-500 rounded-2xl ${highlightPage ? "ring-4 ring-emerald-500/50 bg-emerald-50/20 p-2 shadow-lg" : ""
+          }`}
       >
-      {viewMode === "grid" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {paginatedData.map((row, i) => (
-            <ProductGridCard
-              key={row._id || i}
-              p={row}
-              isReadOnly={isReadOnly}
-              expandedRowId={expandedRowId}
-              setExpandedRowId={setExpandedRowId}
-              setEditRow={setEditRow}
-              setShowModal={setShowModal}
-              setConfirmId={setConfirmId}
-              setConfirmType={setConfirmType}
-              setSelectedProductDetailId={setSelectedProductDetailId}
-            />
-          ))}
+        {viewMode === "grid" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {paginatedData.map((row, i) => (
+              <ProductGridCard
+                key={row._id || i}
+                p={row}
+                isReadOnly={isReadOnly}
+                expandedRowId={expandedRowId}
+                setExpandedRowId={setExpandedRowId}
+                setEditRow={setEditRow}
+                setShowModal={setShowModal}
+                setConfirmId={setConfirmId}
+                setConfirmType={setConfirmType}
+                setSelectedProductDetailId={setSelectedProductDetailId}
+                onToggleStatus={handleToggleProductStatus}
+              />
+            ))}
 
-          {/* Dotted "+" Card at the end of grid view */}
-          {!isReadOnly && !search && statusFilter === "all" && selectedCategoryFilter === "all" && brandFilter === "all" && (
-            <div 
-              onClick={() => { setEditRow(null); setShowModal(true); }}
-              className="bg-white border-2 border-dashed border-[#16a34a]/30 hover:border-[#16a34a] rounded-2xl p-6 flex flex-col items-center justify-between text-center cursor-pointer transition group min-h-[280px] relative overflow-hidden"
-            >
-              <div className="h-4" />
-              
-              <div className="flex flex-col items-center z-10">
-                <div className="w-14 h-14 rounded-full bg-[#16a34a] text-white flex items-center justify-center mb-3 shadow-md group-hover:scale-105 transition">
-                  <Plus size={24} strokeWidth={3} />
+            {/* Dotted "+" Card at the end of grid  */}
+            {!isReadOnly && !search && statusFilter === "all" && selectedCategoryFilter === "all" && brandFilter === "all" && (
+              <div
+                onClick={() => { setEditRow(null); setShowModal(true); }}
+                className="bg-white border-2 border-dashed border-[#16a34a]/30 hover:border-[#16a34a] rounded-2xl p-6 flex flex-col items-center justify-between text-center cursor-pointer transition group min-h-[280px] relative overflow-hidden"
+              >
+                <div className="h-4" />
+
+                <div className="flex flex-col items-center z-10">
+                  <div className="w-14 h-14 rounded-full bg-[#16a34a] text-white flex items-center justify-center mb-3 shadow-md group-hover:scale-105 transition">
+                    <Plus size={24} strokeWidth={3} />
+                  </div>
+                  <h3 className="font-extrabold text-[#14532d] text-sm mt-2">Add New Product</h3>
+                  <p className="text-xs text-gray-400 font-medium mt-1">Click here to add product</p>
                 </div>
-                <h3 className="font-extrabold text-[#14532d] text-sm mt-2">Add New Product</h3>
-                <p className="text-xs text-gray-400 font-medium mt-1">Click here to add product</p>
+
+                {/* Landscape agricultural pattern illustration at the bottom */}
+                <svg className="w-full h-16 pointer-events-none mt-auto select-none" viewBox="0 0 400 100" preserveAspectRatio="none">
+                  <path d="M 0,65 Q 100,35 200,65 T 400,65 L 400,100 L 0,100 Z" fill="#f4fbf7" />
+                  <path d="M 0,75 Q 120,50 240,80 T 400,75 L 400,100 L 0,100 Z" fill="#e8f5e9" />
+                  <path d="M 0,85 Q 80,65 180,90 T 400,85 L 400,100 L 0,100 Z" fill="#c8e6c9" />
+                  <rect x="290" y="72" width="10" height="8" fill="#a1887f" />
+                  <polygon points="288,72 295,65 302,72" fill="#d84315" />
+                  <circle cx="80" cy="72" r="6" fill="#2e7d32" />
+                  <rect x="79" y="78" width="1.5" height="6" fill="#5d4037" />
+                  <circle cx="90" cy="76" r="4" fill="#1b5e20" />
+                  <rect x="89" y="80" width="1.5" height="4" fill="#5d4037" />
+                </svg>
               </div>
+            )}
 
-              {/* Landscape agricultural pattern illustration at the bottom */}
-              <svg className="w-full h-16 pointer-events-none mt-auto select-none" viewBox="0 0 400 100" preserveAspectRatio="none">
-                <path d="M 0,65 Q 100,35 200,65 T 400,65 L 400,100 L 0,100 Z" fill="#f4fbf7" />
-                <path d="M 0,75 Q 120,50 240,80 T 400,75 L 400,100 L 0,100 Z" fill="#e8f5e9" />
-                <path d="M 0,85 Q 80,65 180,90 T 400,85 L 400,100 L 0,100 Z" fill="#c8e6c9" />
-                <rect x="290" y="72" width="10" height="8" fill="#a1887f" />
-                <polygon points="288,72 295,65 302,72" fill="#d84315" />
-                <circle cx="80" cy="72" r="6" fill="#2e7d32" />
-                <rect x="79" y="78" width="1.5" height="6" fill="#5d4037" />
-                <circle cx="90" cy="76" r="4" fill="#1b5e20" />
-                <rect x="89" y="80" width="1.5" height="4" fill="#5d4037" />
-              </svg>
-            </div>
-          )}
-
-          {!paginatedData.length && (
-            <div className="col-span-full bg-white rounded-2xl p-20 text-center border border-gray-100 shadow-xs">
-              <div className="flex flex-col items-center gap-3 text-gray-400">
-                <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
-                  <Package size={24} className="text-gray-300" />
+            {!paginatedData.length && (
+              <div className="col-span-full bg-white rounded-2xl p-20 text-center border border-gray-100 shadow-xs">
+                <div className="flex flex-col items-center gap-3 text-gray-400">
+                  <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+                    <Package size={24} className="text-gray-300" />
+                  </div>
+                  <p className="text-sm font-medium">No products found</p>
+                  <p className="text-xs text-gray-305">Try adjusting your search or filter options</p>
+                  <button
+                    onClick={() => {
+                      setStatusFilter("all");
+                      setSelectedCategoryFilter("all");
+                      setBrandFilter("all");
+                      setSearch("");
+                      setCurrentPage(1);
+                    }}
+                    className="mt-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 transition shadow-sm"
+                  >
+                    Show All Products
+                  </button>
                 </div>
-                <p className="text-sm font-medium">No products found</p>
-                <p className="text-xs text-gray-305">Try adjusting your search or filter options</p>
-                <button
-                  onClick={() => {
-                    setStatusFilter("all");
-                    setSelectedCategoryFilter("all");
-                    setBrandFilter("all");
-                    setSearch("");
-                    setCurrentPage(1);
-                  }}
-                  className="mt-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 transition shadow-sm"
-                >
-                  Show All Products
-                </button>
               </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <Fragment>
-          {/* TABLE LIST VIEW */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/30">
-            <h2 className="font-bold text-gray-800 text-sm">Products & Live Stock</h2>
+            )}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50/80 border-b border-gray-100">
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider w-8">
-                    #
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                    Product
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                    Category
-                  </th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                    MRP
-                  </th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                    Live Qty
-                  </th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                    Stock Value
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                    Expiry
-                  </th>
-                  <th className="px-5 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                    Stock
-                  </th>
-                  <th className="px-5 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-5 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedData.map((row, i) => {
-                  const stock = row._stock;
-                  const inStockSystem = !!stock;
-                  const qty = stock ? (stock.availableQuantity ?? 0) : null;
+        ) : (
+          <Fragment>
+            {/* TABLE LIST VIEW */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/30">
+                <h2 className="font-bold text-gray-800 text-sm">Products & Live Stock</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50/80 border-b border-gray-100">
+                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider w-8">
+                        #
+                      </th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                        Product
+                      </th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                        Category
+                      </th>
+                      <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                        MRP
+                      </th>
+                      <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                        Live Qty
+                      </th>
+                      <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                        Stock Value
+                      </th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                        Expiry
+                      </th>
+                      <th className="px-5 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                        Stock
+                      </th>
+                      <th className="px-5 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-5 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedData.map((row, i) => {
+                      const stock = row._stock;
+                      const inStockSystem = !!stock;
+                      const qty = stock ? (stock.availableQuantity ?? 0) : null;
 
-                  // Try multiple ways to get purchase price
-                  const purchasePrice =
-                    stock?.item?.purchasePrice ??
-                    stock?.purchasePrice ??
-                    stock?.item?.price ??
-                    stock?.price ??
-                    0;
+                      // Try multiple ways to get purchase price
+                      const purchasePrice =
+                        stock?.item?.purchasePrice ??
+                        stock?.purchasePrice ??
+                        stock?.item?.price ??
+                        stock?.price ??
+                        0;
 
-                  const stockValue =
-                    qty != null && purchasePrice ? qty * purchasePrice : 0;
-                  const rawCat = row.productCategory || row.category || "";
-                  const catLabel = rawCat ? rawCat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : null;
-                  const catColors = {
-                    insecticides: "bg-purple-50 text-purple-600 border-purple-100",
-                    fungicides: "bg-blue-50 text-blue-600 border-blue-100",
-                    fertilizers: "bg-green-50 text-green-700 border-green-100",
-                    seeds: "bg-yellow-50 text-yellow-700 border-yellow-100",
-                    herbicides: "bg-orange-50 text-orange-655 border-orange-105",
-                    organic: "bg-teal-50 text-teal-650 border-teal-100",
-                    animal_feed: "bg-amber-50 text-amber-700 border-amber-100",
-                    tools: "bg-gray-100 text-gray-600 border-gray-200",
-                    pgr: "bg-pink-50 text-pink-650 border-pink-100",
-                    other: "bg-gray-50 text-gray-500 border-gray-200",
-                  };
-                  const catColorCls = catColors[rawCat.toLowerCase()] ?? "bg-indigo-50 text-indigo-650 border-indigo-100";
-                  const isOOS = qty === 0;
-                  const isLow = qty != null && qty > 0 && qty <= 5;
-                  const rowBg = isOOS
-                    ? "bg-red-50/30"
-                    : isLow
-                      ? "bg-orange-50/30"
-                      : "";
+                      const stockValue =
+                        qty != null && purchasePrice ? qty * purchasePrice : 0;
+                      const rawCat = row.productCategory || row.category || "";
+                      const catLabel = rawCat ? rawCat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : null;
+                      const catColors = {
+                        insecticides: "bg-purple-50 text-purple-600 border-purple-100",
+                        fungicides: "bg-blue-50 text-blue-600 border-blue-100",
+                        fertilizers: "bg-green-50 text-green-700 border-green-100",
+                        seeds: "bg-yellow-50 text-yellow-700 border-yellow-100",
+                        herbicides: "bg-orange-50 text-orange-655 border-orange-105",
+                        organic: "bg-teal-50 text-teal-650 border-teal-100",
+                        animal_feed: "bg-amber-50 text-amber-700 border-amber-100",
+                        tools: "bg-gray-100 text-gray-600 border-gray-200",
+                        pgr: "bg-pink-50 text-pink-650 border-pink-100",
+                        other: "bg-gray-50 text-gray-500 border-gray-200",
+                      };
+                      const catColorCls = catColors[rawCat.toLowerCase()] ?? "bg-indigo-50 text-indigo-650 border-indigo-100";
+                      const isOOS = qty === 0;
+                      const isLow = qty != null && qty > 0 && qty <= 5;
+                      const rowBg = isOOS
+                        ? "bg-red-50/30"
+                        : isLow
+                          ? "bg-orange-50/30"
+                          : "";
 
-                  // Debug log for first few rows if SuperAdmin
-                  if (isSuperAdmin && i < 3) {
-                    console.log(`[Inventory] Row ${i + 1} data:`, {
-                      productName: row.productName,
-                      hasStock: !!stock,
-                      qty,
-                      purchasePrice,
-                      stockValue,
-                      stockStructure: stock ? Object.keys(stock) : null,
-                      itemStructure: stock?.item ? Object.keys(stock.item) : null,
-                    });
-                  }
-                  return (
-                    <Fragment key={row._id || i}>
-                      <tr
-                        className={`border-b border-gray-50 hover:bg-gray-50/60 transition-colors ${rowBg}`}
-                      >
-                        <td className="px-5 py-4 text-gray-400 text-xs font-medium cursor-pointer select-none" onClick={() => setExpandedRowId(expandedRowId === row._id ? null : row._id)}>
-                          <div className="flex items-center gap-1.5 hover:text-brand-600 transition">
-                            <span className={`text-[9px] transition-transform duration-200 ${expandedRowId === row._id ? "rotate-90 text-brand-500" : ""}`}>
-                              ▶
-                            </span>
-                            {(currentPage - 1) * ITEMS_PER_PAGE + i + 1}
-                          </div>
-                        </td>
-    
-                        {/* Product */}
-                        <td className="px-5 py-4 cursor-pointer" onClick={() => setSelectedProductDetailId(row._id)}>
-                          <div className="flex items-center gap-3">
-                            <ProductImage
-                              url={row.productImages?.[0]?.url}
-                              name={row.productName}
-                            />
-                            <div className="min-w-0">
-                              <p className="font-semibold text-gray-800 max-w-[200px] leading-snug">
-                                {row.productName ?? "—"}
-                              </p>
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                {row.brand ?? "No brand"}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-    
-                        {/* Category */}
-                        <td className="px-5 py-4">
-                          {catLabel ? (
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${catColorCls}`}>
-                              {catLabel}
-                            </span>
-                          ) : (
-                            <span className="text-gray-300 text-xs">—</span>
-                          )}
-                        </td>
-    
-                        {/* MRP */}
-                        <td className="px-5 py-4 text-right">
-                          <span className="font-semibold text-gray-800">
-                            ₹{row.products?.[0]?.mrp ?? "—"}
-                          </span>
-                        </td>
-    
-                        {/* Live Qty */}
-                        <td className="px-5 py-4 text-right">
-                          {qty != null ? (
-                            <div className="flex items-center justify-end gap-1">
-                              <span
-                                className={`text-base font-bold ${
-                                  isOOS
-                                    ? "text-red-500"
-                                    : isLow
-                                      ? "text-orange-500"
-                                      : "text-brand-600"
-                                }`}
-                              >
-                                {qty}
+                      // Debug log for first few rows if SuperAdmin
+                      if (isSuperAdmin && i < 3) {
+                        console.log(`[Inventory] Row ${i + 1} data:`, {
+                          productName: row.productName,
+                          hasStock: !!stock,
+                          qty,
+                          purchasePrice,
+                          stockValue,
+                          stockStructure: stock ? Object.keys(stock) : null,
+                          itemStructure: stock?.item ? Object.keys(stock.item) : null,
+                        });
+                      }
+                      return (
+                        <Fragment key={row._id || i}>
+                          <tr
+                            className={`border-b border-gray-50 hover:bg-gray-50/60 transition-colors ${rowBg}`}
+                          >
+                            <td className="px-5 py-4 text-gray-400 text-xs font-medium cursor-pointer select-none" onClick={() => setExpandedRowId(expandedRowId === row._id ? null : row._id)}>
+                              <div className="flex items-center gap-1.5 hover:text-brand-600 transition">
+                                <span className={`text-[9px] transition-transform duration-200 ${expandedRowId === row._id ? "rotate-90 text-brand-500" : ""}`}>
+                                  ▶
+                                </span>
+                                {(currentPage - 1) * ITEMS_PER_PAGE + i + 1}
+                              </div>
+                            </td>
+
+                            {/* Product */}
+                            <td className="px-5 py-4 cursor-pointer" onClick={() => setSelectedProductDetailId(row._id)}>
+                              <div className="flex items-center gap-3">
+                                <ProductImage
+                                  url={row.productImages?.[0]?.url}
+                                  name={row.productName}
+                                />
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-gray-800 max-w-[200px] leading-snug">
+                                    {row.productName ?? "—"}
+                                  </p>
+                                  <p className="text-xs text-gray-400 mt-0.5">
+                                    {row.brand ?? "No brand"}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Category */}
+                            <td className="px-5 py-4">
+                              {catLabel ? (
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${catColorCls}`}>
+                                  {catLabel}
+                                </span>
+                              ) : (
+                                <span className="text-gray-300 text-xs">—</span>
+                              )}
+                            </td>
+
+                            {/* MRP */}
+                            <td className="px-5 py-4 text-right">
+                              <span className="font-semibold text-gray-800">
+                                ₹{row.products?.[0]?.mrp ?? "—"}
                               </span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-300">—</span>
-                          )}
-                        </td>
-    
-                        {/* Stock Value */}
-                        <td className="px-5 py-4 text-right">
-                          {stockValue ? (
-                            <span className="font-semibold text-gray-705">
-                              ₹{stockValue.toLocaleString("en-IN")}
-                            </span>
-                          ) : (
-                            <span className="text-gray-300 text-xs">—</span>
-                          )}
-                        </td>
-    
-                        {/* Expiry */}
-                        <td className="px-5 py-4 text-xs">
-                          <ExpiryCell date={stock?.item?.expiryDate ?? row.products?.[0]?.expiryDate} />
-                        </td>
-    
-                        {/* Stock Badge */}
-                        <td className="px-5 py-4 text-center">
-                          <StockBadge
-                            qty={qty ?? 0}
-                            inStockSystem={inStockSystem}
-                          />
-                        </td>
-    
-                        {/* Status Badge */}
-                        <td className="px-5 py-4 text-center">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${
-                            row.isActive
-                              ? "bg-green-50 text-green-700 border-green-200"
-                              : "bg-gray-105 text-gray-550 border-gray-200"
-                          }`}>
-                            {row.isActive ? "Active" : "Inactive"}
-                          </span>
-                        </td>
-    
-                        {/* Actions */}
-                        <td className="px-5 py-4">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => setSelectedProductDetailId(row._id)}
-                              className="p-2 rounded-lg hover:bg-emerald-50 text-emerald-600 transition"
-                              title="View Details"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                            </button>
-                            {!isReadOnly && (
+                            </td>
+
+                            {/* Live Qty */}
+                            <td className="px-5 py-4 text-right">
+                              {qty != null ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <span
+                                    className={`text-base font-bold ${isOOS
+                                        ? "text-red-500"
+                                        : isLow
+                                          ? "text-orange-500"
+                                          : "text-brand-600"
+                                      }`}
+                                  >
+                                    {qty}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-300">—</span>
+                              )}
+                            </td>
+
+                            {/* Stock Value */}
+                            <td className="px-5 py-4 text-right">
+                              {stockValue ? (
+                                <span className="font-semibold text-gray-705">
+                                  ₹{stockValue.toLocaleString("en-IN")}
+                                </span>
+                              ) : (
+                                <span className="text-gray-300 text-xs">—</span>
+                              )}
+                            </td>
+
+                            {/* Expiry */}
+                            <td className="px-5 py-4 text-xs">
+                              <ExpiryCell date={stock?.item?.expiryDate ?? row.products?.[0]?.expiryDate} />
+                            </td>
+
+                            {/* Stock Badge */}
+                            <td className="px-5 py-4 text-center">
+                              <StockBadge
+                                qty={qty ?? 0}
+                                inStockSystem={inStockSystem}
+                              />
+                            </td>
+
+                            {/* Status Badge */}
+                            <td className="px-5 py-4 text-center">
                               <button
-                                onClick={() => {
-                                  setConfirmId(row._id);
-                                  setConfirmType("product");
+                                type="button"
+                                disabled={isReadOnly}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleProductStatus(row);
                                 }}
-                                className="p-2 rounded-lg hover:bg-red-550/10 text-red-500 transition"
-                                title="Delete"
+                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition ${isReadOnly ? "cursor-default" : "cursor-pointer hover:opacity-80"} ${row.isActive
+                                    ? "bg-green-50 text-green-700 border-green-200"
+                                    : "bg-gray-105 text-gray-550 border-gray-200"
+                                  }`}
+                                title={isReadOnly ? "" : `Click to ${row.isActive ? "Deactivate" : "Activate"}`}
                               >
-                                <Trash2 size={14} />
+                                {row.isActive ? "Active" : "Inactive"}
                               </button>
-                            )}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="px-5 py-4">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => setSelectedProductDetailId(row._id)}
+                                  className="p-2 rounded-lg hover:bg-emerald-50 text-emerald-600 transition"
+                                  title="View Details"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          {expandedRowId === row._id && (
+                            <tr className="bg-gray-50/40">
+                              <td colSpan="10" className="px-6 py-4 border-b border-gray-100">
+                                <div className="space-y-4">
+                                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                    Product Variant Details ({row.products?.length || 0})
+                                  </h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {(row.products || []).map((p, idx) => {
+                                      const variantStock = (stockSummary || []).find(
+                                        (s) => s.item?.variantId === p._id || s.item?._id === p._id || (
+                                          s.item?.sourceRef === row._id &&
+                                          String(s.item?.parameter).trim().toLowerCase() === String(p.parameter).trim().toLowerCase() &&
+                                          String(s.item?.unit).trim().toLowerCase() === String(p.unit).trim().toLowerCase()
+                                        )
+                                      );
+                                      const liveQty = variantStock ? (variantStock.availableQuantity ?? 0) : (p.quantity ?? 0);
+                                      return (
+                                        <div key={idx} className="bg-white border border-gray-150 rounded-xl p-4 shadow-sm space-y-3">
+                                          <div className="flex justify-between items-start border-b border-gray-100 pb-2">
+                                            <div>
+                                              <p className="font-bold text-gray-800 text-sm">
+                                                {p.parameter || "Base"} {p.unit}
+                                              </p>
+                                              {p.itemCode && (
+                                                <p className="text-xs text-gray-400 mt-0.5 font-mono">
+                                                  Item Code: {p.itemCode}
+                                                </p>
+                                              )}
+                                            </div>
+                                            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-50 text-brand-700">
+                                              Stock: {liveQty}
+                                            </span>
+                                          </div>
+                                          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                                            <div>
+                                              <span className="text-gray-400 font-medium">MRP:</span>{" "}
+                                              <span className="font-semibold text-gray-700">₹{p.mrp ?? "—"}</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-400 font-medium">Purchase Price:</span>{" "}
+                                              <span className="font-semibold text-gray-700">₹{p.purchasePrice ?? "—"} ({p.purchasePriceTaxType || "Without Tax"})</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-400 font-medium">Sale Price:</span>{" "}
+                                              <span className="font-semibold text-gray-700">₹{p.salePrice ?? "—"} ({p.salePriceTaxType || "Without Tax"})</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-400 font-medium">Discount:</span>{" "}
+                                              <span className="font-semibold text-gray-700">
+                                                {p.discountOnSalePrice ?? "0"}{p.discountType === "Percentage" ? "%" : " ₹"}
+                                              </span>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-400 font-medium">Wholesale Price:</span>{" "}
+                                              <span className="font-semibold text-gray-700">₹{p.wholesalePrice ?? "—"} ({p.wholesalePriceTaxType || "Without Tax"})</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-400 font-medium">Min Wholesale Qty:</span>{" "}
+                                              <span className="font-semibold text-gray-700">{p.minWholesaleQty ?? "—"}</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-400 font-medium">Min Stock level:</span>{" "}
+                                              <span className="font-semibold text-gray-700">{p.minStockToMaintain ?? "—"}</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-400 font-medium">Location:</span>{" "}
+                                              <span className="font-semibold text-gray-700">{p.location || "—"}</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-400 font-medium">Opening Cost:</span>{" "}
+                                              <span className="font-semibold text-gray-700">₹{p.openingStockPrice ?? "—"}</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-400 font-medium">Valuation Date:</span>{" "}
+                                              <span className="font-semibold text-gray-700">
+                                                {p.asOfDate ? new Date(p.asOfDate).toLocaleDateString("en-IN") : "—"}
+                                              </span>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-400 font-medium">Purchase Date:</span>{" "}
+                                              <span className="font-semibold text-gray-700">
+                                                {p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString("en-IN") : "—"}
+                                              </span>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-400 font-medium">Expiry Date:</span>{" "}
+                                              <span className="font-semibold text-gray-700">
+                                                {p.expiryDate ? new Date(p.expiryDate).toLocaleDateString("en-IN") : "—"}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                    {!filteredData.length && (
+                      <tr>
+                        <td colSpan="11" className="text-center py-20">
+                          <div className="flex flex-col items-center gap-3 text-gray-400">
+                            <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+                              <Package size={24} className="text-gray-300" />
+                            </div>
+                            <p className="text-sm font-medium">No products found</p>
+                            <p className="text-xs text-gray-300">
+                              Try adjusting your search or filter
+                            </p>
                           </div>
                         </td>
                       </tr>
-                      {expandedRowId === row._id && (
-                        <tr className="bg-gray-50/40">
-                          <td colSpan="10" className="px-6 py-4 border-b border-gray-100">
-                            <div className="space-y-4">
-                              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                                Product Variant Details ({row.products?.length || 0})
-                              </h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {(row.products || []).map((p, idx) => {
-                                  const variantStock = (stockSummary || []).find(
-                                    (s) => s.item?.variantId === p._id || s.item?._id === p._id || (
-                                           s.item?.sourceRef === row._id &&
-                                           String(s.item?.parameter).trim().toLowerCase() === String(p.parameter).trim().toLowerCase() &&
-                                           String(s.item?.unit).trim().toLowerCase() === String(p.unit).trim().toLowerCase()
-                                    )
-                                  );
-                                  const liveQty = variantStock ? (variantStock.availableQuantity ?? 0) : (p.quantity ?? 0);
-                                  return (
-                                    <div key={idx} className="bg-white border border-gray-150 rounded-xl p-4 shadow-sm space-y-3">
-                                      <div className="flex justify-between items-start border-b border-gray-100 pb-2">
-                                        <div>
-                                          <p className="font-bold text-gray-800 text-sm">
-                                            {p.parameter || "Base"} {p.unit}
-                                          </p>
-                                          {p.itemCode && (
-                                            <p className="text-xs text-gray-400 mt-0.5 font-mono">
-                                              Item Code: {p.itemCode}
-                                            </p>
-                                          )}
-                                        </div>
-                                        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-50 text-brand-700">
-                                          Stock: {liveQty}
-                                        </span>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                                        <div>
-                                          <span className="text-gray-400 font-medium">MRP:</span>{" "}
-                                          <span className="font-semibold text-gray-700">₹{p.mrp ?? "—"}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 font-medium">Purchase Price:</span>{" "}
-                                          <span className="font-semibold text-gray-700">₹{p.purchasePrice ?? "—"} ({p.purchasePriceTaxType || "Without Tax"})</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 font-medium">Sale Price:</span>{" "}
-                                          <span className="font-semibold text-gray-700">₹{p.salePrice ?? "—"} ({p.salePriceTaxType || "Without Tax"})</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 font-medium">Discount:</span>{" "}
-                                          <span className="font-semibold text-gray-700">
-                                            {p.discountOnSalePrice ?? "0"}{p.discountType === "Percentage" ? "%" : " ₹"}
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 font-medium">Wholesale Price:</span>{" "}
-                                          <span className="font-semibold text-gray-700">₹{p.wholesalePrice ?? "—"} ({p.wholesalePriceTaxType || "Without Tax"})</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 font-medium">Min Wholesale Qty:</span>{" "}
-                                          <span className="font-semibold text-gray-700">{p.minWholesaleQty ?? "—"}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 font-medium">Min Stock level:</span>{" "}
-                                          <span className="font-semibold text-gray-700">{p.minStockToMaintain ?? "—"}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 font-medium">Location:</span>{" "}
-                                          <span className="font-semibold text-gray-700">{p.location || "—"}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 font-medium">Opening Cost:</span>{" "}
-                                          <span className="font-semibold text-gray-700">₹{p.openingStockPrice ?? "—"}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 font-medium">Valuation Date:</span>{" "}
-                                          <span className="font-semibold text-gray-700">
-                                            {p.asOfDate ? new Date(p.asOfDate).toLocaleDateString("en-IN") : "—"}
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 font-medium">Purchase Date:</span>{" "}
-                                          <span className="font-semibold text-gray-700">
-                                            {p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString("en-IN") : "—"}
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 font-medium">Expiry Date:</span>{" "}
-                                          <span className="font-semibold text-gray-700">
-                                            {p.expiryDate ? new Date(p.expiryDate).toLocaleDateString("en-IN") : "—"}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-                {!filteredData.length && (
-                  <tr>
-                    <td colSpan="11" className="text-center py-20">
-                      <div className="flex flex-col items-center gap-3 text-gray-400">
-                        <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
-                          <Package size={24} className="text-gray-300" />
-                        </div>
-                        <p className="text-sm font-medium">No products found</p>
-                        <p className="text-xs text-gray-300">
-                          Try adjusting your search or filter
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-      </Fragment>
-      )}
+          </Fragment>
+        )}
       </div>
 
       {/* COMPACT GREEN FOOTER PAGINATION CARD */}
@@ -1728,11 +1764,10 @@ function Inventory() {
                     key={p}
                     type="button"
                     onClick={() => handlePageChange(p)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-xl text-xs font-extrabold transition-all duration-150 cursor-pointer ${
-                      p === currentPage
+                    className={`w-8 h-8 flex items-center justify-center rounded-xl text-xs font-extrabold transition-all duration-150 cursor-pointer ${p === currentPage
                         ? "bg-emerald-400 text-gray-950 shadow-md scale-105"
                         : "bg-white/10 hover:bg-white/20 text-white border border-white/15"
-                    }`}
+                      }`}
                   >
                     {p}
                   </button>

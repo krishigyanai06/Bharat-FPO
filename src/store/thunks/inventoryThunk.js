@@ -119,8 +119,8 @@ export const toggleProductStatus = createAsyncThunk(
   'inventory/toggleProductStatus',
   async ({ id, isActive }, { rejectWithValue }) => {
     try {
-      await api.patch(`/product/toggleProductStatus/${id}`, { isActive });
-      return { id, isActive };
+      const res = await api.patch(`/product/toggleProductStatus/${id}`, { isActive });
+      return { id, isActive, response: res.data, message: res.data?.message, success: res.data?.success };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to update status');
     }

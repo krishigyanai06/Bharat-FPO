@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import toast from "react-hot-toast";
+import Swal from "sweetalert2";
 import {
   ChevronLeft,
   ChevronRight,
@@ -54,77 +55,7 @@ const getCropEmoji = (cropName) => {
   return cropEmojis[lower] || "🌱";
 };
 
-// Target pests/crops helper based on category
-const getTargetSpecs = (category, crops = []) => {
-  const cat = String(category || "").toLowerCase();
-  if (cat.includes("insect") || cat.includes("pest")) {
-    return [
-      { label: "Aphids", img: "https://images.unsplash.com/photo-1622839276536-6c1f1ec4b12b?auto=format&fit=crop&w=150&q=80" },
-      { label: "Leafhoppers", img: "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=150&q=80" },
-      { label: "Caterpillars", img: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=150&q=80" }
-    ];
-  }
-  if (cat.includes("fungi")) {
-    return [
-      { label: "Mildew", img: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=150&q=80" },
-      { label: "Rust Disease", img: "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?auto=format&fit=crop&w=150&q=80" },
-      { label: "Blight", img: "https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?auto=format&fit=crop&w=150&q=80" }
-    ];
-  }
-  if (cat.includes("fertil")) {
-    return [
-      { label: "Roots", img: "https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?auto=format&fit=crop&w=150&q=80" },
-      { label: "Foliage", img: "https://images.unsplash.com/photo-1463171359919-31072989f438?auto=format&fit=crop&w=150&q=80" },
-      { label: "Yield", img: "https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=150&q=80" }
-    ];
-  }
-  return [
-    { label: crops[0] || "Paddy", img: "https://images.unsplash.com/photo-1530595467537-0b5996c41f2d?auto=format&fit=crop&w=150&q=80" },
-    { label: crops[1] || "Wheat", img: "https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=150&q=80" },
-    { label: crops[2] || "Cotton", img: "https://images.unsplash.com/photo-1594900508605-ff3605e5428a?auto=format&fit=crop&w=150&q=80" }
-  ];
-};
 
-// Key benefits helper based on product name
-const getBenefits = (productName) => {
-  const name = String(productName || "").toLowerCase();
-  if (name.includes("saaf") || name.includes("kem")) {
-    return [
-      {
-        title: "Crop Protection",
-        desc: "Protects crops from destructive fungal diseases.",
-        icon: <Shield className="w-5 h-5 text-emerald-600" />
-      },
-      {
-        title: "High Efficiency",
-        desc: "Fast acting and long lasting effect.",
-        icon: <TrendingUp className="w-5 h-5 text-emerald-600" />
-      },
-      {
-        title: "Better Yield",
-        desc: "Improves crop health and increases productivity.",
-        icon: <Leaf className="w-5 h-5 text-emerald-600" />
-      }
-    ];
-  }
-  return [
-    {
-      title: "Crop Protection",
-      desc: "Safeguards crops against critical agricultural threats.",
-      icon: <Shield className="w-5 h-5 text-emerald-600" />
-    },
-    {
-      title: "Eco Friendly",
-      desc: "Gentle on soil profile and non-target organisms.",
-      icon: <Leaf className="w-5 h-5 text-emerald-600" />
-    },
-    {
-      title: "High Efficiency",
-      desc: "Delivers maximum yield and uniform plant growth.",
-      icon: <TrendingUp className="w-5 h-5 text-emerald-600" />
-    }
-  ];
-};
 
 export default function ProductDetailView({
   productId,
@@ -178,10 +109,55 @@ export default function ProductDetailView({
 
   const handleToggleStatus = () => {
     if (!product) return;
-    dispatch(toggleProductStatus({ id: product._id, isActive: !product.isActive }))
+    const nextStatus = !product.isActive;
+    dispatch(toggleProductStatus({ id: product._id, isActive: nextStatus }))
       .unwrap()
-      .then(() => toast.success(`Marked ${!product.isActive ? "Active" : "Inactive"}`))
-      .catch(() => toast.error("Failed to update status"));
+      .then((res) => {
+        const msg =
+          res?.message ||
+          res?.response?.message ||
+          (nextStatus ? "Product activated successfully" : "Product deactivated successfully");
+
+        const isNowActive = res?.isActive !== undefined ? res?.isActive : nextStatus;
+
+        Swal.fire({
+          icon: isNowActive ? "success" : "info",
+          title: isNowActive ? "Product Activated" : "Product Deactivated",
+          text: msg,
+          toast: true,
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 3000,
+          timerProgressBar: true,
+          background: isNowActive ? "#ECFDF5" : "#F8FAFC",
+          iconColor: isNowActive ? "#059669" : "#64748B",
+          customClass: {
+            popup: `border-l-4 ${isNowActive ? "border-emerald-500" : "border-slate-400"} shadow-lg rounded-xl`,
+            title: `${isNowActive ? "text-emerald-900" : "text-slate-800"} font-bold text-sm`,
+            htmlContainer: `${isNowActive ? "text-emerald-800" : "text-slate-600"} text-xs`,
+          },
+        });
+      })
+      .catch((err) => {
+        const errorMsg = typeof err === "string" ? err : err?.message || "Failed to update status";
+        Swal.fire({
+          icon: "error",
+          title: "Status Update Failed",
+          text: errorMsg,
+          toast: true,
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 3000,
+          timerProgressBar: true,
+          background: "#FEF2F2",
+          iconColor: "#DC2626",
+          customClass: {
+            popup: "border-l-4 border-red-500 shadow-lg rounded-xl",
+            title: "text-red-900 font-bold text-sm",
+            htmlContainer: "text-red-800 text-xs",
+          },
+        });
+      });
   };
 
   if (!product) {
@@ -240,27 +216,19 @@ export default function ProductDetailView({
     });
   };
 
-  const targets = getTargetSpecs(rawCat, product.targetCrops);
-  const benefits = getBenefits(product.productName);
-
   // Technical Details Split
   const techDetails = product.productTechnicalDetails
     ? product.productTechnicalDetails.split("\n").filter(line => line.trim())
-    : ["Systemic fungicide", "Broad spectrum disease control", "Water soluble granules"];
+    : [];
 
   // How to use instructions
   const instructions = product.howToUse
     ? product.howToUse.split("\n").filter(line => line.trim())
-    : [
-        "Mix 2.5 gm per liter of water.",
-        "Spray uniformly on the affected plant parts.",
-        "Recommended during early signs of infection.",
-        "Repeat after 10-14 days if required."
-      ];
+    : [];
 
-  const dynamicCrops = product.targetCrops && product.targetCrops.length > 0
-    ? product.targetCrops
-    : ["Wheat", "Rice", "Tomato", "Potato", "Chilli", "Grapes"];
+  const dynamicCrops = product.targetCrops && Array.isArray(product.targetCrops) && product.targetCrops.length > 0
+    ? product.targetCrops.filter(Boolean)
+    : [];
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-2 lg:px-4 py-4 animate-in fade-in duration-305 font-sans text-slate-805">
@@ -625,8 +593,8 @@ export default function ProductDetailView({
                         <td className={`px-4 py-3 text-right font-bold ${vStockQty === 0 ? "text-red-500" : "text-emerald-700"}`}>
                           {vStockQty} Units
                         </td>
-                        <td className="px-4 py-3 text-right text-slate-500 font-bold">{v.minStockToMaintain ?? "10"} Units</td>
-                        <td className="px-4 py-3 text-slate-550 font-semibold">{v.location || "Aisle 3"}</td>
+                        <td className="px-4 py-3 text-right text-slate-500 font-bold">{v.minStockToMaintain ?? "—"} Units</td>
+                        <td className="px-4 py-3 text-slate-550 font-semibold">{v.location || "—"}</td>
                         <td className="px-4 py-3 text-orange-655 font-bold">{formatExpiryDate(v.expiryDate)}</td>
                       </tr>
                     );
@@ -683,16 +651,20 @@ export default function ProductDetailView({
             <h3 className="text-xs font-bold text-slate-805 uppercase tracking-wider">About Product</h3>
           </div>
           <p className="text-slate-600 text-xs leading-relaxed font-semibold">
-            {product.description || `${product.productName} is an FPO certified farming support item designed to increase yield efficiency and provide top class protection.`}
+            {product.description || "No description provided."}
           </p>
           
           <div className="space-y-2.5 pt-1">
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Technical Details</span>
-            <ul className="list-disc pl-4 text-xs font-bold text-slate-700 space-y-1">
-              {techDetails.map((td, idx) => (
-                <li key={idx}>{td}</li>
-              ))}
-            </ul>
+            {techDetails.length > 0 ? (
+              <ul className="list-disc pl-4 text-xs font-bold text-slate-700 space-y-1">
+                {techDetails.map((td, idx) => (
+                  <li key={idx}>{td}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-slate-400 text-xs font-semibold">Not specified</p>
+            )}
           </div>
         </div>
 
@@ -702,14 +674,18 @@ export default function ProductDetailView({
             <Sprout className="w-4.5 h-4.5 text-emerald-600" />
             <h3 className="text-xs font-bold text-slate-805 uppercase tracking-wider">Target Crops</h3>
           </div>
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            {dynamicCrops.map((crop, idx) => (
-              <div key={idx} className="flex items-center gap-2 px-3 py-2 border border-slate-150 rounded-xl text-xs font-extrabold bg-slate-50/50 hover:bg-slate-55 transition">
-                <span className="text-base">{getCropEmoji(crop)}</span>
-                <span className="text-slate-750 truncate capitalize">{crop}</span>
-              </div>
-            ))}
-          </div>
+          {dynamicCrops.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              {dynamicCrops.map((crop, idx) => (
+                <div key={idx} className="flex items-center gap-2 px-3 py-2 border border-slate-150 rounded-xl text-xs font-extrabold bg-slate-50/50 hover:bg-slate-55 transition">
+                  <span className="text-base">{getCropEmoji(crop)}</span>
+                  <span className="text-slate-750 truncate capitalize">{crop}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-slate-400 text-xs font-semibold pt-1">Not specified</p>
+          )}
         </div>
 
         {/* Card 4: How To Use */}
@@ -718,16 +694,20 @@ export default function ProductDetailView({
             <HelpCircle className="w-4.5 h-4.5 text-emerald-600" />
             <h3 className="text-xs font-bold text-slate-855 uppercase tracking-wider">How To Use</h3>
           </div>
-          <div className="space-y-3.5 pt-1 text-xs">
-            {instructions.map((inst, idx) => (
-              <div key={idx} className="flex gap-2.5 items-start">
-                <span className="w-5 h-5 rounded-full bg-emerald-650 bg-emerald-600 text-white font-extrabold flex items-center justify-center text-[10px] shrink-0 mt-0.5">
-                  {idx + 1}
-                </span>
-                <p className="text-slate-600 leading-snug font-semibold">{inst}</p>
-              </div>
-            ))}
-          </div>
+          {instructions.length > 0 ? (
+            <div className="space-y-3.5 pt-1 text-xs">
+              {instructions.map((inst, idx) => (
+                <div key={idx} className="flex gap-2.5 items-start">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-extrabold flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                    {idx + 1}
+                  </span>
+                  <p className="text-slate-600 leading-snug font-semibold">{inst}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-slate-400 text-xs font-semibold pt-1">Not specified</p>
+          )}
         </div>
 
       </div>
@@ -747,19 +727,9 @@ export default function ProductDetailView({
               {product.productBenefits}
             </p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {benefits.map((b, idx) => (
-                <div key={idx} className="bg-slate-50/30 border border-slate-150 rounded-2xl p-4 flex flex-col items-start gap-3 transition duration-150 hover:bg-slate-50/40">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-emerald-50 text-emerald-650 shrink-0">
-                    {b.icon}
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-slate-808 text-xs">{b.title}</h4>
-                    <p className="text-slate-400 text-[10px] font-semibold leading-relaxed mt-1">{b.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <p className="text-slate-400 text-xs font-semibold bg-slate-50/50 p-4 border border-slate-150 rounded-2xl">
+              No key benefits specified for this product.
+            </p>
           )}
         </div>
 
