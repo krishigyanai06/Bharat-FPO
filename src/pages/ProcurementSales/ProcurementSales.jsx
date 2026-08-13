@@ -46,6 +46,7 @@ export default function ProcurementSales() {
         <ProcurementSaleDetails
           id={activeSaleId}
           onBack={handleBackToList}
+          onEdit={handleEdit}
         />
       )}
     </div>

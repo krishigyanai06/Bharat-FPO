@@ -309,7 +309,7 @@ function Members() {
         <div>
           <h1 className="text-2xl font-semibold">Member Management</h1>
           <p className="text-sm text-gray-500">
-            Manage FPO members and their
+            Manage FPO members and their profiles
           </p>
         </div>
         {!isReadOnly && <AddMemberButton />}
