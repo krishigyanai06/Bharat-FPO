@@ -104,11 +104,10 @@ function Pagination({ page, totalPages, start, total, perPage, onPage }) {
             <button
               key={p}
               onClick={() => onPage(p)}
-              className={`w-8 h-8 rounded-lg text-sm font-medium ${
-                page === p
+              className={`w-8 h-8 rounded-lg text-sm font-medium ${page === p
                   ? "bg-brand-600 text-white"
                   : "border hover:bg-gray-50 text-gray-600"
-              }`}
+                }`}
             >
               {p}
             </button>
@@ -251,7 +250,7 @@ function Members() {
         });
         setTabData((d) => ({ ...d, Documents: docs }));
       }
-    } catch (_) {}
+    } catch (_) { }
     setTabLoading(false);
   };
 
@@ -310,7 +309,7 @@ function Members() {
         <div>
           <h1 className="text-2xl font-semibold">Member Management</h1>
           <p className="text-sm text-gray-500">
-            Manage FPO members and their profiles
+            Manage FPO members and their
           </p>
         </div>
         {!isReadOnly && <AddMemberButton />}
@@ -396,49 +395,49 @@ function Members() {
             <tbody className="divide-y">
               {loading
                 ? Array(5)
-                    .fill(0)
-                    .map((_, i) => <SkeletonRow key={i} />)
+                  .fill(0)
+                  .map((_, i) => <SkeletonRow key={i} />)
                 : paginatedFarmers.map((m) => {
-                    const kycStatus = m.kycStatus || "Pending";
-                    return (
-                      <tr
-                        key={m._id}
-                        className="cursor-pointer hover:bg-gray-50"
-                        onClick={() => openDetail(m)}
-                      >
-                        <td className="px-6 py-4 font-medium">
-                          FPO-{m._id?.slice(-6).toUpperCase()}
-                        </td>
-                        <td className="px-6 py-4 font-medium text-brand-700">
-                          {m.firstName} {m.lastName}
-                        </td>
-                        <td className="px-6 py-4">+91 {m.phone}</td>
-                        <td className="px-6 py-4">
-                          <span className="px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-100 rounded-full">
-                            {m.status || "Active"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-semibold ${KYC_BADGE[kycStatus] || KYC_BADGE.Pending}`}
-                          >
-                            {kycStatus}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setFarmMember(m);
-                            }}
-                            className="px-3 py-1 text-xs text-brand-600 transition border border-brand-600 rounded-lg hover:bg-brand-50"
-                          >
-                            View Farms
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  const kycStatus = m.kycStatus || "Pending";
+                  return (
+                    <tr
+                      key={m._id}
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => openDetail(m)}
+                    >
+                      <td className="px-6 py-4 font-medium">
+                        FPO-{m._id?.slice(-6).toUpperCase()}
+                      </td>
+                      <td className="px-6 py-4 font-medium text-brand-700">
+                        {m.firstName} {m.lastName}
+                      </td>
+                      <td className="px-6 py-4">+91 {m.phone}</td>
+                      <td className="px-6 py-4">
+                        <span className="px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-100 rounded-full">
+                          {m.status || "Active"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-semibold ${KYC_BADGE[kycStatus] || KYC_BADGE.Pending}`}
+                        >
+                          {kycStatus}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFarmMember(m);
+                          }}
+                          className="px-3 py-1 text-xs text-brand-600 transition border border-brand-600 rounded-lg hover:bg-brand-50"
+                        >
+                          View Farms
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               {!loading && !filteredFarmers.length && (
                 <tr>
                   <td colSpan="6" className="py-10 text-center">
@@ -512,36 +511,36 @@ function Members() {
             <tbody className="divide-y">
               {loading
                 ? Array(3)
-                    .fill(0)
-                    .map((_, i) => <SkeletonRow key={i} />)
+                  .fill(0)
+                  .map((_, i) => <SkeletonRow key={i} />)
                 : paginatedStaff.map((m) => (
-                    <tr
-                      key={m._id}
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => openDetail(m)}
-                    >
-                      <td className="px-6 py-4 font-medium">
-                        FPO-{m._id?.slice(-6).toUpperCase()}
-                      </td>
-                      <td className="px-6 py-4 font-medium text-yellow-700">
-                        {m.firstName} {m.lastName}
-                      </td>
-                      <td className="px-6 py-4">+91 {m.phone}</td>
-                      <td className="px-6 py-4 text-gray-500">
-                        {m.emailId?.includes('@noemail.local') ? '—' : (m.emailId || '—')}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-100 rounded-full">
-                          {m.status || "Active"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-500">
-                        {m.joiningDate
-                          ? new Date(m.joiningDate).toLocaleDateString("en-IN")
-                          : "—"}
-                      </td>
-                    </tr>
-                  ))}
+                  <tr
+                    key={m._id}
+                    className="cursor-pointer hover:bg-gray-50"
+                    onClick={() => openDetail(m)}
+                  >
+                    <td className="px-6 py-4 font-medium">
+                      FPO-{m._id?.slice(-6).toUpperCase()}
+                    </td>
+                    <td className="px-6 py-4 font-medium text-yellow-700">
+                      {m.firstName} {m.lastName}
+                    </td>
+                    <td className="px-6 py-4">+91 {m.phone}</td>
+                    <td className="px-6 py-4 text-gray-500">
+                      {m.emailId?.includes('@noemail.local') ? '—' : (m.emailId || '—')}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-100 rounded-full">
+                        {m.status || "Active"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-gray-500">
+                      {m.joiningDate
+                        ? new Date(m.joiningDate).toLocaleDateString("en-IN")
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
               {!loading && !filteredStaff.length && (
                 <tr>
                   <td colSpan="6" className="py-10 text-center">
@@ -621,13 +620,12 @@ function Members() {
                     <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-white/10 text-white border border-white/10">
                       {detailMember.role}
                     </span>
-                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
-                      detailMember.kycStatus === "Approved"
+                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border ${detailMember.kycStatus === "Approved"
                         ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300"
                         : detailMember.kycStatus === "Rejected"
-                        ? "bg-red-500/20 border-red-400/30 text-red-300"
-                        : "bg-amber-500/20 border-amber-400/30 text-amber-300"
-                    }`}>
+                          ? "bg-red-500/20 border-red-400/30 text-red-300"
+                          : "bg-amber-500/20 border-amber-400/30 text-amber-300"
+                      }`}>
                       KYC: {detailMember.kycStatus || "Pending"}
                     </span>
                   </div>
@@ -641,11 +639,10 @@ function Members() {
                 <button
                   key={tab}
                   onClick={() => loadTab(tab)}
-                  className={`px-5 py-3 text-sm font-semibold whitespace-nowrap transition-all border-b-2 ${
-                    activeTab === tab
+                  className={`px-5 py-3 text-sm font-semibold whitespace-nowrap transition-all border-b-2 ${activeTab === tab
                       ? "border-brand-600 text-brand-700"
                       : "border-transparent text-gray-400 hover:text-gray-600"
-                  }`}
+                    }`}
                 >
                   {tab}
                 </button>
@@ -811,8 +808,8 @@ function Members() {
                             Area: {c.area} {c.unit} • Sown:{" "}
                             {c.sowingDate
                               ? new Date(c.sowingDate).toLocaleDateString(
-                                  "en-IN",
-                                )
+                                "en-IN",
+                              )
                               : "—"}
                           </p>
                         </div>
@@ -879,8 +876,8 @@ function Members() {
                             Qty: {p.quantity} • Rate: ₹{p.rate} •{" "}
                             {p.procurementDate
                               ? new Date(p.procurementDate).toLocaleDateString(
-                                  "en-IN",
-                                )
+                                "en-IN",
+                              )
                               : "—"}
                           </p>
                         </div>
