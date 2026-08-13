@@ -159,7 +159,7 @@ export default function CounterSales() {
     error,
     success,
   } = useSelector((state) => state.sell);
-  
+
   const { parties } = useSelector((state) => state.party);
   const { products, stockSummary } = useSelector((state) => state.inventory);
 
@@ -172,11 +172,11 @@ export default function CounterSales() {
   const [viewDetailModalOpen, setViewDetailModalOpen] = useState(false);
   const [quickEInvoiceItem, setQuickEInvoiceItem] = useState(null);
   const [quickEInvoiceMode, setQuickEInvoiceMode] = useState("generate"); // "generate" | "details"
-  
+
   // Compliance drawer state
   const [complianceDrawerOpen, setComplianceDrawerOpen] = useState(false);
   const [complianceItem, setComplianceItem] = useState(null);
-  
+
   // Local list filters
   const [searchQuery, setSearchQuery] = useState("");
   const [saleTypeFilter, setSaleTypeFilter] = useState("all");
@@ -317,7 +317,7 @@ export default function CounterSales() {
           const text = await err.response.data.text();
           const json = JSON.parse(text);
           if (json.message) errorMsg = json.message;
-        } catch (_) {}
+        } catch (_) { }
       } else if (err.response?.data?.message) {
         errorMsg = err.response.data.message;
       }
@@ -381,6 +381,43 @@ export default function CounterSales() {
     setViewDetailModalOpen(true);
   };
 
+  // Sort data to ensure latest entries are always at the top
+  const sortedSales = useMemo(() => {
+    if (!sales) return [];
+    return [...sales].sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (dateA !== dateB) return dateB - dateA;
+      const idA = String(a._id || a.id || "");
+      const idB = String(b._id || b.id || "");
+      return idB.localeCompare(idA);
+    });
+  }, [sales]);
+
+  const sortedPayments = useMemo(() => {
+    if (!payments) return [];
+    return [...payments].sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (dateA !== dateB) return dateB - dateA;
+      const idA = String(a._id || a.id || "");
+      const idB = String(b._id || b.id || "");
+      return idB.localeCompare(idA);
+    });
+  }, [payments]);
+
+  const sortedReturns = useMemo(() => {
+    if (!returns) return [];
+    return [...returns].sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (dateA !== dateB) return dateB - dateA;
+      const idA = String(a._id || a.id || "");
+      const idB = String(b._id || b.id || "");
+      return idB.localeCompare(idA);
+    });
+  }, [returns]);
+
   // Summary Metrics calculations (from loaded lists)
   const salesMetrics = {
     totalSales: sales.filter((s) => s.saleType === "SALE").reduce((acc, s) => acc + (s.totalAmount || 0), 0),
@@ -394,14 +431,14 @@ export default function CounterSales() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="w-full h-full min-h-[calc(100vh-4rem)] flex flex-col space-y-6 select-none bg-[#F8FAFC]">
       {/* 1. Header Area */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-950">Counter Sales (Direct Sell)</h1>
           <p className="text-sm text-gray-500">Manage walk-in cash checkouts, credit sales, customer sales bills, and returns</p>
         </div>
-        
+
         <div className="flex gap-2 flex-wrap">
           {!isReadOnly && (
             <>
@@ -476,11 +513,10 @@ export default function CounterSales() {
                 else if (t.key === "payments") navigate("/sell/receipts");
                 else if (t.key === "returns") navigate("/sell/returns");
               }}
-              className={`flex items-center gap-2 px-5 py-3 border-b-2 font-semibold text-sm transition-all duration-150 ${
-                isSelected
-                  ? "border-brand-650 text-brand-700"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200"
-              }`}
+              className={`flex items-center gap-2 px-5 py-3 border-b-2 font-semibold text-sm transition-all duration-150 ${isSelected
+                ? "border-brand-650 text-brand-700"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200"
+                }`}
             >
               <TabIcon size={16} />
               {t.label}
@@ -501,7 +537,7 @@ export default function CounterSales() {
             className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 placeholder-gray-400"
           />
         </form>
-        
+
         {activeTab === "sales" && (
           <div className="flex gap-3">
             <select
@@ -532,478 +568,474 @@ export default function CounterSales() {
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600" />
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            {activeTab === "sales" && (
-              <table className="w-full border-collapse text-left text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100 text-xs text-gray-600 uppercase font-semibold">
-                  <tr className="text-[10px] tracking-wider text-gray-500">
-                    <th className="px-3 py-3 font-bold">SALES BILL #</th>
-                    <th className="px-3 py-3 text-center font-bold">DATE</th>
-                    <th className="px-3 py-3 font-bold">BUYER/PARTY</th>
-                    <th className="px-3 py-3 font-bold">PAYMENT</th>
-                    <th className="px-3 py-3 font-bold">TYPE</th>
-                    <th className="px-3 py-3 text-right font-bold">TOTAL AMOUNT</th>
-                    <th className="px-3 py-3 text-right font-bold">RECEIVED AMOUNT</th>
-                    <th className="px-3 py-3 text-right font-bold">UNPAID AMOUNT</th>
-                    <th className="px-3 py-3 text-center font-bold">E-INVOICE</th>
-                    <th className="px-3 py-3 text-center font-bold">E-WAY BILL</th>
-                    <th className="px-3 py-3 text-right font-bold">ACTIONS</th>
+        <div className="w-full bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-x-auto overflow-y-auto flex-1 min-h-[420px]">
+          {activeTab === "sales" && (
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-600 uppercase font-semibold sticky top-0 z-10">
+                <tr className="text-[10px] tracking-wider text-slate-500 bg-slate-50">
+                  <th className="px-3 py-3 font-bold bg-slate-50">SALES BILL #</th>
+                  <th className="px-3 py-3 text-center font-bold bg-slate-50">DATE</th>
+                  <th className="px-3 py-3 font-bold bg-slate-50">BUYER/PARTY</th>
+                  <th className="px-3 py-3 font-bold bg-slate-50">PAYMENT</th>
+                  <th className="px-3 py-3 font-bold bg-slate-50">TYPE</th>
+                  <th className="px-3 py-3 text-right font-bold bg-slate-50">TOTAL AMOUNT</th>
+                  <th className="px-3 py-3 text-right font-bold bg-slate-50">RECEIVED AMOUNT</th>
+                  <th className="px-3 py-3 text-right font-bold bg-slate-50">UNPAID AMOUNT</th>
+                  <th className="px-3 py-3 text-center font-bold bg-slate-50">E-INVOICE</th>
+                  <th className="px-3 py-3 text-center font-bold bg-slate-50">E-WAY BILL</th>
+                  <th className="px-3 py-3 text-right font-bold bg-slate-50">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {sortedSales.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="px-6 py-16 text-center text-gray-400">
+                      <Receipt className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                      <p className="font-medium">No sales bills found</p>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {sales.length === 0 ? (
-                    <tr>
-                      <td colSpan={11} className="px-6 py-16 text-center text-gray-400">
-                        <Receipt className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                        <p className="font-medium">No sales bills found</p>
+                ) : (
+                  sortedSales.map((sale) => (
+                    <tr key={sale._id} className="hover:bg-gray-50 transition">
+                      <td className="px-3 py-2.5 font-bold text-gray-900 text-xs">{sale.invoiceNumber || sale._id.substring(0, 8).toUpperCase()}</td>
+                      <td className="px-3 py-2.5 text-gray-500">
+                        {(() => {
+                          const dateVal = new Date(sale.createdAt);
+                          if (isNaN(dateVal.getTime())) return "—";
+                          const day = dateVal.getDate();
+                          const month = dateVal.toLocaleDateString("en-IN", { month: "short" });
+                          const year = dateVal.getFullYear();
+                          return (
+                            <div className="flex flex-col items-center justify-center text-center font-medium leading-tight text-[11px] font-sans text-gray-500">
+                              <span className="text-gray-700 font-bold">{day}</span>
+                              <span className="text-[10px] text-gray-400 font-semibold">{month}</span>
+                              <span className="text-[9px] text-gray-400">{year}</span>
+                            </div>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div>
+                          <p className="font-bold text-gray-800 text-xs">{sale.party?.name || sale.buyerName || "Walk-in Customer"}</p>
+                          {(sale.buyerPhone || sale.party?.phoneNumber) && (
+                            <span className="text-[10px] text-gray-400 mt-0.5 block font-semibold">{sale.buyerPhone || sale.party?.phoneNumber}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${sale.billingType === "Credit"
+                          ? "bg-amber-50 text-amber-700 border border-amber-100"
+                          : "bg-green-50 text-green-700 border border-green-100"
+                          }`}>
+                          {sale.billingType === "Cash" ? "Money Received" : "Udhar (Credit)"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="inline-block px-2 py-0.5 rounded-md bg-gray-100 text-gray-655 text-[10px] font-extrabold uppercase tracking-wider border border-gray-200">
+                          {sale.saleType}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-extrabold text-gray-950 text-xs">₹{(sale.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                      <td className="px-3 py-2.5 text-right text-green-700 font-semibold text-xs">₹{(sale.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                      <td className={`px-3 py-2.5 text-right font-semibold text-xs ${sale.unpaidAmount > 0 ? "text-red-650" : "text-gray-900"}`}>
+                        ₹{(sale.unpaidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {(() => {
+                          const partyId = typeof sale.party === "string" ? sale.party : sale.party?._id;
+                          const resolved = parties.find(p => p._id === partyId);
+                          const isB2B = sale.saleType === "SALE" && resolved && (resolved.gstin || resolved.gstNumber || resolved.gstType?.startsWith("Registered"));
+
+                          if (!isB2B) {
+                            return (
+                              <span className="text-gray-450 font-semibold text-xs select-none">
+                                N/A
+                              </span>
+                            );
+                          }
+
+                          const irnVal = sale.eInvoiceIrn || sale.irn || sale.eInvoiceInfo?.irn;
+                          if (irnVal) {
+                            return (
+                              <button
+                                onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                                className="border border-emerald-500 bg-emerald-50/10 hover:bg-emerald-50 text-emerald-800 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
+                              >
+                                ✓ Generated
+                              </button>
+                            );
+                          }
+
+                          const isFailed = sale.eInvoiceStatus === "FAILED" || sale.eInvoiceStatus === "Failed" || sale.eInvoiceError || (sale.eInvoiceInfo && (sale.eInvoiceInfo.status === "FAILED" || sale.eInvoiceInfo.error));
+                          if (isFailed) {
+                            return (
+                              <button
+                                onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                                className="border border-rose-500 bg-rose-50/10 hover:bg-rose-50 text-rose-750 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
+                              >
+                                ❌ Failed
+                              </button>
+                            );
+                          }
+
+                          return (
+                            <button
+                              onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                              className="border border-gray-205 bg-white hover:bg-gray-50 text-gray-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer font-sans text-xs"
+                            >
+                              ⚡ Generate
+                            </button>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {(() => {
+                          if (sale.saleType === "ESTIMATE") {
+                            return (
+                              <span className="text-gray-400 font-medium text-[11px] select-none">
+                                —
+                              </span>
+                            );
+                          }
+
+                          const ewbNo = sale.ewayBillNo || sale.eWayBillNo || sale.eInvoiceInfo?.ewayBillNo || sale.eInvoiceInfo?.eWayBillNo;
+                          const ewbStatus = sale.ewayBillStatus || sale.eInvoiceInfo?.ewayBillStatus || "ACTIVE";
+                          const hasEwb = !!ewbNo;
+
+                          if (hasEwb) {
+                            return (
+                              <button
+                                onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                                className={`font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs border ${ewbStatus === "CANCELLED"
+                                  ? "border-rose-300 bg-rose-50/10 text-rose-700"
+                                  : "border-emerald-500 bg-emerald-50/10 text-emerald-805"
+                                  }`}
+                              >
+                                {ewbStatus === "CANCELLED" ? "Cancelled" : "✓ Generated"}
+                              </button>
+                            );
+                          }
+
+                          const partyId = typeof sale.party === "string" ? sale.party : sale.party?._id;
+                          const resolved = parties.find(p => p._id === partyId);
+                          const isB2B = sale.saleType === "SALE" && resolved && (resolved.gstin || resolved.gstNumber || resolved.gstType?.startsWith("Registered"));
+
+                          if (isB2B) {
+                            const irnVal = sale.eInvoiceIrn || sale.irn || sale.eInvoiceInfo?.irn;
+                            if (!irnVal) {
+                              return (
+                                <span className="text-gray-400 font-semibold text-[11px] select-none">
+                                  Waiting IRN
+                                </span>
+                              );
+                            }
+                          }
+
+                          return (
+                            <button
+                              onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                              className="border border-amber-500 bg-amber-50/5 hover:bg-amber-50 text-amber-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
+                            >
+                              ⚡ Generate
+                            </button>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <div className="relative inline-block text-left">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDropdownId(activeDropdownId === sale._id ? null : sale._id);
+                            }}
+                            className="p-1.5 hover:bg-gray-100 rounded-lg transition border-0 bg-transparent cursor-pointer text-gray-500 hover:text-gray-900"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+
+                          {activeDropdownId === sale._id && (
+                            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                              <button
+                                onClick={() => handleViewDetails(sale, "sale")}
+                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-gray-400" />
+                                View Details
+                              </button>
+
+                              {sale.saleType === "SALE" && (
+                                <button
+                                  onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                >
+                                  <Shield className="w-3.5 h-3.5 text-gray-400" />
+                                  Government Compliance
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleDownloadReceipt(sale._id, sale.invoiceNo || "Receipt", sale.supplyType)}
+                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                              >
+                                <Download className="w-3.5 h-3.5 text-gray-400" />
+                                Download PDF
+                              </button>
+
+                              {sale.billingType === "Credit" && sale.saleType === "SALE" && sale.unpaidAmount > 0 && !isReadOnly && (
+                                <button
+                                  onClick={() => {
+                                    setLinkedSellForPayment(sale);
+                                    setPaymentModalOpen(true);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-xs text-emerald-705 hover:bg-emerald-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                >
+                                  <IndianRupee className="w-3.5 h-3.5 text-emerald-500" />
+                                  Receive Payment
+                                </button>
+                              )}
+
+                              {sale.saleType === "ESTIMATE" && !isReadOnly && (
+                                <button
+                                  onClick={() => handleConvertEstimate(sale._id)}
+                                  className="w-full text-left px-4 py-2 text-xs text-brand-700 hover:bg-brand-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                >
+                                  <RefreshCw className="w-3.5 h-3.5 text-brand-500" />
+                                  Convert to Sale
+                                </button>
+                              )}
+
+                              {!isReadOnly && (
+                                <>
+                                  <div className="h-px bg-gray-100 my-1"></div>
+                                  <button
+                                    onClick={() => navigate(`/sell/invoice/edit/${sale._id}`)}
+                                    className="w-full text-left px-4 py-2 text-xs text-amber-700 hover:bg-amber-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5 text-amber-500" />
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteSale(sale._id)}
+                                    className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                    Delete
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                  ) : (
-                    sales.map((sale) => (
-                      <tr key={sale._id} className="hover:bg-gray-50 transition">
-                        <td className="px-3 py-2.5 font-bold text-gray-900 text-xs">{sale.invoiceNo || sale._id.substring(0, 8).toUpperCase()}</td>
-                        <td className="px-3 py-2.5 text-gray-500">
-                          {(() => {
-                            const dateVal = new Date(sale.createdAt);
-                            if (isNaN(dateVal.getTime())) return "—";
-                            const day = dateVal.getDate();
-                            const month = dateVal.toLocaleDateString("en-IN", { month: "short" });
-                            const year = dateVal.getFullYear();
-                            return (
-                              <div className="flex flex-col items-center justify-center text-center font-medium leading-tight text-[11px] font-sans text-gray-500">
-                                <span className="text-gray-700 font-bold">{day}</span>
-                                <span className="text-[10px] text-gray-400 font-semibold">{month}</span>
-                                <span className="text-[9px] text-gray-400">{year}</span>
-                              </div>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <div>
-                            <p className="font-bold text-gray-800 text-xs">{sale.party?.name || sale.buyerName || "Walk-in Customer"}</p>
-                            {(sale.buyerPhone || sale.party?.phoneNumber) && (
-                              <span className="text-[10px] text-gray-400 mt-0.5 block font-semibold">{sale.buyerPhone || sale.party?.phoneNumber}</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                            sale.billingType === "Credit"
-                              ? "bg-amber-50 text-amber-700 border border-amber-100"
-                              : "bg-green-50 text-green-700 border border-green-100"
-                          }`}>
-                            {sale.billingType === "Cash" ? "Money Received" : "Udhar (Credit)"}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <span className="inline-block px-2 py-0.5 rounded-md bg-gray-100 text-gray-655 text-[10px] font-extrabold uppercase tracking-wider border border-gray-200">
-                            {sale.saleType}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-extrabold text-gray-950 text-xs">₹{(sale.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                        <td className="px-3 py-2.5 text-right text-green-700 font-semibold text-xs">₹{(sale.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                        <td className={`px-3 py-2.5 text-right font-semibold text-xs ${sale.unpaidAmount > 0 ? "text-red-650" : "text-gray-900"}`}>
-                          ₹{(sale.unpaidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          {(() => {
-                            const partyId = typeof sale.party === "string" ? sale.party : sale.party?._id;
-                            const resolved = parties.find(p => p._id === partyId);
-                            const isB2B = sale.saleType === "SALE" && resolved && (resolved.gstin || resolved.gstNumber || resolved.gstType?.startsWith("Registered"));
-                            
-                            if (!isB2B) {
-                              return (
-                                <span className="text-gray-450 font-semibold text-xs select-none">
-                                  N/A
-                                </span>
-                              );
-                            }
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
 
-                            const irnVal = sale.eInvoiceIrn || sale.irn || sale.eInvoiceInfo?.irn;
-                            if (irnVal) {
-                              return (
-                                <button
-                                  onClick={() => navigate(`/sell/compliance/${sale._id}`)}
-                                  className="border border-emerald-500 bg-emerald-50/10 hover:bg-emerald-50 text-emerald-800 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
-                                >
-                                  ✓ Generated
-                                </button>
-                              );
-                            }
+          {activeTab === "payments" && (
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-600 uppercase font-semibold sticky top-0 z-10">
+                <tr className="bg-slate-50">
+                  <th className="px-6 py-4 bg-slate-50">Receipt #</th>
+                  <th className="px-6 py-4 bg-slate-50">Date</th>
+                  <th className="px-6 py-4 bg-slate-50">Party/Customer</th>
+                  <th className="px-6 py-4 bg-slate-50">Linked Sales Bill</th>
+                  <th className="px-6 py-4 bg-slate-50">Payment Breakdown</th>
+                  <th className="px-6 py-4 text-right bg-slate-50">Received Amount</th>
+                  <th className="px-6 py-4 text-right bg-slate-50">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {sortedPayments.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-16 text-center text-gray-400">
+                      <IndianRupee className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                      <p className="font-medium">No customer payments recorded</p>
+                    </td>
+                  </tr>
+                ) : (
+                  sortedPayments.map((p) => (
+                    <tr key={p._id} className="hover:bg-gray-55 transition">
+                      <td className="px-6 py-4 font-bold text-gray-900">
+                        <div className="flex items-center gap-2">
+                          <span>{p.receiptNo || p._id.substring(0, 8).toUpperCase()}</span>
+                          {p.isAutoGenerated && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              Auto
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-550">{formatDate(p.createdAt)}</td>
+                      <td className="px-6 py-4 font-semibold text-gray-800">{p.party?.name || "Unassigned"}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-gray-500 font-semibold">
+                        {p.linkedSell?.invoiceNumber || p.sell?.invoiceNumber || (p.sell && typeof p.sell === "string" ? p.sell.substring(0, 8).toUpperCase() : "—")}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-1">
+                          {p.payments?.map((py, idx) => (
+                            <span key={idx} className="inline-block mr-2 px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs uppercase font-medium">
+                              {py.paymentType}: ₹{py.amount}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right font-extrabold text-green-700">₹{(p.receivedAmount || 0).toLocaleString("en-IN")}</td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="relative inline-block text-left">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDropdownId(activeDropdownId === p._id ? null : p._id);
+                            }}
+                            className="p-1.5 hover:bg-gray-100 rounded-lg transition border-0 bg-transparent cursor-pointer text-gray-500 hover:text-gray-900"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
 
-                            const isFailed = sale.eInvoiceStatus === "FAILED" || sale.eInvoiceStatus === "Failed" || sale.eInvoiceError || (sale.eInvoiceInfo && (sale.eInvoiceInfo.status === "FAILED" || sale.eInvoiceInfo.error));
-                            if (isFailed) {
-                              return (
-                                <button
-                                  onClick={() => navigate(`/sell/compliance/${sale._id}`)}
-                                  className="border border-rose-500 bg-rose-50/10 hover:bg-rose-50 text-rose-750 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
-                                >
-                                  ❌ Failed
-                                </button>
-                              );
-                            }
-
-                            return (
+                          {activeDropdownId === p._id && (
+                            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] py-1.5 animate-in fade-in zoom-in-95 duration-100">
                               <button
-                                onClick={() => navigate(`/sell/compliance/${sale._id}`)}
-                                className="border border-gray-205 bg-white hover:bg-gray-50 text-gray-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer font-sans text-xs"
+                                onClick={() => handleViewDetails(p, "payment")}
+                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
                               >
-                                ⚡ Generate
+                                <Eye className="w-3.5 h-3.5 text-gray-400" />
+                                View Details
                               </button>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          {(() => {
-                            if (sale.saleType === "ESTIMATE") {
-                              return (
-                                <span className="text-gray-400 font-medium text-[11px] select-none">
-                                  —
-                                </span>
-                              );
-                            }
 
-                            const ewbNo = sale.ewayBillNo || sale.eWayBillNo || sale.eInvoiceInfo?.ewayBillNo || sale.eInvoiceInfo?.eWayBillNo;
-                            const ewbStatus = sale.ewayBillStatus || sale.eInvoiceInfo?.ewayBillStatus || "ACTIVE";
-                            const hasEwb = !!ewbNo;
-
-                            if (hasEwb) {
-                              return (
-                                <button
-                                  onClick={() => navigate(`/sell/compliance/${sale._id}`)}
-                                  className={`font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs border ${
-                                    ewbStatus === "CANCELLED"
-                                      ? "border-rose-300 bg-rose-50/10 text-rose-700"
-                                      : "border-emerald-500 bg-emerald-50/10 text-emerald-805"
-                                  }`}
-                                >
-                                  {ewbStatus === "CANCELLED" ? "Cancelled" : "✓ Generated"}
-                                </button>
-                              );
-                            }
-
-                            const partyId = typeof sale.party === "string" ? sale.party : sale.party?._id;
-                            const resolved = parties.find(p => p._id === partyId);
-                            const isB2B = sale.saleType === "SALE" && resolved && (resolved.gstin || resolved.gstNumber || resolved.gstType?.startsWith("Registered"));
-
-                            if (isB2B) {
-                              const irnVal = sale.eInvoiceIrn || sale.irn || sale.eInvoiceInfo?.irn;
-                              if (!irnVal) {
-                                return (
-                                  <span className="text-gray-400 font-semibold text-[11px] select-none">
-                                    Waiting IRN
-                                  </span>
-                                );
-                              }
-                            }
-
-                            return (
                               <button
-                                onClick={() => navigate(`/sell/compliance/${sale._id}`)}
-                                className="border border-amber-500 bg-amber-50/5 hover:bg-amber-50 text-amber-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
+                                onClick={() => handleDownloadPaymentReceipt(p._id)}
+                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
                               >
-                                ⚡ Generate
+                                <Download className="w-3.5 h-3.5 text-gray-400" />
+                                Download PDF
                               </button>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          <div className="relative inline-block text-left">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveDropdownId(activeDropdownId === sale._id ? null : sale._id);
-                              }}
-                              className="p-1.5 hover:bg-gray-100 rounded-lg transition border-0 bg-transparent cursor-pointer text-gray-500 hover:text-gray-900"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
-                            
-                            {activeDropdownId === sale._id && (
-                              <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] py-1.5 animate-in fade-in zoom-in-95 duration-100">
-                                <button
-                                  onClick={() => handleViewDetails(sale, "sale")}
-                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
-                                >
-                                  <Eye className="w-3.5 h-3.5 text-gray-400" />
-                                  View Details
-                                </button>
-                                
-                                {sale.saleType === "SALE" && (
-                                  <button
-                                    onClick={() => navigate(`/sell/compliance/${sale._id}`)}
-                                    className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
-                                  >
-                                    <Shield className="w-3.5 h-3.5 text-gray-400" />
-                                    Government Compliance
-                                  </button>
-                                )}
-                                
-                                <button
-                                  onClick={() => handleDownloadReceipt(sale._id, sale.invoiceNo || "Receipt", sale.supplyType)}
-                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
-                                >
-                                  <Download className="w-3.5 h-3.5 text-gray-400" />
-                                  Download PDF
-                                </button>
-                                
-                                {sale.billingType === "Credit" && sale.saleType === "SALE" && sale.unpaidAmount > 0 && !isReadOnly && (
+
+                              {!isReadOnly && !p.isAutoGenerated && (
+                                <>
+                                  <div className="h-px bg-gray-100 my-1"></div>
                                   <button
                                     onClick={() => {
-                                      setLinkedSellForPayment(sale);
+                                      setEditPaymentRecord(p);
                                       setPaymentModalOpen(true);
                                     }}
-                                    className="w-full text-left px-4 py-2 text-xs text-emerald-705 hover:bg-emerald-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    className="w-full text-left px-4 py-2 text-xs text-amber-700 hover:bg-amber-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
                                   >
-                                    <IndianRupee className="w-3.5 h-3.5 text-emerald-500" />
-                                    Receive Payment
+                                    <Pencil className="w-3.5 h-3.5 text-amber-500" />
+                                    Edit
                                   </button>
-                                )}
-                                
-                                {sale.saleType === "ESTIMATE" && !isReadOnly && (
                                   <button
-                                    onClick={() => handleConvertEstimate(sale._id)}
-                                    className="w-full text-left px-4 py-2 text-xs text-brand-700 hover:bg-brand-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    onClick={() => handleDeletePayment(p._id)}
+                                    className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
                                   >
-                                    <RefreshCw className="w-3.5 h-3.5 text-brand-500" />
-                                    Convert to Sale
+                                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                    Delete
                                   </button>
-                                )}
-                                
-                                {!isReadOnly && (
-                                  <>
-                                    <div className="h-px bg-gray-100 my-1"></div>
-                                    <button
-                                      onClick={() => navigate(`/sell/invoice/edit/${sale._id}`)}
-                                      className="w-full text-left px-4 py-2 text-xs text-amber-700 hover:bg-amber-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
-                                    >
-                                      <Pencil className="w-3.5 h-3.5 text-amber-500" />
-                                      Edit
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteSale(sale._id)}
-                                      className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                                      Delete
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
-
-            {activeTab === "payments" && (
-              <table className="w-full border-collapse text-left text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100 text-xs text-gray-600 uppercase font-semibold">
-                  <tr>
-                    <th className="px-6 py-4">Receipt #</th>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Party/Customer</th>
-                    <th className="px-6 py-4">Linked Sales Bill</th>
-                    <th className="px-6 py-4">Payment Breakdown</th>
-                    <th className="px-6 py-4 text-right">Received Amount</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {payments.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-16 text-center text-gray-400">
-                        <IndianRupee className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                        <p className="font-medium">No customer payments recorded</p>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                  ) : (
-                    payments.map((p) => (
-                      <tr key={p._id} className="hover:bg-gray-55 transition">
-                        <td className="px-6 py-4 font-bold text-gray-900">
-                          <div className="flex items-center gap-2">
-                            <span>{p.receiptNo || p._id.substring(0, 8).toUpperCase()}</span>
-                            {p.isAutoGenerated && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                Auto
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-gray-550">{formatDate(p.createdAt)}</td>
-                        <td className="px-6 py-4 font-semibold text-gray-800">{p.party?.name || "Unassigned"}</td>
-                        <td className="px-6 py-4 font-mono text-xs text-gray-500 font-semibold">
-                          {p.linkedSell?.invoiceNo || p.sell?.invoiceNo || (p.sell && typeof p.sell === "string" ? p.sell.substring(0, 8).toUpperCase() : "—")}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="space-y-1">
-                            {p.payments?.map((py, idx) => (
-                              <span key={idx} className="inline-block mr-2 px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs uppercase font-medium">
-                                {py.paymentType}: ₹{py.amount}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right font-extrabold text-green-700">₹{(p.receivedAmount || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="relative inline-block text-left">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveDropdownId(activeDropdownId === p._id ? null : p._id);
-                              }}
-                              className="p-1.5 hover:bg-gray-100 rounded-lg transition border-0 bg-transparent cursor-pointer text-gray-500 hover:text-gray-900"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
-                            
-                            {activeDropdownId === p._id && (
-                              <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] py-1.5 animate-in fade-in zoom-in-95 duration-100">
-                                <button
-                                  onClick={() => handleViewDetails(p, "payment")}
-                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
-                                >
-                                  <Eye className="w-3.5 h-3.5 text-gray-400" />
-                                  View Details
-                                </button>
-                                
-                                <button
-                                  onClick={() => handleDownloadPaymentReceipt(p._id)}
-                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
-                                >
-                                  <Download className="w-3.5 h-3.5 text-gray-400" />
-                                  Download PDF
-                                </button>
-                                
-                                {!isReadOnly && !p.isAutoGenerated && (
-                                  <>
-                                    <div className="h-px bg-gray-100 my-1"></div>
-                                    <button
-                                      onClick={() => {
-                                        setEditPaymentRecord(p);
-                                        setPaymentModalOpen(true);
-                                      }}
-                                      className="w-full text-left px-4 py-2 text-xs text-amber-700 hover:bg-amber-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
-                                    >
-                                      <Pencil className="w-3.5 h-3.5 text-amber-500" />
-                                      Edit
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeletePayment(p._id)}
-                                      className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                                      Delete
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
 
-            {activeTab === "returns" && (
-              <table className="w-full border-collapse text-left text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100 text-xs text-gray-600 uppercase font-semibold">
+          {activeTab === "returns" && (
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-600 uppercase font-semibold sticky top-0 z-10">
+                <tr className="bg-slate-50">
+                  <th className="px-6 py-4 bg-slate-50">Credit Note #</th>
+                  <th className="px-6 py-4 bg-slate-50">Date</th>
+                  <th className="px-6 py-4 bg-slate-50">Party/Customer</th>
+                  <th className="px-6 py-4 bg-slate-50">Linked Sales Bill</th>
+                  <th className="px-6 py-4 text-right bg-slate-50">Credit Value</th>
+                  <th className="px-6 py-4 text-right bg-slate-50">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {sortedReturns.length === 0 ? (
                   <tr>
-                    <th className="px-6 py-4">Credit Note #</th>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Party/Customer</th>
-                    <th className="px-6 py-4">Linked Sales Bill</th>
-                    <th className="px-6 py-4 text-right">Credit Value</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    <td colSpan={6} className="px-6 py-16 text-center text-gray-400">
+                      <RefreshCw className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                      <p className="font-medium">No sales returns recorded</p>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {returns.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-16 text-center text-gray-400">
-                        <RefreshCw className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                        <p className="font-medium">No sales returns recorded</p>
+                ) : (
+                  sortedReturns.map((r) => (
+                    <tr key={r._id} className="hover:bg-gray-50 transition">
+                      <td className="px-6 py-4 font-bold text-gray-900">{r.returnNo || r._id.substring(0, 8).toUpperCase()}</td>
+                      <td className="px-6 py-4 text-gray-500">{formatDate(r.createdAt)}</td>
+                      <td className="px-6 py-4 font-semibold text-gray-800">{r.party?.name || r.sale?.buyerName || "Walk-in"}</td>
+                      <td className="px-6 py-4 text-gray-500 font-mono">{r.sale?.invoiceNumber || "Sales Bill ID"}</td>
+                      <td className="px-6 py-4 text-right font-extrabold text-red-650">₹{(r.totalAmount || 0).toLocaleString("en-IN")}</td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="relative inline-block text-left">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDropdownId(activeDropdownId === r._id ? null : r._id);
+                            }}
+                            className="p-1.5 hover:bg-gray-100 rounded-lg transition border-0 bg-transparent cursor-pointer text-gray-500 hover:text-gray-900"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+
+                          {activeDropdownId === r._id && (
+                            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                              <button
+                                onClick={() => handleViewDetails(r, "return")}
+                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-gray-400" />
+                                View Details
+                              </button>
+
+                              <button
+                                onClick={() => handleDownloadReturnReceipt(r._id)}
+                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                              >
+                                <Download className="w-3.5 h-3.5 text-gray-400" />
+                                Download Receipt
+                              </button>
+
+                              {!isReadOnly && (
+                                <>
+                                  <div className="h-px bg-gray-100 my-1"></div>
+                                  <button
+                                    onClick={() => {
+                                      setEditReturnRecord(r);
+                                      setReturnModalOpen(true);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-xs text-amber-700 hover:bg-amber-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5 text-amber-500" />
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteReturn(r._id)}
+                                    className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                    Delete
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                  ) : (
-                    returns.map((r) => (
-                      <tr key={r._id} className="hover:bg-gray-50 transition">
-                        <td className="px-6 py-4 font-bold text-gray-900">{r.returnNo || r._id.substring(0, 8).toUpperCase()}</td>
-                        <td className="px-6 py-4 text-gray-500">{formatDate(r.createdAt)}</td>
-                        <td className="px-6 py-4 font-semibold text-gray-800">{r.party?.name || r.sale?.buyerName || "Walk-in"}</td>
-                        <td className="px-6 py-4 text-gray-500 font-mono">{r.sale?.invoiceNo || "Sales Bill ID"}</td>
-                        <td className="px-6 py-4 text-right font-extrabold text-red-650">₹{(r.totalAmount || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="relative inline-block text-left">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveDropdownId(activeDropdownId === r._id ? null : r._id);
-                              }}
-                              className="p-1.5 hover:bg-gray-100 rounded-lg transition border-0 bg-transparent cursor-pointer text-gray-500 hover:text-gray-900"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
-                            
-                            {activeDropdownId === r._id && (
-                              <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] py-1.5 animate-in fade-in zoom-in-95 duration-100">
-                                <button
-                                  onClick={() => handleViewDetails(r, "return")}
-                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
-                                >
-                                  <Eye className="w-3.5 h-3.5 text-gray-400" />
-                                  View Details
-                                </button>
-
-                                <button
-                                  onClick={() => handleDownloadReturnReceipt(r._id)}
-                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
-                                >
-                                  <Download className="w-3.5 h-3.5 text-gray-400" />
-                                  Download Receipt
-                                </button>
-                                
-                                {!isReadOnly && (
-                                  <>
-                                    <div className="h-px bg-gray-100 my-1"></div>
-                                    <button
-                                      onClick={() => {
-                                        setEditReturnRecord(r);
-                                        setReturnModalOpen(true);
-                                      }}
-                                      className="w-full text-left px-4 py-2 text-xs text-amber-700 hover:bg-amber-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
-                                    >
-                                      <Pencil className="w-3.5 h-3.5 text-amber-500" />
-                                      Edit
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteReturn(r._id)}
-                                      className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                                      Delete
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
-          </div>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
@@ -1361,9 +1393,9 @@ function RecordPaymentModal({ editRecord = null, linkedSell = null, parties, onC
                 <div className="flex-1 space-y-1.5">
                   <h4 className="font-bold text-emerald-800 text-[13px] leading-tight">Customer account is fully settled.</h4>
                   <p className="text-gray-550 font-semibold">No unpaid sales bills found.</p>
-                  
+
                   <div className="border-t border-emerald-200/40 my-3"></div>
-                  
+
                   <div className="flex items-start gap-2 text-slate-600 font-medium text-[11px] leading-relaxed">
                     <Info className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
                     <span>Any amount received now will be recorded as an Advance Payment and adjusted against future sales bills.</span>
@@ -1625,7 +1657,7 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
     const base = q * item.pricePerUnit;
     const disc = base * (item.discountPercent / 100);
     const taxable = base - disc;
-    
+
     if (item.taxType === "With Tax") {
       return taxable;
     } else {
@@ -1736,7 +1768,7 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
               <option value="">-- Select Sales Bill --</option>
               {dropdownSales.map((s) => (
                 <option key={s._id} value={s._id}>
-                  Sales Bill {s.invoiceNo || s._id.substring(0,8).toUpperCase()} - {s.party?.name || s.buyerName} (₹{s.totalAmount})
+                  Sales Bill {s.invoiceNo || s._id.substring(0, 8).toUpperCase()} - {s.party?.name || s.buyerName} (₹{s.totalAmount})
                 </option>
               ))}
             </select>
@@ -1745,7 +1777,7 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
           {returnItems.length > 0 && (
             <div className="space-y-3">
               <label className="text-xs font-semibold text-gray-500 block border-b pb-1.5">Returned Quantities</label>
-              
+
               <div className="max-h-60 overflow-y-auto space-y-2.5">
                 {returnItems.map((item, idx) => (
                   <div key={idx} className="flex gap-4 items-center justify-between bg-white p-3 rounded-lg border border-gray-150">
@@ -1869,32 +1901,32 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
   const isReturn = type === "return";
   const isPayment = type === "payment";
 
-  const titleText = isSale 
-    ? `${item.saleType || "SALE"} DETAILS` 
-    : isReturn 
-      ? "CREDIT NOTE DETAILS" 
+  const titleText = isSale
+    ? `${item.saleType || "SALE"} DETAILS`
+    : isReturn
+      ? "CREDIT NOTE DETAILS"
       : "PAYMENT RECEIPT DETAILS";
 
-  const billingTypeLabel = isSale 
-    ? (item.billingType === "Cash" ? "Cash" : "Credit") 
-    : isReturn 
-      ? "Credit Note" 
+  const billingTypeLabel = isSale
+    ? (item.billingType === "Cash" ? "Cash" : "Credit")
+    : isReturn
+      ? "Credit Note"
       : "Receipt Entry";
 
-  const transactionNo = isSale 
-    ? (item.invoiceNo || item._id?.substring(0, 8).toUpperCase()) 
-    : isReturn 
-      ? (item.returnNo || item._id?.substring(0, 8).toUpperCase()) 
+  const transactionNo = isSale
+    ? (item.invoiceNo || item._id?.substring(0, 8).toUpperCase())
+    : isReturn
+      ? (item.returnNo || item._id?.substring(0, 8).toUpperCase())
       : (item.receiptNo || item._id?.substring(0, 8).toUpperCase());
 
   const dateLabel = isSale ? "Bill Date" : isReturn ? "Return Date" : "Payment Date";
   const displayDate = formatDisplayDate(item.createdAt);
 
   const dueDateLabel = isSale ? "Due Date" : isReturn ? "Linked Bill #" : "Linked Bill";
-  const dueDateVal = isSale 
+  const dueDateVal = isSale
     ? (item.dueDate || (item.createdAt ? new Date(new Date(item.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000) : null))
-    : isReturn 
-      ? (item.sale?.invoiceNo || "—") 
+    : isReturn
+      ? (item.sale?.invoiceNo || "—")
       : (item.linkedSell?.invoiceNo || item.sell?.invoiceNo || "—");
   const displayDueDate = isSale ? formatDisplayDate(dueDateVal) : dueDateVal;
 
@@ -1903,7 +1935,7 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
       <div className="bg-white rounded-3xl w-full max-w-5xl p-8 space-y-6 max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-150 flex flex-col [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        
+
         {/* Header Title */}
         <div className="flex justify-between items-center border-b border-gray-100 pb-4">
           <h2 className="text-base font-extrabold text-gray-900 uppercase tracking-wide flex items-center gap-2">
@@ -2171,17 +2203,17 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
                 </span>
                 <div className="text-left leading-normal">
                   <span className="font-bold text-[#006C47] block text-xs">
-                    {isReturn 
-                      ? "Credit Issued" 
-                      : (item.billingType === "Credit" || item.unpaidAmount > 0) 
-                        ? "Credit Sale" 
+                    {isReturn
+                      ? "Credit Issued"
+                      : (item.billingType === "Credit" || item.unpaidAmount > 0)
+                        ? "Credit Sale"
                         : "Fully Settled"}
                   </span>
                   <span className="text-gray-500 text-[10px] block mt-0.5">
-                    {isReturn 
-                      ? "Refund added to credit account" 
-                      : (item.billingType === "Credit" || item.unpaidAmount > 0) 
-                        ? "Amount pending from buyer" 
+                    {isReturn
+                      ? "Refund added to credit account"
+                      : (item.billingType === "Credit" || item.unpaidAmount > 0)
+                        ? "Amount pending from buyer"
                         : "Fully settled at checkout"}
                   </span>
                 </div>

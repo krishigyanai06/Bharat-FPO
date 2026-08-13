@@ -178,13 +178,12 @@ function SearchableMemberSelect({
     <div ref={containerRef} className="relative w-full">
       <div
         onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`relative flex items-center justify-between border rounded-xl px-3 text-xs focus:outline-none transition-all cursor-pointer font-bold h-[42px] ${
-          disabled
-            ? "bg-slate-100/60 text-slate-400 border-slate-200 cursor-not-allowed"
-            : isOpen
+        className={`relative flex items-center justify-between border rounded-xl px-3 text-xs focus:outline-none transition-all cursor-pointer font-bold h-[42px] ${disabled
+          ? "bg-slate-100/60 text-slate-400 border-slate-200 cursor-not-allowed"
+          : isOpen
             ? "border-emerald-500 bg-white ring-4 ring-emerald-500/10 text-slate-800"
             : "border-slate-200 hover:border-slate-350 bg-white text-slate-800"
-        } ${error ? "border-red-400 focus:ring-red-400" : ""}`}
+          } ${error ? "border-red-400 focus:ring-red-400" : ""}`}
       >
         <div className="flex items-center gap-2.5 truncate">
           <User className={`w-4.5 h-4.5 shrink-0 ${disabled ? "text-slate-350" : isOpen ? "text-emerald-600" : "text-slate-400"}`} />
@@ -234,9 +233,8 @@ function SearchableMemberSelect({
                       onChange(m._id);
                       setIsOpen(false);
                     }}
-                    className={`px-3.5 py-2.5 text-xs font-semibold cursor-pointer transition-colors flex items-center justify-between hover:bg-slate-50 ${
-                      isSelected ? "bg-emerald-50/40 text-emerald-800 hover:bg-emerald-50/50" : "text-slate-700 hover:text-slate-900"
-                    }`}
+                    className={`px-3.5 py-2.5 text-xs font-semibold cursor-pointer transition-colors flex items-center justify-between hover:bg-slate-50 ${isSelected ? "bg-emerald-50/40 text-emerald-800 hover:bg-emerald-50/50" : "text-slate-700 hover:text-slate-900"
+                      }`}
                   >
                     <div className="flex items-center gap-3">
                       {/* Avatar initials badge */}
@@ -278,7 +276,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
   const [dueDate, setDueDate] = useState(editRecord && editRecord.dueDate ? new Date(editRecord.dueDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
   const [paymentType, setPaymentType] = useState(editRecord ? (editRecord.paymentType || "Cash") : "Cash");
   const [referenceNo, setReferenceNo] = useState(editRecord ? (editRecord.referenceNo || "") : "");
-  
+
   // Manual Entry walk-in fields
   const [buyerName, setBuyerName] = useState(editRecord ? (editRecord.buyerName || "") : "");
   const [buyerPhone, setBuyerPhone] = useState(editRecord ? (editRecord.buyerPhone || "") : "");
@@ -429,7 +427,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
         const targetItemId = it.item?._id || it.item;
         const stockRecord = stockSummary.find((s) => s.item?._id === targetItemId || s._id === targetItemId);
         let productId = stockRecord?.item?.sourceRef || "";
-        
+
         if (!productId) {
           const matchedProd = products.find(p => p._id === targetItemId || p.products?.some(v => v._id === targetItemId));
           if (matchedProd) {
@@ -488,9 +486,9 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     if (!draftVariant) return null;
     return (stockSummary || []).find(
       (s) => s.item?.variantId === draftVariant?._id || s.item?._id === draftVariant?._id || (
-             s.item?.sourceRef === draftProd?._id &&
-             String(s.item?.parameter).trim().toLowerCase() === String(draftVariant?.parameter).trim().toLowerCase() &&
-             String(s.item?.unit).trim().toLowerCase() === String(draftVariant?.unit).trim().toLowerCase()
+        s.item?.sourceRef === draftProd?._id &&
+        String(s.item?.parameter).trim().toLowerCase() === String(draftVariant?.parameter).trim().toLowerCase() &&
+        String(s.item?.unit).trim().toLowerCase() === String(draftVariant?.unit).trim().toLowerCase()
       )
     );
   }, [stockSummary, draftVariant, draftProd]);
@@ -605,13 +603,13 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
       const selectedVariant = draftVariant;
       const variantStock = (stockSummary || []).find(
         (s) => s.item?.variantId === selectedVariant?._id || s.item?._id === selectedVariant?._id || (
-               s.item?.sourceRef === draftProd?._id &&
-               String(s.item?.parameter).trim().toLowerCase() === String(selectedVariant?.parameter).trim().toLowerCase() &&
-               String(s.item?.unit).trim().toLowerCase() === String(selectedVariant?.unit).trim().toLowerCase()
+          s.item?.sourceRef === draftProd?._id &&
+          String(s.item?.parameter).trim().toLowerCase() === String(selectedVariant?.parameter).trim().toLowerCase() &&
+          String(s.item?.unit).trim().toLowerCase() === String(selectedVariant?.unit).trim().toLowerCase()
         )
       );
       const availableQty = variantStock ? (variantStock.availableQuantity ?? 0) : (selectedVariant?.quantity ?? 0);
-      
+
       const alreadyAddedQty = checkoutItems
         .filter((item) => item.productId === draftProductId && item.variantIndex === draftVariantIndex)
         .reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
@@ -642,7 +640,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     if (existingIdx !== -1) {
       const existingItem = checkoutItems[existingIdx];
       const newQty = (parseFloat(existingItem.quantity) || 0) + parseFloat(draftQty);
-      
+
       const q = newQty;
       const price = parseFloat(existingItem.pricePerUnit) || 0;
       const base = q * price;
@@ -747,7 +745,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
       setDraftDiscountAmount("");
     }
     setDraftTaxPercent(item.taxPercent);
-    
+
     setCheckoutItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
@@ -755,7 +753,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
     setCheckoutItems((prev) => {
       const copy = [...prev];
       const item = { ...copy[idx] };
-      
+
       if (field === "quantity" || field === "pricePerUnit") {
         if (value === "") {
           item[field] = "";
@@ -776,7 +774,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
       const q = item.quantity === "" ? 0 : parseFloat(item.quantity) || 0;
       const price = item.pricePerUnit === "" ? 0 : parseFloat(item.pricePerUnit) || 0;
       const tPct = parseFloat(item.taxPercent) || 0;
-      
+
       let rate = price;
       if (item.taxType === "With Tax") {
         rate = price / (1 + tPct / 100);
@@ -885,9 +883,9 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
         const variant = prod?.products?.[item.variantIndex];
         const variantStock = (stockSummary || []).find(
           (s) => s.item?.variantId === variant?._id || s.item?._id === variant?._id || (
-                 s.item?.sourceRef === prod?._id &&
-                 String(s.item?.parameter).trim().toLowerCase() === String(variant?.parameter).trim().toLowerCase() &&
-                 String(s.item?.unit).trim().toLowerCase() === String(variant?.unit).trim().toLowerCase()
+            s.item?.sourceRef === prod?._id &&
+            String(s.item?.parameter).trim().toLowerCase() === String(variant?.parameter).trim().toLowerCase() &&
+            String(s.item?.unit).trim().toLowerCase() === String(variant?.unit).trim().toLowerCase()
           )
         );
         const availableQty = variantStock ? (variantStock.availableQuantity ?? 0) : (variant?.quantity ?? 0);
@@ -915,9 +913,9 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
       const variant = prod?.products?.[item.variantIndex];
       const stockRecord = (stockSummary || []).find(
         (s) => s.item?.variantId === variant?._id || s.item?._id === variant?._id || (
-               s.item?.sourceRef === prod?._id &&
-               String(s.item?.parameter).trim().toLowerCase() === String(variant?.parameter).trim().toLowerCase() &&
-               String(s.item?.unit).trim().toLowerCase() === String(variant?.unit).trim().toLowerCase()
+          s.item?.sourceRef === prod?._id &&
+          String(s.item?.parameter).trim().toLowerCase() === String(variant?.parameter).trim().toLowerCase() &&
+          String(s.item?.unit).trim().toLowerCase() === String(variant?.unit).trim().toLowerCase()
         )
       );
       const inventoryItemId = stockRecord?.item?._id || variant?._id || prod?._id;
@@ -990,18 +988,18 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
       const partyId = typeof savedSale?.party === "string"
         ? savedSale.party
         : (savedSale?.party && typeof savedSale?.party === "object" ? savedSale.party._id : null);
-      
+
       const resolvedParty = partyId
         ? (parties.find(p => p._id === partyId) || (typeof savedSale?.party === "object" ? savedSale.party : null))
         : (savedSale?.party && typeof savedSale?.party === "object" ? savedSale.party : null);
 
       const isB2B = resolvedParty && (resolvedParty.gstin || resolvedParty.gstNumber || resolvedParty.gstType?.startsWith("Registered"));
-      
+
       const irnVal = savedSale?.eInvoiceIrn || savedSale?.irn || savedSale?.eInvoiceInfo?.irn;
       const ewbNoVal = savedSale?.ewayBillNo || savedSale?.eWayBillNo || savedSale?.eInvoiceInfo?.ewayBillNo || savedSale?.eInvoiceInfo?.eWayBillNo;
-      
-      const isComplianceDone = isB2B 
-        ? (irnVal && ewbNoVal) 
+
+      const isComplianceDone = isB2B
+        ? (irnVal && ewbNoVal)
         : ewbNoVal;
 
       if (isComplianceDone) {
@@ -1031,7 +1029,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
             Record walk-in sales, estimates, and customer billing
           </p>
         </div>
-        
+
         <button
           type="button"
           onClick={() => navigate("/sell")}
@@ -1048,19 +1046,18 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
           <button
             type="button"
             onClick={() => activeStep > 1 && setActiveStep(1)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all whitespace-nowrap ${
-              activeStep === 1
-                ? "text-emerald-700 bg-emerald-50 border border-emerald-200 shadow-2xs animate-pulse"
-                : activeStep > 1
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all whitespace-nowrap ${activeStep === 1
+              ? "text-emerald-700 bg-emerald-50 border border-emerald-200 shadow-2xs animate-pulse"
+              : activeStep > 1
                 ? "text-emerald-600 hover:bg-gray-50"
                 : "text-gray-400 cursor-not-allowed"
-            }`}
+              }`}
           >
             <span>{activeStep > 1 ? "✓" : "①"} Customer & Details</span>
           </button>
-          
+
           <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
-          
+
           <button
             type="button"
             onClick={() => {
@@ -1070,20 +1067,19 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                 handleNextStep();
               }
             }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all whitespace-nowrap ${
-              activeStep === 2
-                ? "text-emerald-700 bg-emerald-50 border border-emerald-200 shadow-2xs"
-                : activeStep > 2
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all whitespace-nowrap ${activeStep === 2
+              ? "text-emerald-700 bg-emerald-50 border border-emerald-200 shadow-2xs"
+              : activeStep > 2
                 ? "text-emerald-600 hover:bg-gray-50"
                 : "text-gray-400 cursor-not-allowed"
-            }`}
+              }`}
             disabled={activeStep < 2 && !selectedPartyId && !buyerName.trim()}
           >
             <span>{activeStep > 2 ? "✓" : "②"} Add Products</span>
           </button>
-          
+
           <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
-          
+
           <button
             type="button"
             onClick={() => {
@@ -1113,17 +1109,16 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                 }
               }
             }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all whitespace-nowrap ${
-              activeStep === 3
-                ? "text-emerald-700 bg-emerald-50 border border-emerald-200 shadow-2xs"
-                : "text-gray-400 cursor-not-allowed"
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all whitespace-nowrap ${activeStep === 3
+              ? "text-emerald-700 bg-emerald-50 border border-emerald-200 shadow-2xs"
+              : "text-gray-400 cursor-not-allowed"
+              }`}
             disabled={activeStep < 3 && checkoutItems.length === 0}
           >
             <span>③ Review & Submit</span>
           </button>
         </div>
-        
+
         {activeStep > 1 && (
           <div className="hidden md:flex items-center gap-4 text-[10px] text-gray-500 font-bold uppercase tracking-wider select-none bg-slate-50 border border-slate-100 rounded-xl px-3.5 py-1.5">
             <span>
@@ -1139,7 +1134,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
 
       {/* Main Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        
+
         {/* ==================== STEP 1: CUSTOMER & INVOICE DETAILS ==================== */}
         {activeStep === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-200">
@@ -1160,11 +1155,10 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                         handleCustomerTypeChange("registered");
                       }
                     }}
-                    className={`relative flex items-start gap-3 p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
-                      customerType === "registered"
-                        ? "border-emerald-600 bg-emerald-50/10 shadow-md scale-[1.01]"
-                        : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
-                    }`}
+                    className={`relative flex items-start gap-3 p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${customerType === "registered"
+                      ? "border-emerald-600 bg-emerald-50/10 shadow-md scale-[1.01]"
+                      : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                      }`}
                   >
                     {/* Hidden Native Input */}
                     <input
@@ -1185,9 +1179,8 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                     )}
 
                     {/* Icon */}
-                    <div className={`flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
-                      customerType === "registered" ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-500"
-                    }`}>
+                    <div className={`flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${customerType === "registered" ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-500"
+                      }`}>
                       <Users className="w-[26px] h-[26px]" />
                     </div>
 
@@ -1212,11 +1205,10 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                         handleCustomerTypeChange("member");
                       }
                     }}
-                    className={`relative flex items-start gap-3 p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
-                      customerType === "member"
-                        ? "border-emerald-600 bg-emerald-50/10 shadow-md scale-[1.01]"
-                        : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
-                    }`}
+                    className={`relative flex items-start gap-3 p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${customerType === "member"
+                      ? "border-emerald-600 bg-emerald-50/10 shadow-md scale-[1.01]"
+                      : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                      }`}
                   >
                     {/* Hidden Native Input */}
                     <input
@@ -1237,9 +1229,8 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                     )}
 
                     {/* Icon */}
-                    <div className={`flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
-                      customerType === "member" ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-500"
-                    }`}>
+                    <div className={`flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${customerType === "member" ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-500"
+                      }`}>
                       <User className="w-[26px] h-[26px]" />
                     </div>
 
@@ -1264,11 +1255,10 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                         handleCustomerTypeChange("walkin");
                       }
                     }}
-                    className={`relative flex items-start gap-3 p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
-                      customerType === "walkin"
-                        ? "border-emerald-600 bg-emerald-50/10 shadow-md scale-[1.01]"
-                        : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
-                    }`}
+                    className={`relative flex items-start gap-3 p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${customerType === "walkin"
+                      ? "border-emerald-600 bg-emerald-50/10 shadow-md scale-[1.01]"
+                      : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                      }`}
                   >
                     {/* Hidden Native Input */}
                     <input
@@ -1289,9 +1279,8 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                     )}
 
                     {/* Icon */}
-                    <div className={`flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
-                      customerType === "walkin" ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-500"
-                    }`}>
+                    <div className={`flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${customerType === "walkin" ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-500"
+                      }`}>
                       <ShoppingBag className="w-[26px] h-[26px]" />
                     </div>
 
@@ -1318,8 +1307,8 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                     {customerType === "registered"
                       ? "Registered Party Details"
                       : customerType === "member"
-                      ? "FPO Member Details"
-                      : "Walk-in Customer Details"}
+                        ? "FPO Member Details"
+                        : "Walk-in Customer Details"}
                   </h3>
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
                     Provide client billing profile information
@@ -1337,9 +1326,8 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                           ref={partySelectRef}
                           value={selectedPartyId}
                           onChange={(e) => setSelectedPartyId(e.target.value)}
-                          className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] cursor-pointer font-bold text-gray-800 appearance-none pr-8 transition-all ${
-                            errors.selectedPartyId ? "border-red-400 focus:ring-red-400" : "border-gray-200 hover:border-gray-300"
-                          }`}
+                          className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] cursor-pointer font-bold text-gray-800 appearance-none pr-8 transition-all ${errors.selectedPartyId ? "border-red-400 focus:ring-red-400" : "border-gray-200 hover:border-gray-300"
+                            }`}
                         >
                           <option value="">-- Select Registered Party --</option>
                           {parties.map((p) => (
@@ -1467,9 +1455,8 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                         value={buyerName}
                         onChange={(e) => setBuyerName(e.target.value)}
                         placeholder="e.g. Ramesh Kumar"
-                        className={`w-full pl-10 pr-3 py-2 text-xs border rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] transition-all font-semibold text-gray-800 ${
-                          errors.buyerName ? "border-red-400 focus:ring-red-400" : "border-gray-200"
-                        }`}
+                        className={`w-full pl-10 pr-3 py-2 text-xs border rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] transition-all font-semibold text-gray-800 ${errors.buyerName ? "border-red-400 focus:ring-red-400" : "border-gray-200"
+                          }`}
                       />
                     </div>
                     {errors.buyerName && (
@@ -1553,11 +1540,10 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                     <button
                       type="button"
                       onClick={() => setSaleType("SALE")}
-                      className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${
-                        saleType === "SALE"
-                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                          : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
-                      }`}
+                      className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${saleType === "SALE"
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+                        }`}
                     >
                       <ShoppingCart className="w-4 h-4" />
                       Direct Sale
@@ -1565,11 +1551,10 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                     <button
                       type="button"
                       onClick={() => setSaleType("ESTIMATE")}
-                      className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${
-                        saleType === "ESTIMATE"
-                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                          : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
-                      }`}
+                      className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${saleType === "ESTIMATE"
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+                        }`}
                     >
                       <FileText className="w-4 h-4" />
                       Estimate / Quotation
@@ -1583,23 +1568,21 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                     <button
                       type="button"
                       onClick={() => setBillingType("Cash")}
-                      className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${
-                        billingType === "Cash"
-                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                          : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
-                      }`}
+                      className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${billingType === "Cash"
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+                        }`}
                     >
                       <Zap className="w-4 h-4" />
-                      Money Received
+                      Cash Bill
                     </button>
                     <button
                       type="button"
                       onClick={() => setBillingType("Credit")}
-                      className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${
-                        billingType === "Credit"
-                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                          : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
-                      }`}
+                      className={`flex-1 flex items-center justify-center gap-2 h-[42px] px-4 rounded-xl text-xs font-bold transition-all border ${billingType === "Credit"
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+                        }`}
                     >
                       <Calendar className="w-4 h-4" />
                       Udhar (Credit)
@@ -1622,7 +1605,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                   </span>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                 <div>
                   <label className="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Sales Bill Number</label>
@@ -1658,9 +1641,8 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                         type="date"
                         value={dueDate}
                         onChange={(e) => setDueDate(e.target.value)}
-                        className={`w-full pl-3 pr-10 py-2 text-xs border rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] cursor-pointer transition-all font-semibold text-gray-800 ${
-                          errors.dueDate ? "border-red-400 focus:ring-red-400" : "border-gray-200"
-                        }`}
+                        className={`w-full pl-3 pr-10 py-2 text-xs border rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white h-[42px] cursor-pointer transition-all font-semibold text-gray-800 ${errors.dueDate ? "border-red-400 focus:ring-red-400" : "border-gray-200"
+                          }`}
                         required
                       />
                       <Calendar className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -1779,10 +1761,10 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
         {/* ==================== STEPS 2 & 3: GRID LAYOUT ==================== */}
         {(activeStep === 2 || activeStep === 3) && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-            
+
             {/* Left Column (spans 3 columns) */}
             <div className="lg:col-span-3 space-y-6">
-              
+
               {activeStep === 2 && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-200">
                   {/* Unified Billing Workspace Card */}
@@ -1833,37 +1815,92 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 items-start pt-1">
                         {/* Quantity Counter */}
                         <div className="space-y-1">
-                          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">Quantity *</label>
-                          <div className="flex border border-gray-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/10 rounded-xl overflow-hidden bg-white h-10 transition-all shadow-2xs">
+                          <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                            Quantity <span className="text-red-500">*</span>
+                          </label>
+
+                          <div
+                            className={`flex h-10 overflow-hidden rounded-md border bg-white transition-all focus-within:ring-1 ${draftQty > availableQty
+                              ? "border-red-400 focus-within:border-red-500 focus-within:ring-red-500/20"
+                              : "border-gray-300 focus-within:border-emerald-500 focus-within:ring-emerald-500/20"
+                              }`}
+                          >
+                            {/* Minus */}
                             <button
                               type="button"
-                              disabled={!draftProductId}
+                              disabled={!draftProductId || draftQty <= 1}
                               onClick={() => setDraftQty(prev => Math.max(1, prev - 1))}
-                              className="px-2.5 bg-gray-50 hover:bg-gray-100 text-gray-500 disabled:opacity-50 transition-colors flex items-center justify-center border-r border-gray-200"
+                              className="w-9 flex items-center justify-center border-r border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              <Minus className="w-3 h-3" />
+                              <Minus className="h-3 w-3" />
                             </button>
+
+                            {/* Quantity */}
                             <input
                               type="number"
                               min="1"
-                              disabled={!draftProductId}
                               value={draftQty}
-                              onChange={(e) => setDraftQty(Math.max(1, parseInt(e.target.value) || 1))}
-                              className="w-full text-center text-xs font-bold focus:outline-none border-0 p-0 text-gray-800 bg-transparent h-full text-center"
+                              onChange={(e) => {
+                                const value = e.target.value;
+
+                                // Allow empty input while editing
+                                if (value === "") {
+                                  setDraftQty("");
+                                  return;
+                                }
+
+                                const qty = parseInt(value, 10);
+
+                                if (!Number.isNaN(qty)) {
+                                  setDraftQty(qty);
+                                }
+                              }}
+                              onBlur={() => {
+                                // Restore minimum quantity when user leaves empty
+                                if (draftQty === "" || draftQty < 1) {
+                                  setDraftQty(1);
+                                }
+                              }}
+                              className={`w-full min-w-0 border-0 bg-white p-0 text-center text-sm font-semibold tabular-nums focus:outline-none ${draftQty > availableQty ? "text-red-600" : "text-gray-800"
+                                }`}
                             />
+                            {/* Plus */}
                             <button
                               type="button"
-                              disabled={!draftProductId}
-                              onClick={() => setDraftQty(prev => prev + 1)}
-                              className="px-2.5 bg-gray-50 hover:bg-gray-100 text-gray-500 disabled:opacity-50 transition-colors flex items-center justify-center border-l border-gray-200"
+                              disabled={!draftProductId || draftQty >= availableQty}
+                              onClick={() =>
+                                setDraftQty(prev => Math.min(prev + 1, availableQty))
+                              }
+                              className="w-9 flex items-center justify-center border-l border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              <Plus className="w-3 h-3" />
+                              <Plus className="h-3 w-3" />
                             </button>
                           </div>
+
+                          {/* Stock */}
                           {draftProductId && (
-                            <span className="text-[10px] text-gray-400 font-semibold block mt-0.5">
-                              Stock: <b className="text-gray-700">{availableQty} {draftUnit}</b>
-                            </span>
+                            <div className="flex items-center justify-between px-0.5 pt-0.5">
+                              <span className="text-[10px] font-medium text-gray-400">
+                                Available Stock
+                              </span>
+
+                              <span
+                                className={`text-[10px] font-semibold tabular-nums ${draftQty > availableQty
+                                  ? "text-red-600"
+                                  : "text-gray-700"
+                                  }`}
+                              >
+                                {availableQty}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Validation */}
+                          {draftProductId && draftQty > availableQty && (
+                            <p className="flex items-center gap-1 text-[10px] font-medium text-red-600">
+                              <span>⚠</span>
+                              Only {availableQty} units available in stock.
+                            </p>
                           )}
                         </div>
 
@@ -2285,7 +2322,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
               {/* STEP 3 CONTENT: REVIEW & SUBMIT */}
               {activeStep === 3 && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-200">
-                  
+
                   {/* Invoice Summary Card */}
                   <div className="bg-white border border-gray-150 rounded-2xl p-6 shadow-sm space-y-5">
                     <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
@@ -2363,7 +2400,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                       <div>
                         <span className="text-gray-400 font-bold text-[9px] uppercase tracking-wider block">Billing Type</span>
                         <span className="text-xs font-extrabold text-emerald-750">
-                          {billingType === "Cash" ? "Money Received" : "Udhar (Credit)"}
+                          {billingType === "Cash" ? "Cash Bill" : "Udhar (Credit)"}
                         </span>
                       </div>
 
@@ -2492,12 +2529,12 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
                     <span>Subtotal (Base Bill)</span>
                     <span className="text-gray-800 font-bold">₹{subTotal.toLocaleString("en-IN")}</span>
                   </div>
-                  
+
                   <div className="flex justify-between text-xs font-semibold text-red-655">
                     <span>Discounts Applied</span>
                     <span className="font-bold text-red-650">-₹{totalDiscounts.toLocaleString("en-IN")}</span>
                   </div>
-                  
+
                   <div className="flex justify-between text-xs font-semibold text-gray-500">
                     <span>Taxes & GST</span>
                     <span className="text-gray-800 font-bold">+₹{totalTaxes.toLocaleString("en-IN")}</span>
@@ -2540,7 +2577,7 @@ function InvoiceFormInner({ editRecord = null, parties, products, stockSummary =
         )}
 
         {/* Form Actions Footer */}
-        <div className="sticky bottom-4 z-[90] flex justify-between items-center p-4 bg-white border border-gray-150 rounded-2xl shadow-lg mt-6">
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 md:px-6 shadow-sm flex justify-between items-center mt-6">
           <div>
             {(activeStep === 2 || activeStep === 3) ? (
               <div className="flex items-center gap-2">
@@ -2883,9 +2920,8 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                             if (gstinError) setGstinError(null);
                             if (hasAttemptedGstin) setHasAttemptedGstin(false);
                           }}
-                          className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${
-                            errors.gstin ? "border-red-400 focus:ring-red-400" : "border-gray-200"
-                          }`}
+                          className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${errors.gstin ? "border-red-400 focus:ring-red-400" : "border-gray-200"
+                            }`}
                           placeholder="22AAAAA0000A1Z5"
                         />
                       </div>
@@ -2893,11 +2929,10 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                         type="button"
                         disabled={gstinLoading || form.gstin.length !== 15}
                         onClick={handleVerifyGstin}
-                        className={`px-3.5 py-2 disabled:opacity-50 text-xs font-bold rounded-lg border transition shrink-0 flex items-center gap-1.5 h-[38px] ${
-                          verifiedGstinDetails
-                            ? "bg-emerald-50 border-emerald-250 text-emerald-700 hover:bg-emerald-100"
-                            : "bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100"
-                        }`}
+                        className={`px-3.5 py-2 disabled:opacity-50 text-xs font-bold rounded-lg border transition shrink-0 flex items-center gap-1.5 h-[38px] ${verifiedGstinDetails
+                          ? "bg-emerald-50 border-emerald-250 text-emerald-700 hover:bg-emerald-100"
+                          : "bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100"
+                          }`}
                       >
                         {gstinLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                         {gstinLoading ? "Fetching..." : verifiedGstinDetails ? "Re-Verify" : "Verify GSTIN"}
@@ -2950,11 +2985,11 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                         {verifiedGstinDetails.taxpayerType}
                       </span>
                       <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-805 text-[9px] font-bold uppercase tracking-wider">
-                        {verifiedGstinDetails.einvoiceStatus?.toLowerCase()?.includes("elig") || 
-                         verifiedGstinDetails.einvoiceStatus?.toLowerCase()?.includes("enab") || 
-                         verifiedGstinDetails.einvoiceStatus?.toLowerCase() === "yes" || 
-                         verifiedGstinDetails.einvoiceStatus?.toLowerCase() === "y"
-                          ? "E-Invoice Enabled" 
+                        {verifiedGstinDetails.einvoiceStatus?.toLowerCase()?.includes("elig") ||
+                          verifiedGstinDetails.einvoiceStatus?.toLowerCase()?.includes("enab") ||
+                          verifiedGstinDetails.einvoiceStatus?.toLowerCase() === "yes" ||
+                          verifiedGstinDetails.einvoiceStatus?.toLowerCase() === "y"
+                          ? "E-Invoice Enabled"
                           : "E-Invoice Disabled"}
                       </span>
                     </div>
@@ -2964,7 +2999,7 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                         <span className="text-gray-400 font-semibold block text-[10px] uppercase tracking-wider">GSTIN</span>
                         <span className="font-bold text-gray-800 text-[11px]">{verifiedGstinDetails.gstin}</span>
                       </div>
-                      
+
                       <div className="pt-2 border-t border-gray-150 flex items-start gap-2">
                         <span className="text-emerald-700 text-xs shrink-0 mt-0.5">📍</span>
                         <div>
@@ -2982,7 +3017,7 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                       >
                         {showMoreDetails ? "▲ Hide Details" : "▼ Show More Details"}
                       </button>
-                      
+
                       {showMoreDetails && (
                         <div className="grid grid-cols-2 gap-3 pt-2 text-[11px] leading-relaxed border-t border-emerald-100/30 animate-in fade-in slide-in-from-top-1 duration-200">
                           <div>
@@ -3065,13 +3100,12 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                     type="text"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 bg-white h-[38px] ${
-                      errors.name 
-                        ? "border-red-400 focus:ring-red-400" 
-                        : isNameAutofilled 
-                          ? "border-emerald-300 focus:ring-emerald-450 focus:border-emerald-450 bg-emerald-50/5 text-emerald-950" 
-                          : "border-gray-200 focus:ring-brand-500"
-                    }`}
+                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 bg-white h-[38px] ${errors.name
+                      ? "border-red-400 focus:ring-red-400"
+                      : isNameAutofilled
+                        ? "border-emerald-300 focus:ring-emerald-450 focus:border-emerald-450 bg-emerald-50/5 text-emerald-950"
+                        : "border-gray-200 focus:ring-brand-500"
+                      }`}
                     placeholder="Mahadev Traders"
                   />
                 </div>
@@ -3109,9 +3143,8 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                     maxLength={10}
                     value={form.phoneNumber}
                     onChange={(e) => setForm({ ...form, phoneNumber: e.target.value.replace(/\D/g, "") })}
-                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${
-                      errors.phoneNumber ? "border-red-400 focus:ring-red-400 bg-white" : "border-gray-200 bg-white"
-                    }`}
+                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${errors.phoneNumber ? "border-red-400 focus:ring-red-400 bg-white" : "border-gray-200 bg-white"
+                      }`}
                     placeholder="9876543210"
                   />
                 </div>
@@ -3129,9 +3162,8 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                     type="email"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${
-                      errors.email ? "border-red-400 focus:ring-red-400 bg-white" : "border-gray-200 bg-white"
-                    }`}
+                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] ${errors.email ? "border-red-400 focus:ring-red-400 bg-white" : "border-gray-200 bg-white"
+                      }`}
                     placeholder="mahadevtraders@example.com"
                   />
                 </div>
@@ -3182,11 +3214,10 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                       }));
                     }}
                     rows={3}
-                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 bg-white ${
-                      isAddressAutofilled
-                        ? "border-emerald-300 focus:ring-emerald-450 focus:border-emerald-450 bg-emerald-50/5 text-emerald-950"
-                        : "border-gray-200 focus:ring-brand-500 bg-white"
-                    }`}
+                    className={`w-full pl-10 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 bg-white ${isAddressAutofilled
+                      ? "border-emerald-300 focus:ring-emerald-450 focus:border-emerald-450 bg-emerald-50/5 text-emerald-950"
+                      : "border-gray-200 focus:ring-brand-500 bg-white"
+                      }`}
                     placeholder="Main Road, Deoria"
                   />
                 </div>
@@ -3248,11 +3279,10 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                 <label className="block text-xs font-semibold text-gray-500 mb-2">Balance Type</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Credit Option */}
-                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                    form.openingBalanceType === "CREDIT"
-                      ? "bg-emerald-50/20 border-emerald-500 ring-1 ring-emerald-500"
-                      : "bg-white border-gray-200 hover:bg-gray-50/50"
-                  }`}>
+                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${form.openingBalanceType === "CREDIT"
+                    ? "bg-emerald-50/20 border-emerald-500 ring-1 ring-emerald-500"
+                    : "bg-white border-gray-200 hover:bg-gray-50/50"
+                    }`}>
                     <input
                       type="radio"
                       name="openingBalanceTypeQuick"
@@ -3268,11 +3298,10 @@ function QuickAddVendorModal({ onClose, onSuccess }) {
                   </label>
 
                   {/* Debit Option */}
-                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                    form.openingBalanceType === "DEBIT"
-                      ? "bg-emerald-50/20 border-emerald-500 ring-1 ring-emerald-500"
-                      : "bg-white border-gray-200 hover:bg-gray-50/50"
-                  }`}>
+                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${form.openingBalanceType === "DEBIT"
+                    ? "bg-emerald-50/20 border-emerald-500 ring-1 ring-emerald-500"
+                    : "bg-white border-gray-200 hover:bg-gray-50/50"
+                    }`}>
                     <input
                       type="radio"
                       name="openingBalanceTypeQuick"
@@ -3431,9 +3460,8 @@ function QuickAddProductModal({ onClose, onSuccess }) {
                 type="text"
                 value={form.productName}
                 onChange={(e) => setForm({ ...form, productName: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-805 ${
-                  errors.productName ? "border-red-400 focus:ring-red-450" : "border-gray-200"
-                }`}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-805 ${errors.productName ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                  }`}
                 placeholder="e.g. Urea Coarse"
               />
               {errors.productName && <p className="text-[11px] text-red-500 mt-1">{errors.productName}</p>}
@@ -3485,9 +3513,8 @@ function QuickAddProductModal({ onClose, onSuccess }) {
                 type="text"
                 value={form.parameter}
                 onChange={(e) => setForm({ ...form, parameter: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-805 ${
-                  errors.parameter ? "border-red-400 focus:ring-red-450" : "border-gray-200"
-                }`}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-805 ${errors.parameter ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                  }`}
                 placeholder="e.g. 50"
               />
               {errors.parameter && <p className="text-[11px] text-red-500 mt-1">{errors.parameter}</p>}
@@ -3527,9 +3554,8 @@ function QuickAddProductModal({ onClose, onSuccess }) {
                 step="any"
                 value={form.mrp}
                 onChange={(e) => setForm({ ...form, mrp: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${
-                  errors.mrp ? "border-red-400 focus:ring-red-450" : "border-gray-200"
-                }`}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${errors.mrp ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                  }`}
                 placeholder="0.00"
               />
               {errors.mrp && <p className="text-[11px] text-red-500 mt-1">{errors.mrp}</p>}
@@ -3546,9 +3572,8 @@ function QuickAddProductModal({ onClose, onSuccess }) {
                 step="any"
                 value={form.purchasePrice}
                 onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${
-                  errors.purchasePrice ? "border-red-400 focus:ring-red-450" : "border-gray-200"
-                }`}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${errors.purchasePrice ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                  }`}
                 placeholder="0.00"
               />
               {errors.purchasePrice && <p className="text-[11px] text-red-500 mt-1">{errors.purchasePrice}</p>}
@@ -3565,9 +3590,8 @@ function QuickAddProductModal({ onClose, onSuccess }) {
                 step="any"
                 value={form.salePrice}
                 onChange={(e) => setForm({ ...form, salePrice: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${
-                  errors.salePrice ? "border-red-400 focus:ring-red-450" : "border-gray-200"
-                }`}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${errors.salePrice ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                  }`}
                 placeholder="0.00"
               />
               {errors.salePrice && <p className="text-[11px] text-red-500 mt-1">{errors.salePrice}</p>}
@@ -3583,9 +3607,8 @@ function QuickAddProductModal({ onClose, onSuccess }) {
                 min="0"
                 value={form.quantity}
                 onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${
-                  errors.quantity ? "border-red-400 focus:ring-red-450" : "border-gray-200"
-                }`}
+                className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white h-[38px] font-semibold text-gray-855 ${errors.quantity ? "border-red-400 focus:ring-red-450" : "border-gray-200"
+                  }`}
                 placeholder="0"
               />
               {errors.quantity && <p className="text-[11px] text-red-500 mt-1">{errors.quantity}</p>}
@@ -3689,11 +3712,10 @@ function SearchableProductSelect({ value, onChange, products, stockSummary = [],
             setProductDropdownOpen(true);
           }}
           placeholder={placeholder}
-          className={`pl-10 pr-10 w-full border rounded-xl text-xs h-[42px] transition-all font-semibold ${
-            dropdownOpen
-              ? "border-emerald-500 bg-white ring-4 ring-emerald-500/10 text-gray-850"
-              : "border-gray-200 hover:border-gray-350 bg-white text-gray-700"
-          }`}
+          className={`pl-10 pr-10 w-full border rounded-xl text-xs h-[42px] transition-all font-semibold ${dropdownOpen
+            ? "border-emerald-500 bg-white ring-4 ring-emerald-500/10 text-gray-850"
+            : "border-gray-200 hover:border-gray-350 bg-white text-gray-700"
+            }`}
         />
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
         <ChevronDown
@@ -3701,9 +3723,8 @@ function SearchableProductSelect({ value, onChange, products, stockSummary = [],
             e.stopPropagation();
             if (!disabled) setProductDropdownOpen(!dropdownOpen);
           }}
-          className={`absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 cursor-pointer transition-transform duration-200 text-gray-400 ${
-            dropdownOpen ? "rotate-180 text-emerald-600" : ""
-          }`}
+          className={`absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 cursor-pointer transition-transform duration-200 text-gray-400 ${dropdownOpen ? "rotate-180 text-emerald-600" : ""
+            }`}
         />
       </div>
 
@@ -3743,9 +3764,8 @@ function SearchableProductSelect({ value, onChange, products, stockSummary = [],
                       setSearchQuery(p.productName);
                       setProductDropdownOpen(false);
                     }}
-                    className={`px-3.5 py-2.5 cursor-pointer transition-colors flex items-center gap-3 hover:bg-gray-50 ${
-                      isSelected ? "bg-emerald-50/30 hover:bg-emerald-50/40" : ""
-                    }`}
+                    className={`px-3.5 py-2.5 cursor-pointer transition-colors flex items-center gap-3 hover:bg-gray-50 ${isSelected ? "bg-emerald-50/30 hover:bg-emerald-50/40" : ""
+                      }`}
                   >
                     <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shrink-0">
                       <ProductIcon className="w-4 h-4" />
