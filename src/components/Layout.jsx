@@ -84,11 +84,13 @@ const menuSections = [
         path: "/purchase",
         isParent: true,
         children: [
-          { label: "Stock Purchase", path: "/purchase", icon: Receipt },
-          { label: "Payments", path: "/purchase/payments", icon: Wallet },
-          { label: "Debit Notes", path: "/purchase/debit-notes", icon: RotateCcw },
+          { label: "Purchase", path: "/purchase", icon: Receipt },
+          { label: "Crop Purchases", path: "/purchase/crop", icon: Sprout },
+
+          { label: "Purchase Returns", path: "/purchase/debit-notes", icon: RotateCcw },
           { label: "Expenses", path: "/purchase/expenses", icon: ReceiptIndianRupee },
-          { label: "Purchase Crop", path: "/purchase/crop", icon: Sprout },
+          { label: "Receipts & Payments", path: "/purchase/payments", icon: Wallet },
+
         ]
       },
       {
@@ -97,11 +99,11 @@ const menuSections = [
         path: "/sell",
         isParent: true,
         children: [
-          { label: "Sale Inventory", path: "/sell/invoices", icon: Receipt },
-          { label: "Procurement Sales", path: "/sales/procurement", icon: Receipt },
-          { label: "Customer Orders", path: "/sell/orders", icon: ClipboardList },
-          { label: "Payment", path: "/sell/receipts", icon: Wallet },
-          { label: "Returns", path: "/sell/returns", icon: RotateCcw },
+          { label: "Sales", path: "/sell/invoices", icon: Receipt },
+          { label: "Crop Sales", path: "/sales/procurement", icon: Receipt },
+          { label: "Sales Returns", path: "/sell/returns", icon: RotateCcw },
+          { label: "Sales Orders", path: "/sell/orders", icon: ClipboardList },
+          { label: "Receipts & Payments", path: "/sell/receipts", icon: Wallet },
         ]
       }
     ]
@@ -113,7 +115,7 @@ const menuSections = [
       { icon: FileText, label: "GST Reports", path: "/gst-reports" },
       {
         icon: BookOpen,
-        label: "Ledger",
+        label: "Account Statement",
         path: "/ledger",
         isParent: true,
         children: [
@@ -493,11 +495,9 @@ export default function Layout() {
       )}
 
       <aside
-        className={`fixed lg:static z-40 h-full ${
-          isSidebarMinimized ? "w-[72px]" : "w-[260px]"
-        } flex flex-col transition-all duration-300 bg-white border-r border-[#E5E7EB] ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        className={`fixed lg:static z-40 h-full ${isSidebarMinimized ? "w-[72px]" : "w-[260px]"
+          } flex flex-col transition-all duration-300 bg-white border-r border-[#E5E7EB] ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          }`}
       >
         {/* BRAND CARD */}
         <div className="h-[72px] px-4 border-b border-[#E5E7EB] flex items-center justify-between">
@@ -530,9 +530,8 @@ export default function Layout() {
             className="hidden lg:flex w-6 h-6 items-center justify-center rounded-lg border border-[#E5E7EB] hover:bg-[#F5FBF6] hover:text-[#18864B] transition-colors text-gray-400 cursor-pointer"
           >
             <svg
-              className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                isSidebarMinimized ? "rotate-180" : ""
-              }`}
+              className={`w-3.5 h-3.5 transition-transform duration-200 ${isSidebarMinimized ? "rotate-180" : ""
+                }`}
               fill="none"
               stroke="currentColor"
               strokeWidth={2.5}
@@ -616,11 +615,10 @@ export default function Layout() {
                               }
                             }}
                             title={item.label}
-                            className={`w-10 h-10 flex items-center justify-center mx-auto rounded-xl transition-all duration-200 ${
-                              parentActive
-                                ? "bg-[#EAF7EE] text-[#18864B]"
-                                : "text-gray-400 hover:bg-[#F5FBF6] hover:text-[#18864B]"
-                            }`}
+                            className={`w-10 h-10 flex items-center justify-center mx-auto rounded-xl transition-all duration-200 ${parentActive
+                              ? "bg-[#EAF7EE] text-[#18864B]"
+                              : "text-gray-400 hover:bg-[#F5FBF6] hover:text-[#18864B]"
+                              }`}
                           >
                             <Icon className="w-5 h-5 flex-shrink-0 transition-colors duration-200" strokeWidth={1.8} />
                           </button>
@@ -632,11 +630,10 @@ export default function Layout() {
                           <button
                             type="button"
                             onClick={() => toggleMenu(item.label.toLowerCase())}
-                            className={`relative w-full h-10 flex items-center gap-3 px-3 rounded-xl text-[15px] transition-all duration-200 border-l-4 ${
-                              isExpanded || parentActive
-                                ? "bg-[#EAF7EE] border-[#16A34A] text-[#18864B] font-semibold shadow-[0_4px_12px_rgba(22,163,74,0.08)]"
-                                : "bg-transparent border-transparent text-[#1F2937] hover:bg-[#F5FBF6] hover:text-[#18864B] font-medium"
-                            }`}
+                            className={`relative w-full h-10 flex items-center gap-3 px-3 rounded-xl text-[15px] transition-all duration-200 border-l-4 ${isExpanded || parentActive
+                              ? "bg-[#EAF7EE] border-[#16A34A] text-[#18864B] font-semibold shadow-[0_4px_12px_rgba(22,163,74,0.08)]"
+                              : "bg-transparent border-transparent text-[#1F2937] hover:bg-[#F5FBF6] hover:text-[#18864B] font-medium"
+                              }`}
                           >
                             <Icon
                               className="w-5 h-5 flex-shrink-0 transition-colors duration-200"
@@ -645,9 +642,8 @@ export default function Layout() {
                             />
                             <span className="flex-1 text-left">{item.label}</span>
                             <ChevronDown
-                              className={`w-4 h-4 transition-transform duration-200 ${
-                                isExpanded ? "text-[#18864B] rotate-180" : "text-gray-400 -rotate-90"
-                              }`}
+                              className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? "text-[#18864B] rotate-180" : "text-gray-400 -rotate-90"
+                                }`}
                             />
                           </button>
 
@@ -665,8 +661,8 @@ export default function Layout() {
                                 const childActive = child.path.includes("?")
                                   ? currentFullPath === child.path
                                   : hasSiblingsWithParams
-                                  ? location.pathname === child.path && !location.search
-                                  : location.pathname === child.path;
+                                    ? location.pathname === child.path && !location.search
+                                    : location.pathname === child.path;
 
                                 return (
                                   <button
@@ -675,11 +671,10 @@ export default function Layout() {
                                       navigate(child.path);
                                       setSidebarOpen(false);
                                     }}
-                                    className={`relative w-full h-9 flex items-center gap-2 px-3 rounded-lg text-[14px] transition-all duration-200 ${
-                                      childActive
-                                        ? "bg-[#F4FBF6] text-[#18864B] font-medium"
-                                        : "bg-transparent text-[#6B7280] hover:bg-[#F5FBF6] hover:text-[#1F2937] font-normal cursor-pointer"
-                                    }`}
+                                    className={`relative w-full h-9 flex items-center gap-2 px-3 rounded-lg text-[14px] transition-all duration-200 ${childActive
+                                      ? "bg-[#F4FBF6] text-[#18864B] font-medium"
+                                      : "bg-transparent text-[#6B7280] hover:bg-[#F5FBF6] hover:text-[#1F2937] font-normal cursor-pointer"
+                                      }`}
                                   >
                                     {childActive ? (
                                       <span className="w-1.5 h-1.5 rounded-full bg-[#18864B] mr-2 flex-shrink-0 animate-pulse" />
@@ -714,11 +709,10 @@ export default function Layout() {
                             }
                           }}
                           title={item.label}
-                          className={`w-10 h-10 flex items-center justify-center mx-auto rounded-xl transition-all duration-150 ${
-                            active
-                              ? "bg-[#EAF7EE] text-[#18864B]"
-                              : "text-gray-400 hover:bg-[#F5FBF6] hover:text-[#18864B]"
-                          }`}
+                          className={`w-10 h-10 flex items-center justify-center mx-auto rounded-xl transition-all duration-150 ${active
+                            ? "bg-[#EAF7EE] text-[#18864B]"
+                            : "text-gray-400 hover:bg-[#F5FBF6] hover:text-[#18864B]"
+                            }`}
                         >
                           <Icon className="w-5 h-5" strokeWidth={1.8} />
                         </button>
@@ -736,11 +730,10 @@ export default function Layout() {
                             setSidebarOpen(false);
                           }
                         }}
-                        className={`relative w-full h-10 flex items-center gap-3 px-3 rounded-xl text-[15px] transition-all duration-200 border-l-4 ${
-                          active
-                            ? "bg-[#EAF7EE] border-[#16A34A] text-[#18864B] font-semibold shadow-[0_4px_12px_rgba(22,163,74,0.08)]"
-                            : "bg-transparent border-transparent text-[#1F2937] hover:bg-[#F5FBF6] hover:text-[#18864B] font-medium"
-                        }`}
+                        className={`relative w-full h-10 flex items-center gap-3 px-3 rounded-xl text-[15px] transition-all duration-200 border-l-4 ${active
+                          ? "bg-[#EAF7EE] border-[#16A34A] text-[#18864B] font-semibold shadow-[0_4px_12px_rgba(22,163,74,0.08)]"
+                          : "bg-transparent border-transparent text-[#1F2937] hover:bg-[#F5FBF6] hover:text-[#18864B] font-medium"
+                          }`}
                       >
                         <Icon
                           className="w-5 h-5 flex-shrink-0 transition-colors duration-200"
@@ -802,11 +795,10 @@ export default function Layout() {
                       dispatch(fetchAllTenants({ force: true }));
                     }
                   }}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${
-                    showTenantMenu
-                      ? "bg-emerald-50 border-emerald-300 ring-2 ring-emerald-500/20 text-emerald-950"
-                      : "bg-emerald-50/80 border-emerald-200/80 hover:border-emerald-300 hover:bg-emerald-100/60 text-emerald-900 shadow-2xs"
-                  }`}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${showTenantMenu
+                    ? "bg-emerald-50 border-emerald-300 ring-2 ring-emerald-500/20 text-emerald-950"
+                    : "bg-emerald-50/80 border-emerald-200/80 hover:border-emerald-300 hover:bg-emerald-100/60 text-emerald-900 shadow-2xs"
+                    }`}
                 >
                   <div className="p-1 rounded-lg bg-emerald-100 text-emerald-700 flex-shrink-0">
                     <Building2 className="w-3.5 h-3.5" />
@@ -822,9 +814,8 @@ export default function Layout() {
                     })()}
                   </span>
                   <ChevronDown
-                    className={`w-3.5 h-3.5 text-emerald-600 transition-transform duration-200 ml-0.5 flex-shrink-0 ${
-                      showTenantMenu ? "rotate-180" : ""
-                    }`}
+                    className={`w-3.5 h-3.5 text-emerald-600 transition-transform duration-200 ml-0.5 flex-shrink-0 ${showTenantMenu ? "rotate-180" : ""
+                      }`}
                   />
                 </button>
 
@@ -899,19 +890,17 @@ export default function Layout() {
                                   window.location.reload();
                                 }
                               }}
-                              className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
-                                isSelected
-                                  ? "bg-emerald-50 border-emerald-300 text-emerald-950 font-bold shadow-xs"
-                                  : "bg-white border-transparent hover:bg-emerald-50/50 hover:border-emerald-200/60 text-gray-700"
-                              }`}
+                              className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${isSelected
+                                ? "bg-emerald-50 border-emerald-300 text-emerald-950 font-bold shadow-xs"
+                                : "bg-white border-transparent hover:bg-emerald-50/50 hover:border-emerald-200/60 text-gray-700"
+                                }`}
                             >
                               <div className="flex items-center gap-2.5 min-w-0 pr-2">
                                 <div
-                                  className={`p-1.5 rounded-lg flex-shrink-0 ${
-                                    isSelected
-                                      ? "bg-emerald-600 text-white shadow-2xs"
-                                      : "bg-gray-100 text-gray-500"
-                                  }`}
+                                  className={`p-1.5 rounded-lg flex-shrink-0 ${isSelected
+                                    ? "bg-emerald-600 text-white shadow-2xs"
+                                    : "bg-gray-100 text-gray-500"
+                                    }`}
                                 >
                                   <Building2 className="w-3.5 h-3.5" />
                                 </div>
@@ -976,11 +965,10 @@ export default function Layout() {
                   setShowNotifications((v) => !v);
                   setShowUserMenu(false);
                 }}
-                className={`relative p-2 rounded-xl transition ${
-                  showNotifications
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "hover:bg-emerald-50/60 text-gray-600 hover:text-emerald-700"
-                }`}
+                className={`relative p-2 rounded-xl transition ${showNotifications
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "hover:bg-emerald-50/60 text-gray-600 hover:text-emerald-700"
+                  }`}
               >
                 <Bell className="w-5 h-5" />
                 {broadcasts.length > 0 && (
@@ -1074,11 +1062,10 @@ export default function Layout() {
                   setShowUserMenu((v) => !v);
                   setShowNotifications(false);
                 }}
-                className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all ${
-                  showUserMenu
-                    ? "bg-emerald-50 border-emerald-300 text-emerald-950"
-                    : "bg-white border-gray-200/80 hover:border-emerald-300 hover:bg-emerald-50/50 text-gray-800 shadow-2xs"
-                }`}
+                className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all ${showUserMenu
+                  ? "bg-emerald-50 border-emerald-300 text-emerald-950"
+                  : "bg-white border-gray-200/80 hover:border-emerald-300 hover:bg-emerald-50/50 text-gray-800 shadow-2xs"
+                  }`}
               >
                 <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs font-extrabold shadow-2xs">
                   {me?.firstName?.charAt(0)?.toUpperCase() || user?.firstName?.charAt(0)?.toUpperCase() || "B"}
@@ -1100,9 +1087,8 @@ export default function Layout() {
                   </p>
                 </div>
                 <ChevronDown
-                  className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${
-                    showUserMenu ? "rotate-180 text-emerald-600" : ""
-                  }`}
+                  className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${showUserMenu ? "rotate-180 text-emerald-600" : ""
+                    }`}
                 />
               </button>
 
