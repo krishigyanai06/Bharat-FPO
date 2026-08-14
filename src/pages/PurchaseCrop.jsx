@@ -42,11 +42,11 @@ export default function PurchaseCrop() {
   const [saving, setSaving] = useState(false);
   const [purchaseForm, setPurchaseForm] = useState({
     farmer: "",
-    crops: [{ cropName: "Wheat", variety: "", unit: "qtl", rate: "", quantity: "" }],
+    crops: [{ cropName: "", variety: "", unit: "qtl", rate: "", quantity: "" }],
     procurementDate: new Date().toISOString().split("T")[0],
     procurementCenter: "",
     previousDues: "",
-    godown: "Main Godown",
+    godown: "",
     vehicle: "",
     remarks: "",
     purchaseId: "",
@@ -504,11 +504,10 @@ export default function PurchaseCrop() {
                         value={crop.cropName}
                         onChange={(e) => handleCropRowChange(idx, "cropName", e.target.value)}
                         placeholder="Crop (e.g. Wheat, Mustard)"
-                        className={`w-full border ${
-                          cropErr.cropName
+                        className={`w-full border ${cropErr.cropName
                             ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/30 text-rose-900"
                             : "border-slate-200 bg-white"
-                        } px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 font-semibold text-xs text-slate-800`}
+                          } px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 font-semibold text-xs text-slate-800`}
                       />
                       {cropErr.cropName && (
                         <span className="text-[10px] text-rose-600 font-extrabold block mt-1">{cropErr.cropName}</span>
@@ -547,11 +546,10 @@ export default function PurchaseCrop() {
                         value={crop.quantity}
                         onChange={(e) => handleCropRowChange(idx, "quantity", e.target.value)}
                         placeholder="0.00"
-                        className={`w-full border ${
-                          cropErr.quantity
+                        className={`w-full border ${cropErr.quantity
                             ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/30 text-rose-900"
                             : "border-slate-200 bg-white"
-                        } px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-right font-bold text-xs text-slate-900`}
+                          } px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-right font-bold text-xs text-slate-900`}
                       />
                       {cropErr.quantity && (
                         <span className="text-[10px] text-rose-600 font-extrabold block mt-1 text-right">
@@ -572,11 +570,10 @@ export default function PurchaseCrop() {
                           value={crop.rate}
                           onChange={(e) => handleCropRowChange(idx, "rate", e.target.value)}
                           placeholder="Rate"
-                          className={`w-full border ${
-                            cropErr.rate
+                          className={`w-full border ${cropErr.rate
                               ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/30 text-rose-900"
                               : "border-slate-200 bg-white"
-                          } px-2.5 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-right font-bold text-xs text-slate-900`}
+                            } px-2.5 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-right font-bold text-xs text-slate-900`}
                         />
                         <select
                           value={crop.rateUnit || "qtl"}
@@ -640,11 +637,10 @@ export default function PurchaseCrop() {
                     setPurchaseForm({ ...purchaseForm, procurementDate: e.target.value });
                     if (errors.procurementDate) setErrors((prev) => ({ ...prev, procurementDate: "" }));
                   }}
-                  className={`w-full border ${
-                    errors.procurementDate
+                  className={`w-full border ${errors.procurementDate
                       ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/30 text-rose-900"
                       : "border-slate-200 bg-white"
-                  } px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 font-semibold text-xs text-slate-800 h-[40px]`}
+                    } px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 font-semibold text-xs text-slate-800 h-[40px]`}
                 />
                 {errors.procurementDate && (
                   <p className="text-[10px] text-rose-600 font-extrabold mt-1">{errors.procurementDate}</p>
@@ -706,11 +702,10 @@ export default function PurchaseCrop() {
                     }
                   }}
                   placeholder="e.g. UP53AB1234"
-                  className={`w-full border px-3 py-2 rounded-xl focus:outline-none focus:ring-2 font-mono font-semibold text-xs transition h-[40px] ${
-                    errors.vehicle
+                  className={`w-full border px-3 py-2 rounded-xl focus:outline-none focus:ring-2 font-mono font-semibold text-xs transition h-[40px] ${errors.vehicle
                       ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/10 text-rose-700"
                       : "border-slate-200 bg-white focus:ring-brand-500 text-slate-900"
-                  }`}
+                    }`}
                 />
                 {errors.vehicle && (
                   <p className="text-[10px] text-rose-600 font-bold mt-1">{errors.vehicle}</p>
@@ -790,11 +785,10 @@ export default function PurchaseCrop() {
                         }
                       }}
                       placeholder="0"
-                      className={`w-28 pl-6 pr-2.5 py-1.5 border ${
-                        errors.previousDues
+                      className={`w-28 pl-6 pr-2.5 py-1.5 border ${errors.previousDues
                           ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/30 text-rose-900"
                           : "border-slate-200 bg-white"
-                      } rounded-xl text-right font-bold text-xs text-rose-600 focus:outline-none focus:ring-2 focus:ring-brand-500`}
+                        } rounded-xl text-right font-bold text-xs text-rose-600 focus:outline-none focus:ring-2 focus:ring-brand-500`}
                     />
                   </div>
                   {errors.previousDues && (

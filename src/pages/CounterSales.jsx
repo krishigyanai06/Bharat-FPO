@@ -736,7 +736,7 @@ export default function CounterSales() {
                               onClick={() => navigate(`/sell/compliance/${sale._id}`)}
                               className="border border-amber-500 bg-amber-50/5 hover:bg-amber-50 text-amber-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
                             >
-                              ⚡ Generate
+                              Generate
                             </button>
                           );
                         })()}
@@ -1644,7 +1644,18 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
     setReturnItems((prev) => {
       const copy = [...prev];
       const item = { ...copy[idx] };
-      const v = Math.min(item.purchasedQty, Math.max(0, parseInt(val) || 0));
+
+      if (val === "") {
+        item.returnQty = "";
+        copy[idx] = item;
+        return copy;
+      }
+
+      const v = Math.min(
+        item.purchasedQty,
+        Math.max(0, parseInt(val, 10) || 0)
+      );
+
       item.returnQty = v;
       copy[idx] = item;
       return copy;
@@ -1784,7 +1795,7 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
                     <div className="flex-1">
                       <p className="font-semibold text-xs text-gray-800 truncate">{item.name}</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">
-                        Purchased: {item.purchasedQty} {item.unit} @ ₹{item.pricePerUnit} (Disc: {item.discountPercent}%)
+                        Purchased: {item.purchasedQty}  @ ₹{item.pricePerUnit} (Disc: {item.discountPercent}%)
                       </p>
                     </div>
 

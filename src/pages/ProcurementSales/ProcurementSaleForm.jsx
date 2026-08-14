@@ -14,6 +14,7 @@ import CropItemsSection from "../../components/ProcurementSales/CropItemsSection
 import PaymentSection from "../../components/ProcurementSales/PaymentSection";
 import DispatchSection from "../../components/ProcurementSales/DispatchSection";
 import SaleSummaryCard from "../../components/ProcurementSales/SaleSummaryCard";
+import { parseProcurementErrorMessage } from "../../components/ProcurementSales/procurementSaleHelpers";
 
 export default function ProcurementSaleForm({ id, onBack }) {
   const dispatch = useDispatch();
@@ -25,6 +26,7 @@ export default function ProcurementSaleForm({ id, onBack }) {
   );
 
   // Form Local State
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [buyerDetails, setBuyerDetails] = useState({
     buyerType: "party", // "party", "walk-in"
     buyerParty: "",
@@ -72,6 +74,7 @@ export default function ProcurementSaleForm({ id, onBack }) {
         .then((sale) => {
           if (sale) {
             const rawPartyId = sale.buyerParty?._id || sale.buyerParty?.id || sale.buyerParty;
+            setInvoiceNumber(sale.invoiceNumber || sale.invoiceNo || "");
             setBuyerDetails({
               buyerType: rawPartyId ? "party" : "walk-in",
               buyerParty: rawPartyId ? String(rawPartyId) : "",
@@ -185,6 +188,7 @@ export default function ProcurementSaleForm({ id, onBack }) {
     const apiBillingType = (buyerDetails.billingType === "Credit") ? "Credit" : "Cash";
 
     const payload = {
+      ...(isEdit && invoiceNumber.trim() && { invoiceNumber: invoiceNumber.trim() }),
       buyer: {
         name: buyerDetails.buyerName,
         phone: buyerDetails.phone,
@@ -224,9 +228,7 @@ export default function ProcurementSaleForm({ id, onBack }) {
       onBack();
     } catch (err) {
       console.error(err);
-      toast.error(
-        err || "Unable to save crop sale. Please check stock and details."
-      );
+      toast.error(parseProcurementErrorMessage(err));
     }
   };
 
@@ -291,6 +293,7 @@ export default function ProcurementSaleForm({ id, onBack }) {
       <form onSubmit={handleSubmit} noValidate className="w-full flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column (8 Columns) */}
         <div className="lg:col-span-8 space-y-6">
+
           <BuyerSection
             buyerDetails={buyerDetails}
             setBuyerDetails={setBuyerDetails}
@@ -320,6 +323,7 @@ export default function ProcurementSaleForm({ id, onBack }) {
         <div className="lg:col-span-4">
           <SaleSummaryCard
             buyerDetails={buyerDetails}
+            invoiceNumber={invoiceNumber}
             crops={crops}
             subtotal={subtotal}
             taxAmount={taxAmount}

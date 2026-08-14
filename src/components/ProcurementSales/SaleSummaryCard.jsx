@@ -4,6 +4,7 @@ import { formatINR } from "./procurementSaleHelpers";
 
 export default function SaleSummaryCard({
   buyerDetails,
+  invoiceNumber = "",
   crops = [],
   grandTotal = 0,
   subtotal = 0,
@@ -33,15 +34,26 @@ export default function SaleSummaryCard({
         </span>
       </div>
 
-      {/* Buyer Preview */}
-      <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-0.5">
-        <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block">
-          Target Buyer
-        </span>
-        <span className="text-xs font-black text-slate-900 block truncate">
-          {buyerDetails.buyerName || "No Buyer Selected"}
-        </span>
+      {/* Invoice No. & Buyer Preview */}
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-0.5">
+          <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block">
+            Invoice No.
+          </span>
+          <span className="text-xs font-black font-mono text-emerald-700 block truncate">
+            {invoiceNumber ? invoiceNumber.toUpperCase() : (isEdit ? "Existing Invoice" : "Auto-Generated")}
+          </span>
+        </div>
+        <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-0.5">
+          <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block">
+            Target Buyer
+          </span>
+          <span className="text-xs font-black text-slate-900 block truncate">
+            {buyerDetails.buyerName || "No Buyer Selected"}
+          </span>
+        </div>
       </div>
+
 
       {/* Metrics breakdown */}
       <div className="grid grid-cols-2 gap-3 text-xs">

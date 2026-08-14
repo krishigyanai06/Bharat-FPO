@@ -80,3 +80,27 @@ export function computeSalesMetrics(salesList = []) {
     pendingEWayBills: pendingEwbCount,
   };
 }
+
+export function parseProcurementErrorMessage(err) {
+  if (!err) return "Unable to save crop sale. Please check stock and details.";
+
+  let message = typeof err === "string" ? err : (err.message || err.error || JSON.stringify(err));
+
+  // Check for MongoDB E11000 duplicate key error
+  if (message.includes("E11000") || message.includes("duplicate key")) {
+    const match = message.match(/dup key:\s*\{?\s*(\w+)?:\s*"([^"]+)"\s*\}?/i) ||
+                  message.match(/invoiceNumber:\s*"([^"]+)"/i) ||
+                  message.match(/"([^"]+)"/);
+
+    const dupVal = match ? (match[2] || match[1]) : null;
+
+    if (message.includes("invoiceNumber") || (dupVal && dupVal.startsWith("PS-"))) {
+      return `Invoice number ${dupVal ? `'${dupVal}' ` : ""}already exists! Please try saving again to auto-generate a new invoice number.`;
+    }
+
+    return `Duplicate entry detected ${dupVal ? `('${dupVal}')` : ""}. Please enter a unique value.`;
+  }
+
+  return message;
+}
+
