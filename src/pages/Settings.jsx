@@ -11,6 +11,8 @@ import { isEInvoiceSessionValid, isEWayBillSessionValid } from "../lib/api";
 import { getUserFriendlyEInvoiceError } from "../utils/eInvoiceErrors";
 import { authenticateEWayBillSession } from "../store/thunks/eWayBillThunk";
 import { clearEWayBillStatus } from "../store/slices/eWayBillSlice";
+import { fetchBankDetails, updateBankDetails } from "../store/thunks/bankDetailsThunk";
+import { clearBankDetailsStatus } from "../store/slices/bankDetailsSlice";
 
 function Settings() {
   const dispatch = useDispatch();
@@ -28,6 +30,28 @@ function Settings() {
   const [profileErrors, setProfileErrors] = useState({});
   const [eInvoiceErrors, setEInvoiceErrors] = useState({});
   const [eWayBillErrors, setEWayBillErrors] = useState({});
+  const [bankErrors, setBankErrors] = useState({});
+
+  // FPO Bank Details Redux State
+  const {
+    bankDetails,
+    loading: bankLoading,
+    saving: bankSaving,
+    error: bankError,
+  } = useSelector((s) => s.bankDetails || {
+    bankDetails: {},
+    loading: false,
+    saving: false,
+    error: null,
+  });
+
+  const [bankForm, setBankForm] = useState({
+    bankName: "",
+    accountHolderName: "",
+    accountNumber: "",
+    ifscCode: "",
+    upiId: "",
+  });
 
   const handleProfileChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -156,10 +180,82 @@ function Settings() {
     eWayBillPassword: "",
   });
 
-  /* LOAD PROFILE */
+  /* LOAD PROFILE & BANK DETAILS */
   useEffect(() => {
     dispatch(fetchProfile());
+    dispatch(fetchBankDetails());
   }, [dispatch]);
+
+  /* MAP BANK DETAILS DATA → FORM */
+  useEffect(() => {
+    if (bankDetails) {
+      setBankForm({
+        bankName: bankDetails.bankName || "",
+        accountHolderName: bankDetails.accountHolderName || "",
+        accountNumber: bankDetails.accountNumber || "",
+        ifscCode: bankDetails.ifscCode || "",
+        upiId: bankDetails.upiId || "",
+      });
+    }
+  }, [bankDetails]);
+
+  const handleBankChange = (key, value) => {
+    const finalVal = key === 'ifscCode' ? value.toUpperCase() : value;
+    setBankForm((prev) => ({ ...prev, [key]: finalVal }));
+    if (bankErrors[key]) {
+      setBankErrors((prev) => ({ ...prev, [key]: "" }));
+    }
+  };
+
+  const validateBankDetails = () => {
+    const errs = {};
+    if (!bankForm.bankName?.trim()) {
+      errs.bankName = "Bank Name is required.";
+    }
+    if (!bankForm.accountHolderName?.trim()) {
+      errs.accountHolderName = "Account Holder Name is required.";
+    }
+    if (!bankForm.accountNumber?.trim()) {
+      errs.accountNumber = "Account Number is required.";
+    } else if (!/^\d+$/.test(bankForm.accountNumber.trim())) {
+      errs.accountNumber = "Account Number must contain numbers only.";
+    }
+    if (!bankForm.ifscCode?.trim()) {
+      errs.ifscCode = "IFSC Code is required.";
+    } else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(bankForm.ifscCode.trim())) {
+      errs.ifscCode = "Enter a valid 11-character IFSC code (e.g. HDFC0002565).";
+    }
+    if (bankForm.upiId?.trim() && !/^[\w.-]+@[\w.-]+$/i.test(bankForm.upiId.trim())) {
+      errs.upiId = "Enter a valid UPI ID format (e.g. user@upi).";
+    }
+
+    setBankErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSaveBankDetails = async (e) => {
+    if (e) e.preventDefault();
+    if (!validateBankDetails()) {
+      toast.error("Please fix the highlighted bank detail errors before saving.");
+      return;
+    }
+
+    const payload = {
+      bankName: bankForm.bankName.trim(),
+      accountNumber: bankForm.accountNumber.trim(),
+      ifscCode: bankForm.ifscCode.trim().toUpperCase(),
+      accountHolderName: bankForm.accountHolderName.trim(),
+      upiId: bankForm.upiId.trim(),
+    };
+
+    try {
+      await dispatch(updateBankDetails(payload)).unwrap();
+      toast.success("FPO Bank Details updated successfully!");
+    } catch (err) {
+      console.error("Failed to update bank details:", err);
+      toast.error(err || "Failed to update FPO Bank Details.");
+    }
+  };
 
   /* MAP API DATA → FORM */
   useEffect(() => {
@@ -427,6 +523,190 @@ function Settings() {
             </div>
           </div>
         </form>
+      </div>
+
+      {/* FPO BANK DETAILS CARD */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-150 mt-6">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-brand-650 shrink-0">
+              <Landmark className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-bold text-base text-gray-900 flex items-center gap-2">
+                FPO Bank Details
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Manage the bank account and payment details used by your FPO.
+              </p>
+            </div>
+          </div>
+          {bankError && (
+            <button
+              type="button"
+              onClick={() => dispatch(fetchBankDetails())}
+              className="flex items-center gap-1 text-xs text-brand-600 hover:underline font-medium"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Retry Load
+            </button>
+          )}
+        </div>
+
+        {bankError && (
+          <div className="mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
+            <span>{bankError}</span>
+            <button
+              type="button"
+              onClick={() => dispatch(fetchBankDetails())}
+              className="text-xs text-red-800 underline font-semibold ml-2"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {bankLoading && !bankForm.bankName ? (
+          <div className="flex justify-center items-center py-10">
+            <Loader2 className="w-6 h-6 animate-spin text-brand-600" />
+            <span className="ml-2 text-xs text-gray-500 font-medium">Loading bank details...</span>
+          </div>
+        ) : (
+          <form onSubmit={handleSaveBankDetails}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Bank Name */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Bank Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  disabled={isReadOnly || bankSaving}
+                  value={bankForm.bankName}
+                  onChange={(e) => handleBankChange("bankName", e.target.value)}
+                  placeholder="e.g. HDFC BANK, MARATHALLI, BANGLORE"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none transition-colors ${
+                    bankErrors.bankName
+                      ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 text-red-900"
+                      : "border-gray-200 focus:ring-2 focus:ring-brand-500 bg-white"
+                  }`}
+                />
+                {bankErrors.bankName && (
+                  <p className="text-[11px] text-red-600 mt-1 font-medium">{bankErrors.bankName}</p>
+                )}
+              </div>
+
+              {/* Account Holder Name */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Account Holder Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  disabled={isReadOnly || bankSaving}
+                  value={bankForm.accountHolderName}
+                  onChange={(e) => handleBankChange("accountHolderName", e.target.value)}
+                  placeholder="e.g. Aniket"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none transition-colors ${
+                    bankErrors.accountHolderName
+                      ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 text-red-900"
+                      : "border-gray-200 focus:ring-2 focus:ring-brand-500 bg-white"
+                  }`}
+                />
+                {bankErrors.accountHolderName && (
+                  <p className="text-[11px] text-red-600 mt-1 font-medium">{bankErrors.accountHolderName}</p>
+                )}
+              </div>
+
+              {/* Account Number */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Account Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  disabled={isReadOnly || bankSaving}
+                  value={bankForm.accountNumber}
+                  onChange={(e) => handleBankChange("accountNumber", e.target.value)}
+                  placeholder="e.g. 12345678954"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none font-mono transition-colors ${
+                    bankErrors.accountNumber
+                      ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 text-red-900"
+                      : "border-gray-200 focus:ring-2 focus:ring-brand-500 bg-white"
+                  }`}
+                />
+                {bankErrors.accountNumber && (
+                  <p className="text-[11px] text-red-600 mt-1 font-medium">{bankErrors.accountNumber}</p>
+                )}
+              </div>
+
+              {/* IFSC Code */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  IFSC Code <span className="text-red-500">*</span>
+                </label>
+                <input
+                  disabled={isReadOnly || bankSaving}
+                  value={bankForm.ifscCode}
+                  onChange={(e) => handleBankChange("ifscCode", e.target.value)}
+                  placeholder="e.g. HDFC0002565"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none font-mono uppercase transition-colors ${
+                    bankErrors.ifscCode
+                      ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 text-red-900"
+                      : "border-gray-200 focus:ring-2 focus:ring-brand-500 bg-white"
+                  }`}
+                />
+                {bankErrors.ifscCode && (
+                  <p className="text-[11px] text-red-600 mt-1 font-medium">{bankErrors.ifscCode}</p>
+                )}
+              </div>
+
+              {/* UPI ID */}
+              <div className="col-span-1 md:col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  UPI ID (Optional)
+                </label>
+                <input
+                  disabled={isReadOnly || bankSaving}
+                  value={bankForm.upiId}
+                  onChange={(e) => handleBankChange("upiId", e.target.value)}
+                  placeholder="e.g. aniket@upi"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none transition-colors ${
+                    bankErrors.upiId
+                      ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 text-red-900"
+                      : "border-gray-200 focus:ring-2 focus:ring-brand-500 bg-white"
+                  }`}
+                />
+                {bankErrors.upiId && (
+                  <p className="text-[11px] text-red-600 mt-1 font-medium">{bankErrors.upiId}</p>
+                )}
+              </div>
+
+              <div className="col-span-1 md:col-span-2 flex justify-end mt-2">
+                {!isReadOnly && (
+                  <button
+                    type="submit"
+                    disabled={bankSaving}
+                    className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white px-5 py-2 rounded-lg text-sm transition font-semibold cursor-pointer"
+                  >
+                    {bankSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        <span>Save Bank Details</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                {isReadOnly && (
+                  <p className="text-xs text-gray-400 italic">
+                    SuperAdmin has view-only access
+                  </p>
+                )}
+              </div>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* GOVERNMENT E-INVOICE INTEGRATION CARD */}

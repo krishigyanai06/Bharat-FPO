@@ -137,7 +137,7 @@ const menuSections = [
   {
     title: "SYSTEM",
     items: [
-      { icon: Settings, label: "Settings", path: "/settings" },
+      { icon: Settings, label: "Profile Settings", path: "/settings" },
       {
         icon: Building2,
         label: "Create Tenant",
