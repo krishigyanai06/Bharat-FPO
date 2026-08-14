@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { SkeletonHeader, SkeletonStatCards, SkeletonTable } from "../components/Skeleton";
 import { usePermissions } from "../hooks/usePermissions";
+import toast from "react-hot-toast";
 
 const STATUS_TABS = [
   {
@@ -625,21 +626,29 @@ function Listing() {
                         <div className="flex gap-3">
                           <button
                             onClick={() =>
-                              dispatch(updateListing({ id: viewProduct._id, data: { status: "approved" } })).then(() =>
-                                setViewProduct((prev) => ({ ...prev, status: "approved" }))
-                              )
+                              dispatch(updateListing({ id: viewProduct._id, data: { status: "approved" } }))
+                                .unwrap()
+                                .then(() => {
+                                  setViewProduct((prev) => ({ ...prev, status: "approved" }));
+                                  toast.success("Listing approved successfully!");
+                                })
+                                .catch((err) => toast.error(err || "Failed to approve listing"))
                             }
-                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition border-2 border-emerald-500 text-emerald-600 hover:bg-emerald-500 hover:text-white"
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition border-2 border-emerald-500 text-emerald-600 hover:bg-emerald-500 hover:text-white cursor-pointer"
                           >
                             <CheckCircle size={16} /> Approve
                           </button>
                           <button
                             onClick={() =>
-                              dispatch(updateListing({ id: viewProduct._id, data: { status: "rejected" } })).then(() =>
-                                setViewProduct((prev) => ({ ...prev, status: "rejected" }))
-                              )
+                              dispatch(updateListing({ id: viewProduct._id, data: { status: "reject" } }))
+                                .unwrap()
+                                .then(() => {
+                                  setViewProduct((prev) => ({ ...prev, status: "reject" }));
+                                  toast.success("Listing rejected successfully!");
+                                })
+                                .catch((err) => toast.error(err || "Failed to reject listing"))
                             }
-                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition border-2 border-red-400 text-red-500 hover:bg-red-500 hover:text-white"
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition border-2 border-red-400 text-red-500 hover:bg-red-500 hover:text-white cursor-pointer"
                           >
                             <XCircle size={16} /> Reject
                           </button>
