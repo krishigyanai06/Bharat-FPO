@@ -168,10 +168,11 @@ api.interceptors.request.use(
       const url = config.url || '';
       
       // Only skip tenant context for these specific routes
-      const skipTenantContext = url.includes('/superadmin/tenants') || 
+      const skipTenantContext = url.includes('/superadmin') || 
                                 url.includes('/tenant/getAllTenants') ||
                                 url.includes('/tenant/list') ||
                                 url.includes('/tenant/my-features');
+
       
       if (!skipTenantContext && selectedTenantId && selectedTenantId.trim().length > 0) {
         // ✅ CRITICAL: Backend expects lowercase 'x-tenant-id' header

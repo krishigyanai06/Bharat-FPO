@@ -1,215 +1,300 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   fetchPosters,
   uploadPoster,
   deletePoster,
+  fetchSuperAdminPosters,
+  uploadSuperAdminPoster,
+  deleteSuperAdminPoster,
+  updateSuperAdminPosterTargeting,
 } from "../store/thunks/advertisementThunk";
-import { ImagePlus, Trash2, X, Upload } from "lucide-react";
+import { fetchAllTenants } from "../store/thunks/layoutThunk";
+import { setActiveFilter } from "../store/slices/advertisementSlice";
 import toast from "react-hot-toast";
-import { usePermissions } from "../hooks/usePermissions";
+
+// Modular components
+import AdvertisementHeader from "../components/advertisement/AdvertisementHeader";
+import AdvertisementUploadForm from "../components/advertisement/AdvertisementUploadForm";
+import AdvertisementGallery from "../components/advertisement/AdvertisementGallery";
+
+// Modals
+import EditTargetingModal from "../components/advertisement/modals/EditTargetingModal";
+import PosterLightboxModal from "../components/advertisement/modals/PosterLightboxModal";
+import DeleteConfirmModal from "../components/advertisement/modals/DeleteConfirmModal";
 
 export default function Advertisement() {
   const dispatch = useDispatch();
-  const { posters, loading } = useSelector((s) => s.advertisement);
-  const { isReadOnly } = usePermissions();
-  const [preview, setPreview] = useState(null);
-  const [file, setFile] = useState(null);
+  const {
+    posters = [],
+    loading,
+    uploading,
+    updatingTargeting,
+    activeFilter = "all",
+  } = useSelector((s) => s.advertisement || {});
+  const { user } = useSelector((s) => s.auth || {});
+  const { allTenants = [], tenants = [], selectedTenantId } = useSelector(
+    (s) => s.layout || {}
+  );
 
-  const [uploading, setUploading] = useState(false);
-  const [confirmId, setConfirmId] = useState(null);
-  const fileRef = useRef();
+  const availableTenants = allTenants.length > 0 ? allTenants : tenants;
+
+  // Role permissions
+  const role = String(user?.role || "").replace(/\s+/g, "").toLowerCase();
+  const isSuperAdmin = role === "superadmin";
+  const isViewer = role === "viewer";
+  const canManage = !isViewer;
+
+  // Modals state
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [lightboxItem, setLightboxItem] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
+  const [editingTargetingPoster, setEditingTargetingPoster] = useState(null);
+
+  // Load tenants on mount for SuperAdmin
+  useEffect(() => {
+    if (isSuperAdmin) {
+      dispatch(fetchAllTenants());
+    }
+  }, [dispatch, isSuperAdmin]);
+
+  // Load posters
+  const loadPosters = useCallback(() => {
+    if (isSuperAdmin) {
+      dispatch(fetchSuperAdminPosters());
+    } else {
+      dispatch(fetchPosters(activeFilter === "all" ? undefined : activeFilter));
+    }
+  }, [dispatch, isSuperAdmin, activeFilter]);
 
   useEffect(() => {
-    dispatch(fetchPosters());
-  }, [dispatch]);
+    loadPosters();
+  }, [loadPosters, selectedTenantId]);
 
-  const handleFile = (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    setFile(f);
-    setPreview(URL.createObjectURL(f));
+  // Handle Tab Switch (For FPO Admin)
+  const handleFilterChange = (filterKey) => {
+    if (activeFilter === filterKey) return;
+    dispatch(setActiveFilter(filterKey));
+    dispatch(fetchPosters(filterKey === "all" ? undefined : filterKey));
   };
 
-  const handleUpload = async () => {
-    if (!file) return toast.error("Please select an image");
-    const fd = new FormData();
-    fd.append("posterImages", file);
+  // Upload handler
+  const handleUpload = async ({ files, visibleToAll, selectedTenantIds }) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append("posterImages", file));
 
-    setUploading(true);
-    const res = await dispatch(uploadPoster(fd));
-    setUploading(false);
-    if (uploadPoster.fulfilled.match(res)) {
-      toast.success("Poster uploaded");
-      setFile(null);
-      setPreview(null);
-      fileRef.current.value = "";
-      dispatch(fetchPosters());
+    if (isSuperAdmin) {
+      formData.append("visibleToAll", visibleToAll ? "true" : "false");
+      if (!visibleToAll) {
+        formData.append("visibleToTenants", JSON.stringify(selectedTenantIds));
+      }
+    }
+
+    let res;
+    if (isSuperAdmin) {
+      res = await dispatch(uploadSuperAdminPoster(formData));
     } else {
-      toast.error(res.payload || "Upload failed");
+      res = await dispatch(uploadPoster(formData));
+    }
+
+    if (
+      (uploadSuperAdminPoster.fulfilled && uploadSuperAdminPoster.fulfilled.match(res)) ||
+      (uploadPoster.fulfilled && uploadPoster.fulfilled.match(res))
+    ) {
+      toast.success(
+        files.length === 1
+          ? "Poster uploaded successfully!"
+          : `${files.length} posters uploaded successfully!`
+      );
+      loadPosters();
+      return true;
+    } else {
+      toast.error(res.payload || "Failed to upload posters");
+      return false;
     }
   };
 
+  // Delete handler
   const handleDelete = async (id) => {
-    const res = await dispatch(deletePoster(id));
-    if (deletePoster.fulfilled.match(res)) toast.success("Poster deleted");
-    else toast.error("Delete failed");
-    setConfirmId(null);
+    if (!id) return;
+    setDeletingId(id);
+    let res;
+    if (isSuperAdmin) {
+      res = await dispatch(deleteSuperAdminPoster(id));
+    } else {
+      res = await dispatch(deletePoster(id));
+    }
+    setDeletingId(null);
+    setConfirmDeleteId(null);
+
+    if (
+      (deleteSuperAdminPoster.fulfilled && deleteSuperAdminPoster.fulfilled.match(res)) ||
+      (deletePoster.fulfilled && deletePoster.fulfilled.match(res))
+    ) {
+      toast.success("Poster deleted successfully");
+      loadPosters();
+    } else {
+      toast.error(res.payload || "Failed to delete poster");
+    }
   };
 
+  // Save Targeting (SuperAdmin)
+  const handleSaveTargeting = async (payload) => {
+    const res = await dispatch(updateSuperAdminPosterTargeting(payload));
+    if (updateSuperAdminPosterTargeting.fulfilled.match(res)) {
+      toast.success("Targeting updated successfully");
+      setEditingTargetingPoster(null);
+      loadPosters();
+    } else {
+      toast.error(res.payload || "Failed to update targeting");
+    }
+  };
+
+  // Copy image link
+  const handleCopyLink = (url, id) => {
+    if (!url) return;
+    navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    toast.success("Poster image URL copied to clipboard");
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Flatten & normalize posters for gallery
+  const normalizedPosters = useMemo(() => {
+    if (!Array.isArray(posters)) return [];
+
+    const items = [];
+    posters.forEach((poster) => {
+      if (!poster) return;
+
+      const posterType =
+        poster.type?.toLowerCase() ||
+        (isSuperAdmin || poster.isSuperAdmin ? "superadmin" : "fpo");
+      const createdAt = poster.createdAt || poster.created_at || null;
+      const posterId = poster._id || poster.id;
+      const visAll = poster.visibleToAll !== false;
+      const visTenants = poster.visibleToTenants || [];
+
+      // Case 1: multiple images in array
+      const imageList = poster.posters || poster.posterImages || [];
+      if (Array.isArray(imageList) && imageList.length > 0) {
+        imageList.forEach((imgObj, idx) => {
+          const imgUrl = typeof imgObj === "string" ? imgObj : imgObj?.url;
+          if (imgUrl) {
+            items.push({
+              id: `${posterId}-${idx}`,
+              parentId: posterId,
+              url: imgUrl,
+              type: posterType,
+              createdAt,
+              title: poster.title || `Poster #${items.length + 1}`,
+              visibleToAll: visAll,
+              visibleToTenants: visTenants,
+              raw: poster,
+            });
+          }
+        });
+      } else if (poster.url) {
+        // Case 2: single url
+        items.push({
+          id: posterId || `poster-${items.length}`,
+          parentId: posterId,
+          url: poster.url,
+          type: posterType,
+          createdAt,
+          title: poster.title || `Poster #${items.length + 1}`,
+          visibleToAll: visAll,
+          visibleToTenants: visTenants,
+          raw: poster,
+        });
+      }
+    });
+
+    return items;
+  }, [posters, isSuperAdmin]);
+
+  // Statistics
+  const stats = useMemo(() => {
+    let superAdminCount = 0;
+    let fpoCount = 0;
+    let globalBroadcasts = 0;
+
+    normalizedPosters.forEach((p) => {
+      if (p.type === "superadmin") superAdminCount++;
+      else fpoCount++;
+      if (p.visibleToAll) globalBroadcasts++;
+    });
+
+    return {
+      total: normalizedPosters.length,
+      superAdmin: superAdminCount,
+      fpo: fpoCount,
+      globalBroadcasts,
+    };
+  }, [normalizedPosters]);
+
   return (
-    <div className="space-y-6">
-      {/* UPLOAD CARD */}
-      {!isReadOnly && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-          <h2 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <ImagePlus className="w-5 h-5 text-brand-600" /> Upload Advertisement
-            Poster
-          </h2>
-        <div className="flex flex-col sm:flex-row gap-4 items-start">
-          {/* Image picker */}
-          <div
-            onClick={() => fileRef.current.click()}
-            className="w-full sm:w-48 h-36 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-brand-500 hover:bg-brand-50 transition flex-shrink-0 overflow-hidden"
-          >
-            {preview ? (
-              <img
-                src={preview}
-                alt="preview"
-                className="w-full h-full object-cover rounded-xl"
-              />
-            ) : (
-              <>
-                <Upload className="w-8 h-8 text-gray-400 mb-1" />
-                <p className="text-xs text-gray-500">Click to select image</p>
-              </>
-            )}
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFile}
-          />
+    <div className="space-y-6 pb-12">
+      {/* 1. HEADER & KPI CARDS */}
+      <AdvertisementHeader
+        isSuperAdmin={isSuperAdmin}
+        stats={stats}
+        loading={loading}
+        onRefresh={loadPosters}
+      />
 
-          <div className="flex-1 space-y-3 w-full">
-            <div className="flex gap-2">
-              <button
-                onClick={handleUpload}
-                disabled={uploading || !file}
-                className="px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition"
-              >
-                {uploading ? "Uploading…" : "Upload Poster"}
-              </button>
-              {preview && (
-                <button
-                  onClick={() => {
-                    setFile(null);
-                    setPreview(null);
-                    fileRef.current.value = "";
-                  }}
-                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* 2. UPLOAD FORM (FOR SUPER ADMIN & ADMIN) */}
+      {canManage && (
+        <AdvertisementUploadForm
+          isSuperAdmin={isSuperAdmin}
+          availableTenants={availableTenants}
+          uploading={uploading}
+          onUpload={handleUpload}
+        />
       )}
 
-      {/* POSTERS GRID */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-        <h2 className="text-base font-semibold text-gray-800 mb-4">
-          All Posters{" "}
-          <span className="text-sm font-normal text-gray-400">
-            ({posters.reduce((acc, p) => acc + (p.posters?.length || 0), 0)})
-          </span>
-        </h2>
+      {/* 3. POSTER GALLERY */}
+      <AdvertisementGallery
+        posters={normalizedPosters}
+        loading={loading}
+        activeFilter={activeFilter}
+        onFilterChange={handleFilterChange}
+        isSuperAdmin={isSuperAdmin}
+        canManage={canManage}
+        stats={stats}
+        onOpenLightbox={setLightboxItem}
+        onOpenEditTargeting={setEditingTargetingPoster}
+        onRequestDelete={setConfirmDeleteId}
+        onCopyLink={handleCopyLink}
+        copiedId={copiedId}
+      />
 
-        {loading && posters.length === 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <div
-                key={i}
-                className="h-44 bg-gray-100 rounded-xl animate-pulse"
-              />
-            ))}
-          </div>
-        ) : posters.length === 0 ? (
-          <div className="text-center py-16">
-            <ImagePlus className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-500">
-              No posters yet. Upload one above.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {posters.map((poster) => {
-              const imgs = poster.posters?.length
-                ? poster.posters
-                : poster.url
-                  ? [poster]
-                  : [];
-              return imgs.map((img, i) => (
-                <div
-                  key={`${poster._id}-${i}`}
-                  className="relative group rounded-xl overflow-hidden border border-gray-200 shadow-sm"
-                >
-                  <img
-                    src={img.url}
-                    alt="Poster"
-                    className="w-full object-contain bg-gray-50"
-                  />
-                  {!isReadOnly && (
-                    <button
-                      onClick={() => setConfirmId(poster._id)}
-                      className="absolute top-2 right-2 w-8 h-8 bg-red-600 text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ));
-            })}
-          </div>
-        )}
-      </div>
+      {/* 4. EDIT TARGETING MODAL (SUPER ADMIN) */}
+      <EditTargetingModal
+        isOpen={Boolean(editingTargetingPoster)}
+        poster={editingTargetingPoster}
+        availableTenants={availableTenants}
+        isUpdating={updatingTargeting}
+        onClose={() => setEditingTargetingPoster(null)}
+        onSave={handleSaveTargeting}
+      />
 
-      {/* DELETE CONFIRM */}
-      {confirmId && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center space-y-4">
-            <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto">
-              <Trash2 className="w-7 h-7 text-red-600" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-gray-800">
-                Delete Poster?
-              </h3>
-              <p className="text-sm text-gray-500 mt-1">
-                This action cannot be undone.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmId(null)}
-                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(confirmId)}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm hover:bg-red-700 transition"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 5. LIGHTBOX FULLSCREEN MODAL */}
+      <PosterLightboxModal
+        poster={lightboxItem}
+        isSuperAdmin={isSuperAdmin}
+        onClose={() => setLightboxItem(null)}
+      />
+
+      {/* 6. DELETE CONFIRMATION DIALOG */}
+      <DeleteConfirmModal
+        isOpen={Boolean(confirmDeleteId)}
+        posterId={confirmDeleteId}
+        isDeleting={deletingId === confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
