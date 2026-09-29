@@ -23,6 +23,7 @@ import eInvoiceReducer from './slices/eInvoiceSlice';
 import eWayBillReducer from './slices/eWayBillSlice';
 import procurementSalesReducer from '../redux/procurementSaleSlice';
 import bankDetailsReducer from './slices/bankDetailsSlice';
+import superadminReducer from './slices/superadminSlice';
 
 
 export const store = configureStore({
@@ -51,6 +52,7 @@ export const store = configureStore({
     eWayBill: eWayBillReducer,
     procurementSales: procurementSalesReducer,
     bankDetails: bankDetailsReducer,
+    superadmin: superadminReducer,
   },
 });
 

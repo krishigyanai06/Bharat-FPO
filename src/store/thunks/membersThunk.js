@@ -70,6 +70,37 @@ export const updateKyc = createAsyncThunk(
   }
 );
 
+export const fetchFarmerDue = createAsyncThunk(
+  'members/fetchFarmerDue',
+  async (farmerId, { rejectWithValue }) => {
+    try {
+      const res = await api.get(`/admin/farmers/${farmerId}/due`);
+      return res.data?.data ?? res.data;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to fetch farmer due details'
+      );
+    }
+  }
+);
+
+export const updateFarmerDue = createAsyncThunk(
+  'members/updateFarmerDue',
+  async ({ farmerId, dueAmount, dueAmountNote }, { rejectWithValue }) => {
+    try {
+      const res = await api.patch(`/admin/farmers/${farmerId}/due`, {
+        dueAmount: Number(dueAmount),
+        dueAmountNote,
+      });
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to update farmer due amount'
+      );
+    }
+  }
+);
+
 export const fetchMemberDocs = createAsyncThunk(
   'members/fetchDocs',
   async ({ type, userId }, { rejectWithValue }) => {

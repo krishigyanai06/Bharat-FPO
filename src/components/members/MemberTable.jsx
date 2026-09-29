@@ -39,12 +39,13 @@ export default function MemberTable({
         <table className="w-full border-collapse text-left text-sm table-fixed">
           <thead className="bg-gray-50 border-b border-gray-150 text-xs text-gray-600 uppercase font-bold tracking-wider">
             <tr>
-              <th className="px-5 py-3 w-[32%]">Member Name</th>
-              <th className="px-5 py-3 w-[18%]">Role & KYC</th>
-              <th className="px-5 py-3 w-[16%]">Contact</th>
-              <th className="px-5 py-3 w-[16%]">Location</th>
-              <th className="px-5 py-3 w-[10%]">Farms / Docs</th>
-              <th className="px-5 py-3 w-[8%] text-right">Actions</th>
+              <th className="px-5 py-3 w-[26%]">Member Name</th>
+              <th className="px-5 py-3 w-[16%]">Role & KYC</th>
+              <th className="px-5 py-3 w-[15%]">Contact</th>
+              <th className="px-5 py-3 w-[14%]">Location</th>
+              <th className="px-5 py-3 w-[13%]">Due Balance</th>
+              <th className="px-5 py-3 w-[9%]">Farms</th>
+              <th className="px-5 py-3 w-[7%] text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-150">
@@ -73,6 +74,9 @@ export default function MemberTable({
                       <div className="h-4 bg-gray-200 rounded w-2/3" />
                     </td>
                     <td className="px-5 py-4">
+                      <div className="h-5 bg-gray-200 rounded w-16" />
+                    </td>
+                    <td className="px-5 py-4">
                       <div className="h-6 bg-gray-250 rounded w-16" />
                     </td>
                     <td className="px-5 py-4 text-right">
@@ -82,7 +86,7 @@ export default function MemberTable({
                 ))
             ) : members.length === 0 ? (
               <tr>
-                <td colSpan="6" className="px-5 py-16 text-center text-gray-400">
+                <td colSpan="7" className="px-5 py-16 text-center text-gray-400">
                   <Users className="w-12 h-12 mx-auto text-gray-300 mb-2" />
                   <p className="font-semibold text-gray-905">No members found</p>
                   <p className="text-xs text-gray-400 mt-1">Try refining search parameters or register a new member.</p>
@@ -94,6 +98,7 @@ export default function MemberTable({
                 const fullName = `${member.firstName || ""} ${member.lastName || ""}`.trim();
                 const kycStatus = member.kycStatus || "Pending";
                 const isFarmer = member.role === "Farmer";
+                const dueAmt = Number(member.dueAmount || 0);
 
                 return (
                   <tr key={member._id} className="hover:bg-slate-50/50 transition">
@@ -167,6 +172,28 @@ export default function MemberTable({
                       </div>
                     </td>
 
+                    {/* Due Balance Column */}
+                    <td className="px-5 py-3">
+                      {isFarmer ? (
+                        <div className="flex flex-col items-start gap-0.5">
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-extrabold border ${
+                            dueAmt > 0
+                              ? "bg-rose-50 text-rose-700 border-rose-200"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          }`}>
+                            ₹{dueAmt.toLocaleString("en-IN")}
+                          </span>
+                          {member.dueAmountNote && (
+                            <span className="text-[10px] text-gray-400 font-medium truncate max-w-[110px]" title={member.dueAmountNote}>
+                              {member.dueAmountNote}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400 italic">—</span>
+                      )}
+                    </td>
+
                     {/* Farms Column */}
                     <td className="px-5 py-3">
                       {isFarmer ? (
@@ -176,9 +203,9 @@ export default function MemberTable({
                             e.stopPropagation();
                             onViewFarms(member);
                           }}
-                          className="px-3 py-1 text-xs text-brand-600 transition border border-brand-200 rounded-lg hover:bg-brand-50 font-bold active:scale-95 shadow-xs bg-white cursor-pointer"
+                          className="px-2.5 py-1 text-xs text-brand-600 transition border border-brand-200 rounded-lg hover:bg-brand-50 font-bold active:scale-95 shadow-xs bg-white cursor-pointer"
                         >
-                          View Farms
+                          Farms
                         </button>
                       ) : (
                         <span className="text-xs text-gray-400 italic">N/A</span>

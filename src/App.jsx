@@ -35,6 +35,7 @@ const PartyForm = lazy(() => import('./pages/PartyForm'));
 const ProcurementSales = lazy(() => import('./pages/ProcurementSales/ProcurementSales'));
 const GovernmentCompliancePage = lazy(() => import('./pages/GovernmentCompliancePage'));
 const PurchaseCrop = lazy(() => import('./pages/PurchaseCrop'));
+const WhatsAppCampaign = lazy(() => import('./pages/WhatsAppCampaign'));
 
 
 const PageLoader = () => (
@@ -152,6 +153,7 @@ function App() {
               <Route path="purchase/expenses" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
               <Route path="create-tenant" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/create-tenant']}><Suspense fallback={<PageLoader />}><CreateTenant /></Suspense></ProtectedRoute>} />
               <Route path="tier-features" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/tier-features']}><Suspense fallback={<PageLoader />}><TierFeatures /></Suspense></ProtectedRoute>} />
+              <Route path="superadmin/whatsapp-campaign" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/superadmin/whatsapp-campaign']}><Suspense fallback={<PageLoader />}><WhatsAppCampaign /></Suspense></ProtectedRoute>} />
               <Route path="party" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/party']}><Suspense fallback={<PageLoader />}><Party /></Suspense></ProtectedRoute>} />
               <Route path="party/new" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/party']}><Suspense fallback={<PageLoader />}><PartyForm /></Suspense></ProtectedRoute>} />
               <Route path="party/edit/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/party']}><Suspense fallback={<PageLoader />}><PartyForm /></Suspense></ProtectedRoute>} />

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useDispatch } from "react-redux";
-import { updateMember, updateKyc } from "../../store/thunks/membersThunk";
+import { updateMember, updateKyc, fetchFarmerDue, updateFarmerDue } from "../../store/thunks/membersThunk";
 import { updateMemberLocal } from "../../store/slices/membersSlice";
 import api from "../../lib/api";
 import {
@@ -13,6 +13,9 @@ import {
   Package,
   ChevronRight,
   Pencil,
+  IndianRupee,
+  Calendar,
+  FileText,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -55,13 +58,89 @@ export default function MemberDetailsDrawer({ member, onClose, isReadOnly }) {
   const [tabLoading, setTabLoading] = useState(false);
   const [detailMember, setDetailMember] = useState(member);
 
+  // Farmer Due state
+  const [dueDetails, setDueDetails] = useState({
+    dueAmount: member?.dueAmount || 0,
+    dueAmountNote: member?.dueAmountNote || "",
+    dueAmountUpdatedAt: member?.dueAmountUpdatedAt || null,
+    dueAmountUpdatedBy: member?.dueAmountUpdatedBy || null,
+  });
+  const [dueLoading, setDueLoading] = useState(false);
+  const [showDueModal, setShowDueModal] = useState(false);
+  const [dueForm, setDueForm] = useState({ dueAmount: 0, dueAmountNote: "" });
+  const [dueSubmitting, setDueSubmitting] = useState(false);
+
   useEffect(() => {
     setDetailMember(member);
+    setDueDetails({
+      dueAmount: member?.dueAmount || 0,
+      dueAmountNote: member?.dueAmountNote || "",
+      dueAmountUpdatedAt: member?.dueAmountUpdatedAt || null,
+      dueAmountUpdatedBy: member?.dueAmountUpdatedBy || null,
+    });
     setEditForm(null);
     setEditError("");
     setActiveTab("Info");
     setTabData({});
+
+    // Fetch authoritative due information for Farmers
+    if (member?._id && member?.role === "Farmer") {
+      setDueLoading(true);
+      api.get(`/admin/farmers/${member._id}/due`)
+        .then((res) => {
+          const data = res.data?.data ?? res.data;
+          if (data) {
+            setDueDetails({
+              dueAmount: data.dueAmount ?? 0,
+              dueAmountNote: data.dueAmountNote ?? "",
+              dueAmountUpdatedAt: data.dueAmountUpdatedAt ?? null,
+              dueAmountUpdatedBy: data.dueAmountUpdatedBy ?? null,
+            });
+            setDetailMember((prev) => ({ ...prev, ...data }));
+          }
+        })
+        .catch(() => {})
+        .finally(() => setDueLoading(false));
+    }
   }, [member]);
+
+  const openDueModal = () => {
+    setDueForm({
+      dueAmount: dueDetails.dueAmount || 0,
+      dueAmountNote: dueDetails.dueAmountNote || "",
+    });
+    setShowDueModal(true);
+  };
+
+  const handleUpdateDue = async (e) => {
+    e.preventDefault();
+    setDueSubmitting(true);
+    const result = await dispatch(
+      updateFarmerDue({
+        farmerId: detailMember._id,
+        dueAmount: dueForm.dueAmount,
+        dueAmountNote: dueForm.dueAmountNote,
+      })
+    );
+    setDueSubmitting(false);
+
+    if (updateFarmerDue.fulfilled.match(result)) {
+      const resPayload = result.payload;
+      const updated = {
+        dueAmount: resPayload?.dueAmount ?? Number(dueForm.dueAmount),
+        dueAmountNote: resPayload?.dueAmountNote ?? dueForm.dueAmountNote,
+        dueAmountUpdatedAt: resPayload?.dueAmountUpdatedAt ?? new Date().toISOString(),
+        dueAmountUpdatedBy: dueDetails.dueAmountUpdatedBy,
+      };
+      setDueDetails((prev) => ({ ...prev, ...updated }));
+      setDetailMember((prev) => ({ ...prev, ...updated }));
+      dispatch(updateMemberLocal({ _id: detailMember._id, ...updated }));
+      setShowDueModal(false);
+      toast.success("Farmer due amount updated successfully");
+    } else {
+      toast.error(result.payload || "Failed to update due amount");
+    }
+  };
 
   const startEdit = () => {
     const form = {
@@ -202,15 +281,24 @@ export default function MemberDetailsDrawer({ member, onClose, isReadOnly }) {
                   {detailMember.role}
                 </span>
                 {detailMember.role === "Farmer" && (
-                  <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
-                    detailMember.kycStatus === "Approved"
-                      ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-350"
-                      : detailMember.kycStatus === "Rejected"
-                      ? "bg-rose-500/20 border-rose-400/30 text-rose-300"
-                      : "bg-amber-500/20 border-amber-400/30 text-amber-300"
-                  }`}>
-                    KYC: {detailMember.kycStatus || "Pending"}
-                  </span>
+                  <>
+                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
+                      detailMember.kycStatus === "Approved"
+                        ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-350"
+                        : detailMember.kycStatus === "Rejected"
+                        ? "bg-rose-500/20 border-rose-400/30 text-rose-300"
+                        : "bg-amber-500/20 border-amber-400/30 text-amber-300"
+                    }`}>
+                      KYC: {detailMember.kycStatus || "Pending"}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold border ${
+                      Number(dueDetails.dueAmount || 0) > 0
+                        ? "bg-rose-500/30 border-rose-400/40 text-rose-200"
+                        : "bg-emerald-500/20 border-emerald-400/30 text-emerald-300"
+                    }`}>
+                      Due: ₹{Number(dueDetails.dueAmount || 0).toLocaleString("en-IN")}
+                    </span>
+                  </>
                 )}
               </div>
             </div>
@@ -343,6 +431,59 @@ export default function MemberDetailsDrawer({ member, onClose, isReadOnly }) {
                     </button>
                   )}
                 </div>
+
+                {/* Financial Due Card for Farmers */}
+                {detailMember.role === "Farmer" && (
+                  <div className="p-4 bg-white border border-gray-150 rounded-2xl shadow-xs space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-rose-50 border border-rose-100 text-rose-700 flex items-center justify-center font-bold">
+                          <IndianRupee className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Financial Outstanding Due</h4>
+                          <p className="text-lg font-extrabold text-gray-900 leading-tight">
+                            ₹{Number(dueDetails.dueAmount || 0).toLocaleString("en-IN")}
+                          </p>
+                        </div>
+                      </div>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={openDueModal}
+                          className="px-3 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition shadow-xs cursor-pointer active:scale-95"
+                        >
+                          Update Due Amount
+                        </button>
+                      )}
+                    </div>
+
+                    {dueDetails.dueAmountNote && (
+                      <div className="p-2.5 bg-gray-50 border border-gray-150 rounded-xl text-xs text-gray-700 space-y-1">
+                        <p className="font-bold text-gray-500 text-[10px] uppercase tracking-wider flex items-center gap-1">
+                          <FileText className="w-3 h-3 text-gray-400" /> Due Note / Context
+                        </p>
+                        <p className="font-semibold text-gray-800 leading-snug">{dueDetails.dueAmountNote}</p>
+                      </div>
+                    )}
+
+                    {(dueDetails.dueAmountUpdatedAt || dueDetails.dueAmountUpdatedBy) && (
+                      <div className="flex items-center justify-between text-[11px] text-gray-400 border-t border-gray-100 pt-2 font-medium">
+                        {dueDetails.dueAmountUpdatedAt && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            Updated: {new Date(dueDetails.dueAmountUpdatedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                          </span>
+                        )}
+                        {dueDetails.dueAmountUpdatedBy && (
+                          <span>
+                            By: {dueDetails.dueAmountUpdatedBy.firstName} {dueDetails.dueAmountUpdatedBy.lastName}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {detailMember.role === "Staff" ? (
                   <Section icon={Briefcase} title="Staff Info">
@@ -489,6 +630,83 @@ export default function MemberDetailsDrawer({ member, onClose, isReadOnly }) {
             ))}
         </div>
       </div>
+
+      {/* Update Farmer Due Modal */}
+      {showDueModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+          onClick={() => setShowDueModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <IndianRupee className="w-5 h-5 text-rose-600" />
+                <h3 className="text-base font-bold text-gray-900">Update Due Amount</h3>
+              </div>
+              <button
+                onClick={() => setShowDueModal(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateDue} className="space-y-4 text-left">
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1 uppercase tracking-wider">
+                  Due Amount (₹)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={dueForm.dueAmount}
+                    onChange={(e) => setDueForm((f) => ({ ...f, dueAmount: e.target.value }))}
+                    className="w-full pl-8 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 font-bold bg-white"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1 uppercase tracking-wider">
+                  Due Note / Context
+                </label>
+                <textarea
+                  rows="3"
+                  value={dueForm.dueAmountNote}
+                  onChange={(e) => setDueForm((f) => ({ ...f, dueAmountNote: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white"
+                  placeholder="e.g. Pending advance payment from previous harvest season"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowDueModal(false)}
+                  className="px-4 py-2 text-sm font-semibold border rounded-xl hover:bg-gray-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={dueSubmitting}
+                  className="px-5 py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition shadow-xs disabled:opacity-60 cursor-pointer"
+                >
+                  {dueSubmitting ? "Saving..." : "Save Due Amount"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

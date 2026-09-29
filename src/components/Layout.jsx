@@ -150,6 +150,12 @@ const menuSections = [
         path: "/tier-features",
         roles: ["superadmin"],
       },
+      {
+        icon: Megaphone,
+        label: "WhatsApp Campaign",
+        path: "/superadmin/whatsapp-campaign",
+        roles: ["superadmin"],
+      },
     ]
   }
 ];

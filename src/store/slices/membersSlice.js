@@ -1,5 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { fetchMembers, deleteMember, updateMember, createStaff, createFarmer, updateKyc } from '../thunks/membersThunk';
+import { fetchMembers, deleteMember, updateMember, createStaff, createFarmer, updateKyc, updateFarmerDue, fetchFarmerDue } from '../thunks/membersThunk';
 
 const membersSlice = createSlice({
   name: 'members',
@@ -43,6 +43,30 @@ const membersSlice = createSlice({
           state.members.unshift(member);
         }
         state.lastFetched = null; // Invalidate cache on creation
+      })
+      .addCase(fetchFarmerDue.fulfilled, (state, action) => {
+        const data = action.payload;
+        if (data && data.farmerId) {
+          const idx = state.members.findIndex((m) => m._id === data.farmerId);
+          if (idx !== -1) {
+            state.members[idx].dueAmount = data.dueAmount;
+            state.members[idx].dueAmountNote = data.dueAmountNote;
+            state.members[idx].dueAmountUpdatedAt = data.dueAmountUpdatedAt;
+            state.members[idx].dueAmountUpdatedBy = data.dueAmountUpdatedBy;
+          }
+        }
+      })
+      .addCase(updateFarmerDue.fulfilled, (state, action) => {
+        const data = action.payload;
+        const farmerId = data?.farmerId || action.meta?.arg?.farmerId;
+        if (farmerId) {
+          const idx = state.members.findIndex((m) => m._id === farmerId);
+          if (idx !== -1) {
+            if (data.dueAmount !== undefined) state.members[idx].dueAmount = data.dueAmount;
+            if (data.dueAmountNote !== undefined) state.members[idx].dueAmountNote = data.dueAmountNote;
+            if (data.dueAmountUpdatedAt !== undefined) state.members[idx].dueAmountUpdatedAt = data.dueAmountUpdatedAt;
+          }
+        }
       });
   },
 });

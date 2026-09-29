@@ -42,7 +42,7 @@ export const ROUTE_ROLES = {
   '/purchase': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN, ROLES.VIEWER],
   '/create-tenant': [ROLES.SUPERADMIN],
   '/tier-features': [ROLES.SUPERADMIN],
-
+  '/superadmin/whatsapp-campaign': [ROLES.SUPERADMIN],
 };
 
 // Helper to check if role has permission

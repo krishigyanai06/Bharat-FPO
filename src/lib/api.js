@@ -171,7 +171,8 @@ api.interceptors.request.use(
       const skipTenantContext = url.includes('/superadmin') || 
                                 url.includes('/tenant/getAllTenants') ||
                                 url.includes('/tenant/list') ||
-                                url.includes('/tenant/my-features');
+                                url.includes('/tenant/my-features') ||
+                                url.includes('/user/getAllAdmins');
 
       
       if (!skipTenantContext && selectedTenantId && selectedTenantId.trim().length > 0) {
@@ -526,6 +527,7 @@ api.interceptors.response.use(
         '/advertisement',
         '/superadmin/',
         '/tenant/my-features',
+        '/getAllAdmins',
       ];
       const isDataFetch = skipLogoutUrls.some(u => url.includes(u));
       
