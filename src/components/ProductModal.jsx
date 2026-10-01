@@ -836,10 +836,6 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
       fErrs.productCategory = "Category is required.";
     }
 
-    if (!isEdit && images.length === 0) {
-      fErrs.images = "At least 1 product image is required.";
-    }
-
     const vErrs = variants.map((variant) => {
       const errs = {};
       if (!variant.parameter?.trim()) errs.parameter = "Size/Measure parameter is required.";
@@ -1307,7 +1303,7 @@ export function ProductModal({ initial, onClose, onSave, saving, existingProduct
 
                   {/* Images Section */}
                   <div className="space-y-3">
-                    <p className="text-xs font-semibold text-gray-500">Product Images (Max 5) {!isEdit && <span className="text-red-500">*</span>}</p>
+                    <p className="text-xs font-semibold text-gray-500">Product Images (Max 5)</p>
                     <div
                       className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${formErrors.images
                           ? "border-red-500 bg-red-50/20"
