@@ -210,7 +210,7 @@ function LocationFields({ form, set }) {
 }
 
 /* ─── Premium Farmer Modal ────────────────────────────────────────── */
-function FarmerModal({ onClose }) {
+export function FarmerModal({ onClose }) {
   const dispatch = useDispatch();
   const [form, setForm] = useState({
     firstName: "",

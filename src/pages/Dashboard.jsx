@@ -1,4 +1,4 @@
-import React, { useEffect, lazy, Suspense, useCallback, useMemo, memo } from "react";
+import React, { useEffect, useState, lazy, Suspense, useCallback, useMemo, memo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Package,
@@ -6,6 +6,10 @@ import {
   CheckCircle,
   Users,
   Download,
+  Zap,
+  Sprout,
+  Plus,
+  Building2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -18,6 +22,7 @@ import {
   SkeletonCharts,
 } from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
+import { FarmerModal } from "../components/AddMemberButton";
 
 // Lazy-load the heavy charts component
 const DashboardCharts = lazy(() => import("../components/dashboard/DashboardCharts"));
@@ -52,6 +57,7 @@ Sparkline.displayName = "Sparkline";
 function Dashboard() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const [showFarmerModal, setShowFarmerModal] = useState(false);
 
   const {
     stats,
@@ -264,7 +270,7 @@ function Dashboard() {
       title: "Total Farmers",
       value: stats.totalMembers ?? 0,
       icon: Users,
-      path: "/members",
+      path: "/customers",
       iconBg: "bg-purple-50",
       iconColor: "text-purple-500",
       trend: "↑ +3 new this month",
@@ -274,7 +280,7 @@ function Dashboard() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 select-none">
       {/* ================= HEADER ================= */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -289,10 +295,69 @@ function Dashboard() {
           {/* DOWNLOAD REPORT */}
           <button
             onClick={handleDownload}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white transition-all bg-green-600 shadow-sm rounded-xl hover:bg-green-700 active:scale-95 animate-fade-in"
+            className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white transition-all bg-[#16A36A] hover:bg-[#138a59] shadow-2xs rounded-xl active:scale-95 animate-fade-in cursor-pointer"
           >
             <Download className="w-4 h-4" />
             Download Report
+          </button>
+        </div>
+      </div>
+
+      {/* ================= QUICK ACTIONS BAR ================= */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl shadow-2xs border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-[#16A36A] flex items-center justify-center border border-emerald-100 shrink-0 shadow-2xs">
+            <Zap className="w-4.5 h-4.5" />
+          </div>
+          <div>
+            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+              Quick Actions
+            </h2>
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+              Frequent FPO business operations & quick shortcuts
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* SALE BUTTON (PRIMARY ACTION) */}
+          <button
+            type="button"
+            onClick={() => navigate("/sell/invoice/new")}
+            className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-[#16A36A] hover:bg-[#138a59] rounded-xl transition-all shadow-2xs active:scale-95 cursor-pointer"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span>New Sale</span>
+          </button>
+
+          {/* PURCHASE BUTTON (LIGHT BLUE) */}
+          <button
+            type="button"
+            onClick={() => navigate("/purchase")}
+            className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-blue-700 bg-blue-50/80 hover:bg-blue-100/80 border border-blue-200/90 rounded-xl transition-all shadow-2xs active:scale-95 cursor-pointer"
+          >
+            <Package className="w-4 h-4 text-blue-600" />
+            <span>New Purchase</span>
+          </button>
+
+          {/* ADD FARMER BUTTON (LIGHT AMBER) */}
+          <button
+            type="button"
+            onClick={() => setShowFarmerModal(true)}
+            className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-amber-800 bg-amber-50/80 hover:bg-amber-100/80 border border-amber-200/90 rounded-xl transition-all shadow-2xs active:scale-95 cursor-pointer"
+          >
+            <Sprout className="w-4 h-4 text-amber-600" />
+            <span>Add Farmer</span>
+          </button>
+
+          {/* REGISTER PARTY BUTTON (LIGHT PURPLE) */}
+          <button
+            type="button"
+            onClick={() => navigate("/party/new")}
+            className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-purple-800 bg-purple-50/80 hover:bg-purple-100/80 border border-purple-200/90 rounded-xl transition-all shadow-2xs active:scale-95 cursor-pointer"
+          >
+            <Building2 className="w-4 h-4 text-purple-600" />
+            <span>Add Party</span>
           </button>
         </div>
       </div>
@@ -305,7 +370,7 @@ function Dashboard() {
             <div
               key={i}
               onClick={() => navigate(s.path)}
-              className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+              className="bg-white p-5 rounded-2xl shadow-2xs border border-slate-200/90 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -349,8 +414,14 @@ function Dashboard() {
           chartsLoading={chartsLoading}
         />
       </Suspense>
+
+      {/* ================= ADD FARMER MODAL ================= */}
+      {showFarmerModal && (
+        <FarmerModal onClose={() => setShowFarmerModal(false)} />
+      )}
     </div>
   );
 }
 
 export default Dashboard;
+
