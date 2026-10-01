@@ -104,6 +104,12 @@ export default function Party() {
     const [farmMember, setFarmMember] = useState(null);
 
     useEffect(() => {
+        if (rawTab === "CUSTOMERS") {
+            navigate("/customers", { replace: true });
+        }
+    }, [rawTab, navigate]);
+
+    useEffect(() => {
         if (isCustomersTab) {
             dispatch(fetchMembers());
         } else {
@@ -295,12 +301,11 @@ export default function Party() {
             </div>
 
             {/* Role Filter Tabs */}
-            <div className="flex bg-gray-50 border border-gray-150 p-1 rounded-xl select-none max-w-md">
+            <div className="flex bg-gray-50 border border-gray-150 p-1 rounded-xl select-none max-w-sm">
                 {[
-                    { id: "", label: "All" },
+                    { id: "", label: "All Parties" },
                     { id: "SUPPLIER", label: "Suppliers" },
                     { id: "BUYER", label: "Buyers" },
-                    { id: "CUSTOMERS", label: "Customers" },
                 ].map((tab) => {
                     const isActive = activeRoleTab === tab.id;
                     return (

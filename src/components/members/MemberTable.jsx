@@ -1,9 +1,9 @@
 import { Users } from "lucide-react";
 
 const KYC_BADGE = {
-  Approved: "bg-emerald-100 text-emerald-800 border-emerald-250",
-  Rejected: "bg-rose-105 text-rose-800 border-rose-200",
-  Pending: "bg-amber-100 text-amber-800 border-amber-200",
+  Approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  Rejected: "bg-rose-50 text-rose-700 border-rose-200",
+  Pending: "bg-amber-50 text-amber-700 border-amber-200",
 };
 
 const getInitials = (firstName, lastName) => {
@@ -34,62 +34,62 @@ export default function MemberTable({
   }
 
   return (
-    <div className="bg-white border border-gray-250 rounded-2xl shadow-xs overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-left text-sm table-fixed">
-          <thead className="bg-gray-50 border-b border-gray-150 text-xs text-gray-600 uppercase font-bold tracking-wider">
+    <div className="bg-white border border-[#DCE5EA] rounded-xl shadow-2xs overflow-hidden flex flex-col flex-1 min-h-0">
+      <div className="overflow-x-auto overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <table className="w-full border-collapse text-left text-xs table-fixed">
+          <thead className="bg-[#F8FAFC] border-b border-slate-200/90 text-[11px] text-slate-500 uppercase font-bold tracking-wider sticky top-0 z-10">
             <tr>
-              <th className="px-5 py-3 w-[26%]">Member Name</th>
-              <th className="px-5 py-3 w-[16%]">Role & KYC</th>
-              <th className="px-5 py-3 w-[15%]">Contact</th>
-              <th className="px-5 py-3 w-[14%]">Location</th>
-              <th className="px-5 py-3 w-[13%]">Due Balance</th>
-              <th className="px-5 py-3 w-[9%]">Farms</th>
-              <th className="px-5 py-3 w-[7%] text-right">Actions</th>
+              <th className="px-4 py-2.5 w-[28%] bg-[#F8FAFC]">Member / Farmer Name</th>
+              <th className="px-4 py-2.5 w-[16%] bg-[#F8FAFC]">Role & KYC</th>
+              <th className="px-4 py-2.5 w-[15%] bg-[#F8FAFC]">Contact</th>
+              <th className="px-4 py-2.5 w-[14%] bg-[#F8FAFC]">Location</th>
+              <th className="px-4 py-2.5 w-[13%] text-right bg-[#F8FAFC]">Due Balance</th>
+              <th className="px-4 py-2.5 w-[7%] text-center bg-[#F8FAFC]">Farms</th>
+              <th className="px-4 py-2.5 w-[7%] text-right bg-[#F8FAFC]">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-150">
+          <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
             {loading ? (
               // Skeleton loading rows
-              Array(5)
+              Array(6)
                 .fill(0)
                 .map((_, idx) => (
                   <tr key={idx} className="animate-pulse">
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-200" />
-                        <div className="space-y-1.5 flex-1">
-                          <div className="h-4 bg-gray-200 rounded w-3/4" />
-                          <div className="h-3 bg-gray-150 rounded w-1/2" />
+                        <div className="w-8 h-8 rounded-full bg-slate-200" />
+                        <div className="space-y-1 flex-1">
+                          <div className="h-3.5 bg-slate-200 rounded w-3/4" />
+                          <div className="h-2.5 bg-slate-150 rounded w-1/2" />
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4">
-                      <div className="h-4 bg-gray-200 rounded w-2/3" />
+                    <td className="px-4 py-3">
+                      <div className="h-3.5 bg-slate-200 rounded w-2/3" />
                     </td>
-                    <td className="px-5 py-4">
-                      <div className="h-4 bg-gray-200 rounded w-3/4" />
+                    <td className="px-4 py-3">
+                      <div className="h-3.5 bg-slate-200 rounded w-3/4" />
                     </td>
-                    <td className="px-5 py-4">
-                      <div className="h-4 bg-gray-200 rounded w-2/3" />
+                    <td className="px-4 py-3">
+                      <div className="h-3.5 bg-slate-200 rounded w-2/3" />
                     </td>
-                    <td className="px-5 py-4">
-                      <div className="h-5 bg-gray-200 rounded w-16" />
+                    <td className="px-4 py-3 text-right">
+                      <div className="h-4 bg-slate-200 rounded w-16 ml-auto" />
                     </td>
-                    <td className="px-5 py-4">
-                      <div className="h-6 bg-gray-250 rounded w-16" />
+                    <td className="px-4 py-3 text-center">
+                      <div className="h-6 bg-slate-200 rounded w-12 mx-auto" />
                     </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="h-8 bg-gray-200 rounded w-12 ml-auto" />
+                    <td className="px-4 py-3 text-right">
+                      <div className="h-6 bg-slate-200 rounded w-12 ml-auto" />
                     </td>
                   </tr>
                 ))
             ) : members.length === 0 ? (
               <tr>
-                <td colSpan="7" className="px-5 py-16 text-center text-gray-400">
-                  <Users className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                  <p className="font-semibold text-gray-905">No members found</p>
-                  <p className="text-xs text-gray-400 mt-1">Try refining search parameters or register a new member.</p>
+                <td colSpan="7" className="px-5 py-16 text-center text-slate-400">
+                  <Users className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                  <p className="font-semibold text-xs text-slate-600">No members found</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Try refining search parameters or register a new member.</p>
                 </td>
               </tr>
             ) : (
@@ -99,37 +99,41 @@ export default function MemberTable({
                 const kycStatus = member.kycStatus || "Pending";
                 const isFarmer = member.role === "Farmer";
                 const dueAmt = Number(member.dueAmount || 0);
+                const memberCode = `FPO-${member._id?.slice(-6).toUpperCase()}`;
 
                 return (
-                  <tr key={member._id} className="hover:bg-slate-50/50 transition">
+                  <tr
+                    key={member._id}
+                    className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                    onClick={() => onViewDetails(member)}
+                  >
                     {/* Member Column */}
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-brand-50 border border-brand-100 text-brand-700 font-bold flex items-center justify-center shrink-0 text-sm select-none">
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0 text-xs select-none">
                           {initials}
                         </div>
                         <div className="min-w-0">
                           <p
-                            onClick={() => onViewDetails(member)}
-                            className="font-bold text-gray-909 text-sm hover:text-brand-700 transition cursor-pointer truncate"
+                            className="font-bold text-slate-900 text-xs hover:text-[#16A36A] transition truncate"
                             title={fullName}
                           >
                             {fullName}
                           </p>
-                          <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
-                            FPO-{member._id?.slice(-6).toUpperCase()}
+                          <p className="text-[10px] text-slate-400 font-mono font-medium truncate">
+                            {memberCode}
                           </p>
                         </div>
                       </div>
                     </td>
 
                     {/* Role & KYC Status Column */}
-                    <td className="px-5 py-3">
-                      <div className="flex flex-col gap-1 items-start">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-col gap-0.5 items-start">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide border ${
                           isFarmer
-                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                            : "bg-amber-50 text-amber-800 border-amber-200"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200/80"
+                            : "bg-blue-50 text-blue-700 border-blue-200/80"
                         }`}>
                           {member.role || "Farmer"}
                         </span>
@@ -139,7 +143,7 @@ export default function MemberTable({
                           </span>
                         )}
                         {!isFarmer && member.designation && (
-                          <span className="text-[10px] text-gray-500 font-semibold italic">
+                          <span className="text-[10px] text-slate-500 font-medium italic truncate max-w-[120px]">
                             {member.designation}
                           </span>
                         )}
@@ -147,11 +151,11 @@ export default function MemberTable({
                     </td>
 
                     {/* Contact Column */}
-                    <td className="px-5 py-3 text-xs font-medium text-gray-700">
+                    <td className="px-4 py-2.5 text-xs font-medium text-slate-700">
                       <div className="space-y-0.5">
-                        <p className="font-semibold text-gray-900">+91 {member.phone}</p>
+                        <p className="font-semibold text-slate-900">+91 {member.phone}</p>
                         {member.emailId && !member.emailId.includes("@noemail.local") && (
-                          <p className="text-[11px] text-gray-500 truncate" title={member.emailId}>
+                          <p className="text-[10px] text-slate-400 truncate max-w-[140px]" title={member.emailId}>
                             {member.emailId}
                           </p>
                         )}
@@ -159,13 +163,13 @@ export default function MemberTable({
                     </td>
 
                     {/* Location Column */}
-                    <td className="px-5 py-3 text-sm">
+                    <td className="px-4 py-2.5 text-xs">
                       <div className="space-y-0.5">
-                        <p className="font-semibold text-gray-900 leading-tight">
+                        <p className="font-semibold text-slate-800 leading-tight truncate">
                           {member.state || "—"}
                         </p>
                         {(member.village || member.district) && (
-                          <p className="text-xs text-gray-500 font-medium leading-tight truncate">
+                          <p className="text-[10px] text-slate-400 font-medium leading-tight truncate max-w-[130px]">
                             {[member.village, member.district].filter(Boolean).join(", ")}
                           </p>
                         )}
@@ -173,29 +177,29 @@ export default function MemberTable({
                     </td>
 
                     {/* Due Balance Column */}
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
                       {isFarmer ? (
-                        <div className="flex flex-col items-start gap-0.5">
-                          <span className={`px-2 py-0.5 rounded text-[11px] font-extrabold border ${
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-extrabold border ${
                             dueAmt > 0
                               ? "bg-rose-50 text-rose-700 border-rose-200"
                               : "bg-emerald-50 text-emerald-700 border-emerald-200"
                           }`}>
-                            ₹{dueAmt.toLocaleString("en-IN")}
+                            ₹{dueAmt.toLocaleString("en-IN", { minimumFractionDigits: 0 })}
                           </span>
                           {member.dueAmountNote && (
-                            <span className="text-[10px] text-gray-400 font-medium truncate max-w-[110px]" title={member.dueAmountNote}>
+                            <span className="text-[9px] text-slate-400 font-medium truncate max-w-[100px]" title={member.dueAmountNote}>
                               {member.dueAmountNote}
                             </span>
                           )}
                         </div>
                       ) : (
-                        <span className="text-xs text-gray-400 italic">—</span>
+                        <span className="text-xs text-slate-400 italic">—</span>
                       )}
                     </td>
 
                     {/* Farms Column */}
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-2.5 text-center">
                       {isFarmer ? (
                         <button
                           type="button"
@@ -203,21 +207,21 @@ export default function MemberTable({
                             e.stopPropagation();
                             onViewFarms(member);
                           }}
-                          className="px-2.5 py-1 text-xs text-brand-600 transition border border-brand-200 rounded-lg hover:bg-brand-50 font-bold active:scale-95 shadow-xs bg-white cursor-pointer"
+                          className="px-2 py-1 text-[11px] text-emerald-700 transition border border-emerald-200 rounded-md hover:bg-emerald-50 font-bold bg-white cursor-pointer"
                         >
                           Farms
                         </button>
                       ) : (
-                        <span className="text-xs text-gray-400 italic">N/A</span>
+                        <span className="text-xs text-slate-400 italic">—</span>
                       )}
                     </td>
 
                     {/* Actions Column */}
-                    <td className="px-5 py-3 text-right">
+                    <td className="px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={() => onViewDetails(member)}
-                        className="px-3 py-1 text-xs bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 font-bold rounded-lg transition active:scale-95 cursor-pointer"
+                        className="px-2.5 py-1 text-[11px] bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-md transition cursor-pointer"
                       >
                         Details
                       </button>
@@ -232,29 +236,29 @@ export default function MemberTable({
 
       {/* Pagination Footer */}
       {!loading && members.length > 0 && (
-        <div className="px-5 py-4 border-t border-gray-150 flex items-center justify-between text-xs font-semibold text-gray-500 select-none bg-gray-50">
+        <div className="shrink-0 px-4 py-2.5 border-t border-slate-200/90 flex items-center justify-between text-xs font-medium text-slate-500 bg-[#F8FAFC]">
           <span>
-            Showing {totalCount === 0 ? 0 : startIndex + 1}–{Math.min(startIndex + perPage, totalCount)} of {totalCount} Customers
+            Showing <strong className="text-slate-800 font-bold">{totalCount === 0 ? 0 : startIndex + 1}–{Math.min(startIndex + perPage, totalCount)}</strong> of <strong className="text-slate-800 font-bold">{totalCount}</strong> Customers
           </span>
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => onPageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="px-2.5 py-1.5 border border-gray-200 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+              className="px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-slate-700 transition cursor-pointer"
             >
               Prev
             </button>
             {pages.map((p, i) =>
               p === "..." ? (
-                <span key={`ellipsis-${i}`} className="px-1 text-gray-400">…</span>
+                <span key={`ellipsis-${i}`} className="px-1 text-slate-400">…</span>
               ) : (
                 <button
                   key={p}
                   onClick={() => onPageChange(p)}
-                  className={`w-7 h-7 rounded-lg transition cursor-pointer ${
+                  className={`w-6 h-6 text-xs rounded-md transition font-bold cursor-pointer flex items-center justify-center ${
                     currentPage === p
-                      ? "bg-brand-600 text-white shadow-xs"
-                      : "bg-white border border-gray-200 hover:bg-gray-50 text-gray-600"
+                      ? "bg-[#16A36A] text-white shadow-2xs"
+                      : "bg-white border border-slate-200 hover:bg-slate-50 text-slate-700"
                   }`}
                 >
                   {p}
@@ -264,7 +268,7 @@ export default function MemberTable({
             <button
               onClick={() => onPageChange(currentPage + 1)}
               disabled={currentPage === totalPages || totalPages === 0}
-              className="px-2.5 py-1.5 border border-gray-200 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+              className="px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-slate-700 transition cursor-pointer"
             >
               Next
             </button>

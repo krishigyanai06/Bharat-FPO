@@ -62,16 +62,17 @@ const menuSections = [
       { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
       { icon: ShoppingCart, label: "Procurement", path: "/procurement" },
       {
-        icon: Users,
+        icon: Building2,
         label: "Parties",
         path: "/party",
         isParent: true,
         children: [
+          { label: "All Parties", path: "/party", icon: Building2 },
           { label: "Suppliers", path: "/party?tab=suppliers", icon: Package },
           { label: "Buyers", path: "/party?tab=buyers", icon: ShoppingCart },
-          { label: "Customers (Members)", path: "/party?tab=customers", icon: Users },
         ]
       },
+      { icon: Users, label: "Customers (Farmers)", path: "/customers" },
       { icon: Archive, label: "Inventory", path: "/inventory" },
     ]
   },
@@ -396,6 +397,7 @@ export default function Layout() {
   /* CURRENT PAGE LABEL */
   /* CURRENT PAGE LABEL */
   const getCurrentPageLabel = (path) => {
+    if (path.startsWith("/customers")) return "Customers (Farmers)";
     if (path.startsWith("/gst-reports")) {
       if (path.includes("/gstr-1")) return "GSTR-1 Report";
       if (path.includes("/gstr-3b")) return "GSTR-3B Report";

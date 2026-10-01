@@ -36,6 +36,7 @@ const ProcurementSales = lazy(() => import('./pages/ProcurementSales/Procurement
 const GovernmentCompliancePage = lazy(() => import('./pages/GovernmentCompliancePage'));
 const PurchaseCrop = lazy(() => import('./pages/PurchaseCrop'));
 const WhatsAppCampaign = lazy(() => import('./pages/WhatsAppCampaign'));
+const Customers = lazy(() => import('./pages/Customers'));
 
 
 const PageLoader = () => (
@@ -123,7 +124,9 @@ function App() {
               <Route path="inventory" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/inventory']}><Suspense fallback={<PageLoader />}><Inventory /></Suspense></ProtectedRoute>} />
               <Route path="buy" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/buy']}><Suspense fallback={<PageLoader />}><Buy /></Suspense></ProtectedRoute>} />
               <Route path="broadcast" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/broadcast']}><Suspense fallback={<PageLoader />}><Broadcast /></Suspense></ProtectedRoute>} />
-              <Route path="members" element={<Navigate to="/party?tab=customers" replace />} />
+              <Route path="customers" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/customers']}><Suspense fallback={<PageLoader />}><Customers /></Suspense></ProtectedRoute>} />
+              <Route path="members" element={<Navigate to="/customers" replace />} />
+              <Route path="parties/customers" element={<Navigate to="/customers" replace />} />
               <Route path="documents" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/documents']}><Suspense fallback={<PageLoader />}><Documents /></Suspense></ProtectedRoute>} />
               <Route path="ledger" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/ledger']}><Suspense fallback={<PageLoader />}><ErrorBoundary><Ledger /></ErrorBoundary></Suspense></ProtectedRoute>} />
               <Route path="advertisement" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/advertisement']}><Suspense fallback={<PageLoader />}><Advertisement /></Suspense></ProtectedRoute>} />

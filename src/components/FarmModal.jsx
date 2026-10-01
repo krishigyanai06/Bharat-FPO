@@ -68,26 +68,26 @@ function FarmModal({ member, onClose }) {
   const mapCenter = rawCoords ? getCenter(rawCoords) : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fade-in">
+      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-slate-200 shadow-2xl flex flex-col">
         {/* HEADER */}
-        <div className="flex items-center justify-between p-5 border-b ">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50 shrink-0">
           <div className="flex items-center gap-2">
             {farm && (
               <button
                 onClick={handleBack}
-                className="p-1 rounded-lg hover:bg-gray-100"
+                className="p-1 rounded-lg hover:bg-slate-200/70 text-slate-600 transition cursor-pointer"
               >
                 <ArrowLeft size={18} />
               </button>
             )}
             <div>
-              <h2 className="text-lg font-semibold">
+              <h2 className="text-base font-bold text-slate-900">
                 {farm
                   ? farm.farmName || "Farm Details"
                   : `${member.firstName} ${member.lastName}'s Farms`}
               </h2>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-slate-500 font-medium">
                 {farm
                   ? `${farm.farmArea} ${farm.unit || "acre"}`
                   : `${farms.length} farm(s) found`}
@@ -96,62 +96,62 @@ function FarmModal({ member, onClose }) {
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-gray-100"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition cursor-pointer"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        <div className="p-5">
+        <div className="p-5 flex-1 bg-[#F8FAFC]">
           {/* FARM LIST VIEW */}
           {!farm && (
             <>
               {loading && (
                 <div className="flex justify-center py-10">
-                  <div className="w-8 h-8 border-b-2 border-brand-600 rounded-full animate-spin" />
+                  <div className="w-7 h-7 border-2 border-[#16A36A] border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
 
               {!loading && farms.length === 0 && (
-                <p className="py-10 text-center text-gray-500">
+                <p className="py-10 text-center text-xs text-slate-400">
                   No farms registered for this member.
                 </p>
               )}
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                 {farms.map((f) => {
                   const coords = f.geojson?.geometry?.coordinates?.[0];
                   const center = coords ? getCenter(coords) : null;
                   return (
                     <div
                       key={f._id}
-                      className="p-4 transition border cursor-pointer rounded-xl hover:shadow-md"
+                      className="p-4 transition border border-slate-200/80 bg-white shadow-2xs cursor-pointer rounded-xl hover:border-slate-300 hover:shadow-xs"
                       onClick={() => handleViewDetail(f._id)}
                     >
                       <div className="flex items-start justify-between">
-                        <h3 className="font-semibold text-gray-800">
+                        <h3 className="font-bold text-slate-800 text-xs">
                           {f.farmName || "Unnamed Farm"}
                         </h3>
-                        <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full">
+                        <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2 py-0.5 rounded-md">
                           {f.farmArea} {f.unit || "acre"}
                         </span>
                       </div>
-                      <div className="mt-2 space-y-1 text-sm text-gray-500">
-                        <p className="flex items-center gap-1">
-                          <MapPin size={13} />
+                      <div className="mt-2.5 space-y-1 text-xs text-slate-500 font-medium">
+                        <p className="flex items-center gap-1.5">
+                          <MapPin size={13} className="text-slate-400" />
                           {center
                             ? `${center[0].toFixed(4)}°N, ${center[1].toFixed(4)}°E`
                             : "Location N/A"}
                         </p>
-                        <p className="flex items-center gap-1">
-                          <Layers size={13} /> Soil: {f.soilType || "N/A"}
+                        <p className="flex items-center gap-1.5">
+                          <Layers size={13} className="text-slate-400" /> Soil: {f.soilType || "N/A"}
                         </p>
-                        <p className="flex items-center gap-1">
-                          <Droplets size={13} /> Irrigation:{" "}
+                        <p className="flex items-center gap-1.5">
+                          <Droplets size={13} className="text-slate-400" /> Irrigation:{" "}
                           {f.irrigationType || "N/A"}
                         </p>
                       </div>
-                      <button className="mt-3 text-xs text-brand-600 hover:underline">
+                      <button className="mt-3 text-xs text-[#16A36A] font-bold hover:underline">
                         View Details & Map →
                       </button>
                     </div>

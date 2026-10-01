@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { useDispatch } from "react-redux";
+import Swal from "sweetalert2";
 import {
   fetchMembers,
   createStaff,
@@ -64,30 +65,30 @@ export const INDIAN_STATES = [
 function ModalShell({ title, subtitle, icon: Icon, onClose, children }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh] select-none"
+        className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden border border-slate-200/80 flex flex-col max-h-[88vh] select-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200/90 bg-slate-50/80 shrink-0">
           <div className="flex items-center gap-3">
             {Icon && (
-              <div className="w-10 h-10 rounded-2xl bg-brand-50 text-brand-700 flex items-center justify-center border border-brand-100 shadow-3xs">
-                <Icon className="w-5 h-5" />
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-[#16A36A] flex items-center justify-center border border-emerald-100 shrink-0">
+                <Icon className="w-4.5 h-4.5" />
               </div>
             )}
             <div>
-              <h2 className="text-lg font-black text-slate-900 tracking-tight">{title}</h2>
-              {subtitle && <p className="text-xs text-slate-500 font-semibold">{subtitle}</p>}
+              <h2 className="text-base font-bold text-slate-900 tracking-tight">{title}</h2>
+              {subtitle && <p className="text-xs text-slate-500 font-medium">{subtitle}</p>}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -101,19 +102,19 @@ function ModalShell({ title, subtitle, icon: Icon, onClose, children }) {
 
 function ModalFooter({ onClose, loading, label }) {
   return (
-    <div className="flex justify-end items-center gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/60">
+    <div className="flex justify-end items-center gap-2.5 px-5 py-3 border-t border-slate-200/90 bg-slate-50/80 shrink-0">
       <button
         type="button"
         onClick={onClose}
         disabled={loading}
-        className="px-4 py-2.5 text-xs font-bold border border-slate-200 text-slate-600 bg-white rounded-xl hover:bg-slate-50 transition active:scale-95 cursor-pointer shadow-3xs"
+        className="px-3.5 py-1.5 text-xs font-semibold border border-slate-200 text-slate-700 bg-white rounded-lg hover:bg-slate-50 transition active:scale-95 cursor-pointer shadow-2xs"
       >
         Cancel
       </button>
       <button
         type="submit"
         disabled={loading}
-        className="flex items-center gap-2 px-6 py-2.5 text-xs font-bold text-white bg-brand-600 rounded-xl hover:bg-brand-700 transition active:scale-95 disabled:opacity-60 cursor-pointer shadow-md"
+        className="flex items-center gap-2 px-4 py-1.5 text-xs font-bold text-white bg-[#16A36A] hover:bg-[#138a59] rounded-lg transition active:scale-95 disabled:opacity-60 cursor-pointer shadow-2xs"
       >
         {loading ? (
           <>
@@ -142,7 +143,7 @@ function Field({
   const isPassword = type === "password";
   return (
     <div>
-      <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+      <label className="text-[11px] font-bold text-slate-600 mb-1 block">
         {label}
         {required && <span className="text-rose-500 ml-0.5">*</span>}
       </label>
@@ -161,25 +162,25 @@ function Field({
           }
           inputMode={k === "phone" ? "numeric" : undefined}
           maxLength={k === "phone" ? 10 : undefined}
-          className={`w-full px-3.5 py-2.5 text-xs font-semibold border rounded-xl focus:outline-none focus:ring-2 transition bg-white h-[40px] text-slate-800 ${
-            isPassword ? "pr-9" : ""
+          className={`w-full px-3 py-2 text-xs font-medium border rounded-lg focus:outline-none focus:ring-1 transition bg-slate-50/50 focus:bg-white h-9 text-slate-800 placeholder-slate-400 ${
+            isPassword ? "pr-8" : ""
           } ${
             error
-              ? "border-rose-400 focus:ring-rose-400 bg-rose-50/20 text-rose-900"
-              : "border-slate-200 focus:ring-brand-500"
+              ? "border-rose-400 focus:ring-rose-400 focus:border-rose-400 bg-rose-50/20 text-rose-900"
+              : "border-slate-200/90 focus:ring-[#16A36A] focus:border-[#16A36A]"
           }`}
         />
         {isPassword && (
           <button
             type="button"
             onClick={() => setShow((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
           >
-            {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {show ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
         )}
       </div>
-      {error && <p className="text-[11px] font-bold text-rose-600 mt-1">{error}</p>}
+      {error && <p className="text-[10px] font-bold text-rose-600 mt-0.5">{error}</p>}
     </div>
   );
 }
@@ -190,11 +191,11 @@ function LocationFields({ form, set }) {
       <Field label="Village" k="village" form={form} set={set} placeholder="e.g. Rampur" />
       <Field label="District" k="district" form={form} set={set} placeholder="e.g. Gorakhpur" />
       <div>
-        <label className="text-xs font-bold text-slate-700 mb-1.5 block">State</label>
+        <label className="text-[11px] font-bold text-slate-600 mb-1 block">State</label>
         <select
           value={form.state}
           onChange={set("state")}
-          className="w-full px-3 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white h-[40px] text-slate-800 cursor-pointer"
+          className="w-full px-3 py-2 text-xs font-semibold border border-slate-200/90 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#16A36A] focus:border-[#16A36A] bg-slate-50/50 focus:bg-white h-9 text-slate-800 cursor-pointer"
         >
           <option value="">Select State</option>
           {INDIAN_STATES.map((st) => (
@@ -276,6 +277,27 @@ function FarmerModal({ onClose }) {
     if (createFarmer.fulfilled.match(result)) {
       await dispatch(fetchMembers());
       onClose();
+      Swal.fire({
+        icon: "success",
+        title: "Farmer Registered Successfully!",
+        html: `
+          <div style="font-family: inherit; text-align: center; padding: 4px 0;">
+            <p style="font-size: 13px; color: #475569; margin-bottom: 8px;">
+              Farmer <strong>${form.firstName} ${form.lastName || ""}</strong> has been registered.
+            </p>
+            <p style="font-size: 12px; color: #64748b;">
+              Phone: <strong>+91 ${form.phone}</strong> · State: <strong>${form.state}</strong>
+            </p>
+          </div>
+        `,
+        confirmButtonColor: "#16A36A",
+        confirmButtonText: "Done",
+        customClass: {
+          popup: "rounded-2xl shadow-2xl border border-slate-100 p-5",
+          title: "text-lg font-bold text-slate-900",
+          confirmButton: "px-5 py-2 text-xs font-bold rounded-xl cursor-pointer shadow-2xs",
+        },
+      });
     } else {
       const msg = result.payload || "Failed to create farmer";
       setError(
@@ -296,12 +318,12 @@ function FarmerModal({ onClose }) {
       icon={Sprout}
       onClose={onClose}
     >
-      <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto max-h-[75vh]">
+      <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto max-h-[72vh] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] bg-[#F8FAFC] flex-1">
         {/* Section 1: Personal Information */}
-        <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2">
-            <User className="w-3.5 h-3.5 text-brand-600" />
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 space-y-3 shadow-2xs">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+            <User className="w-3.5 h-3.5 text-[#16A36A]" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Personal Information
             </span>
           </div>
@@ -333,13 +355,13 @@ function FarmerModal({ onClose }) {
               error={errors.phone}
             />
             <div>
-              <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+              <label className="text-[11px] font-bold text-slate-600 mb-1 block">
                 Farmer Category
               </label>
               <select
                 value={form.farmerCategory}
                 onChange={set("farmerCategory")}
-                className="w-full px-3 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white h-[40px] text-slate-800 cursor-pointer"
+                className="w-full px-3 py-2 text-xs font-semibold border border-slate-200/90 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#16A36A] focus:border-[#16A36A] bg-slate-50/50 focus:bg-white h-9 text-slate-800 cursor-pointer"
               >
                 <option value="small">Small Farmer (&lt; 2 Hectares)</option>
                 <option value="medium">Medium Farmer (2–10 Hectares)</option>
@@ -350,10 +372,10 @@ function FarmerModal({ onClose }) {
         </div>
 
         {/* Section 2: Address & Location */}
-        <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2">
-            <MapPin className="w-3.5 h-3.5 text-brand-600" />
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 space-y-3 shadow-2xs">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+            <MapPin className="w-3.5 h-3.5 text-[#16A36A]" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Address & Location
             </span>
           </div>
@@ -361,10 +383,10 @@ function FarmerModal({ onClose }) {
         </div>
 
         {/* Section 3: Bank Account Details */}
-        <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2">
-            <Landmark className="w-3.5 h-3.5 text-brand-600" />
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 space-y-3 shadow-2xs">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+            <Landmark className="w-3.5 h-3.5 text-[#16A36A]" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Bank Account Details (Optional)
             </span>
           </div>
@@ -427,9 +449,9 @@ function TempPasswordActions({ password, onDone }) {
         <button
           type="button"
           onClick={copy}
-          className={`flex-1 px-4 py-2.5 text-xs rounded-xl border transition font-bold cursor-pointer ${
+          className={`flex-1 px-4 py-2 text-xs rounded-lg border transition font-bold cursor-pointer ${
             copied
-              ? "border-brand-500 text-brand-600 bg-brand-50"
+              ? "border-emerald-500 text-emerald-700 bg-emerald-50"
               : "border-slate-300 text-slate-700 hover:bg-slate-50"
           }`}
         >
@@ -438,7 +460,7 @@ function TempPasswordActions({ password, onDone }) {
         <button
           type="button"
           onClick={onDone}
-          className="flex-1 px-4 py-2.5 text-xs text-white bg-brand-600 rounded-xl hover:bg-brand-700 font-bold cursor-pointer"
+          className="flex-1 px-4 py-2 text-xs text-white bg-[#16A36A] hover:bg-[#138a59] rounded-lg font-bold cursor-pointer transition shadow-2xs"
         >
           Done
         </button>
@@ -490,9 +512,9 @@ function StaffModal({ onClose }) {
           <p className="text-xs text-slate-600 font-semibold">
             Staff account created successfully. Share this temporary password with the staff member:
           </p>
-          <div className="bg-brand-50 border border-brand-200 rounded-2xl p-4 text-center">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center">
             <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Temporary Password</p>
-            <p className="text-xl font-mono font-black text-brand-700 tracking-widest select-all">
+            <p className="text-xl font-mono font-black text-emerald-800 tracking-widest select-all">
               {tempPassword}
             </p>
           </div>
@@ -508,15 +530,19 @@ function StaffModal({ onClose }) {
       icon={Briefcase}
       onClose={onClose}
     >
-      <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[75vh]">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="First Name" k="firstName" form={form} set={set} required placeholder="e.g. Amit" />
-          <Field label="Last Name" k="lastName" form={form} set={set} placeholder="e.g. Singh" />
-          <Field label="Mobile Phone" k="phone" form={form} set={set} required placeholder="10-digit mobile number" />
-          <Field label="Email Address" k="emailId" form={form} set={set} placeholder="staff@fpo.com" />
-          <Field label="Joining Date" k="joiningDate" form={form} set={set} type="date" />
+      <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto max-h-[72vh] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] bg-[#F8FAFC] flex-1">
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 space-y-3 shadow-2xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="First Name" k="firstName" form={form} set={set} required placeholder="e.g. Amit" />
+            <Field label="Last Name" k="lastName" form={form} set={set} placeholder="e.g. Singh" />
+            <Field label="Mobile Phone" k="phone" form={form} set={set} required placeholder="10-digit mobile number" />
+            <Field label="Email Address" k="emailId" form={form} set={set} placeholder="staff@fpo.com" />
+            <Field label="Joining Date" k="joiningDate" form={form} set={set} type="date" />
+          </div>
         </div>
-        <LocationFields form={form} set={set} />
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 space-y-3 shadow-2xs">
+          <LocationFields form={form} set={set} />
+        </div>
         {error && (
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700">
             {error}
@@ -562,21 +588,37 @@ function FPOModal({ onClose }) {
     if (createStaff.fulfilled.match(result)) {
       dispatch(fetchMembers());
       onClose();
+      Swal.fire({
+        icon: "success",
+        title: "FPO Created Successfully!",
+        text: `FPO ${form.shopName || form.firstName} has been registered.`,
+        confirmButtonColor: "#16A36A",
+        confirmButtonText: "Done",
+        customClass: {
+          popup: "rounded-2xl shadow-2xl border border-slate-100 p-5",
+          title: "text-lg font-bold text-slate-900",
+          confirmButton: "px-5 py-2 text-xs font-bold rounded-xl cursor-pointer shadow-2xs",
+        },
+      });
     } else setError(result.payload || "Failed to create FPO");
   };
 
   return (
     <ModalShell title="Add New FPO" icon={Briefcase} onClose={onClose}>
-      <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[75vh]">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="First Name" k="firstName" form={form} set={set} />
-          <Field label="Last Name" k="lastName" form={form} set={set} />
-          <Field label="Mobile Phone" k="phone" form={form} set={set} required />
-          <Field label="Email" k="emailId" form={form} set={set} />
-          <Field label="Shop Name" k="shopName" form={form} set={set} />
-          <Field label="GST Number" k="gstNumber" form={form} set={set} />
+      <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto max-h-[72vh] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] bg-[#F8FAFC] flex-1">
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 space-y-3 shadow-2xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="First Name" k="firstName" form={form} set={set} />
+            <Field label="Last Name" k="lastName" form={form} set={set} />
+            <Field label="Mobile Phone" k="phone" form={form} set={set} required />
+            <Field label="Email" k="emailId" form={form} set={set} />
+            <Field label="Shop Name" k="shopName" form={form} set={set} />
+            <Field label="GST Number" k="gstNumber" form={form} set={set} />
+          </div>
         </div>
-        <LocationFields form={form} set={set} />
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 space-y-3 shadow-2xs">
+          <LocationFields form={form} set={set} />
+        </div>
         {error && (
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700">
             {error}
@@ -613,7 +655,7 @@ export default function AddMemberButton() {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
+          className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-white bg-[#16A36A] hover:bg-[#138a59] rounded-lg transition-all shadow-2xs active:scale-95 cursor-pointer"
         >
           <UserPlus className="w-4 h-4" />
           <span className="hidden sm:inline">Add Member</span>
@@ -625,11 +667,11 @@ export default function AddMemberButton() {
         </button>
 
         {open && (
-          <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 py-1">
+          <div className="absolute right-0 top-full mt-1.5 w-44 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 py-1">
             <button
               type="button"
               onClick={() => pick("farmer")}
-              className="w-full flex items-center gap-2.5 px-4 py-3 text-xs font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition cursor-pointer"
+              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 transition cursor-pointer"
             >
               <Sprout className="w-4 h-4 text-emerald-600" />
               <span>Add Farmer</span>
@@ -637,7 +679,7 @@ export default function AddMemberButton() {
             <button
               type="button"
               onClick={() => pick("staff")}
-              className="w-full flex items-center gap-2.5 px-4 py-3 text-xs font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition border-t border-slate-100 cursor-pointer"
+              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 transition border-t border-slate-100 cursor-pointer"
             >
               <Briefcase className="w-4 h-4 text-blue-600" />
               <span>Add Staff</span>
