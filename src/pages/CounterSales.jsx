@@ -133,6 +133,39 @@ const resolveItemLabel = (itemRow, products = [], stockSummary = []) => {
   return "Product";
 };
 
+const resolveLinkedInvoiceNo = (p, salesList = []) => {
+  const sellObjOrId = p?.linkedSell || p?.sell;
+
+  if (sellObjOrId && typeof sellObjOrId === "object") {
+    const invNo = sellObjOrId.invoiceNumber || sellObjOrId.invoiceNo || sellObjOrId.billNumber;
+    if (invNo) return invNo;
+    if (sellObjOrId._id) return sellObjOrId._id.substring(0, 8).toUpperCase();
+  }
+
+  if (sellObjOrId && typeof sellObjOrId === "string") {
+    if (salesList && salesList.length > 0) {
+      const matched = salesList.find(s => s._id === sellObjOrId);
+      if (matched) {
+        const invNo = matched.invoiceNumber || matched.invoiceNo || matched.billNumber;
+        if (invNo) return invNo;
+      }
+    }
+  }
+
+  if (p?.description) {
+    const descMatch = p.description.match(/Invoice\s+([A-Za-z0-9\-_]+)/i);
+    if (descMatch && descMatch[1]) {
+      return descMatch[1];
+    }
+  }
+
+  if (sellObjOrId && typeof sellObjOrId === "string") {
+    return sellObjOrId.substring(0, 8).toUpperCase();
+  }
+
+  return "—";
+};
+
 export default function CounterSales() {
   const dispatch = useDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -182,7 +215,7 @@ export default function CounterSales() {
   const [saleTypeFilter, setSaleTypeFilter] = useState("all");
   const [billingFilter, setBillingFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 8;
+  const ITEMS_PER_PAGE = 12;
 
   // Viewing detail state
   const [detailItem, setDetailItem] = useState(null);
@@ -431,21 +464,26 @@ export default function CounterSales() {
   );
 
   return (
-    <div className="w-full h-full min-h-[calc(100vh-4rem)] flex flex-col space-y-6 select-none bg-[#F8FAFC]">
-      {/* 1. Header Area */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="w-full h-full flex flex-col space-y-3 select-none text-slate-800 flex-1">
+      {/* 1. Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-200/60">
         <div>
-          <h1 className="text-2xl font-bold text-gray-950">Counter Sales (Direct Sell)</h1>
-          <p className="text-sm text-gray-500">Manage walk-in cash checkouts, credit sales, customer sales bills, and returns</p>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Receipt className="w-5 h-5 text-[#16A36A]" />
+            Counter Sales
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Manage sales bills, payments, credit sales and returns
+          </p>
         </div>
 
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           {!isReadOnly && (
             <>
               {activeTab === "sales" && (
                 <button
                   onClick={() => navigate("/sell/invoice/new")}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold transition shadow-sm active:scale-95"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#16A36A] hover:bg-[#128857] text-white rounded-lg text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   New Sales Bill
@@ -457,7 +495,7 @@ export default function CounterSales() {
                     setEditPaymentRecord(null);
                     setPaymentModalOpen(true);
                   }}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold transition shadow-sm active:scale-95"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#16A36A] hover:bg-[#128857] text-white rounded-lg text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   Record Payment
@@ -469,7 +507,7 @@ export default function CounterSales() {
                     setEditReturnRecord(null);
                     setReturnModalOpen(true);
                   }}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition shadow-sm active:scale-95"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   Record Return
@@ -480,28 +518,75 @@ export default function CounterSales() {
         </div>
       </div>
 
-      {/* 2. Stat Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Sales Revenue", val: `₹${salesMetrics.totalSales.toLocaleString("en-IN")}`, icon: CreditCard, bg: "bg-emerald-50 text-emerald-700", border: "border-emerald-100" },
-          { label: "Estimate Volume", val: `₹${salesMetrics.totalEstimates.toLocaleString("en-IN")}`, icon: FileText, bg: "bg-blue-50 text-blue-700", border: "border-blue-100" },
-          { label: "Outstanding Dues", val: `₹${salesMetrics.creditOutstanding.toLocaleString("en-IN")}`, icon: AlertTriangle, bg: "bg-amber-50 text-amber-700", border: "border-amber-100" },
-          { label: "Payments Logged", val: `₹${salesMetrics.paymentsReceived.toLocaleString("en-IN")}`, icon: IndianRupee, bg: "bg-purple-50 text-purple-700", border: "border-purple-100" },
-        ].map((item, idx) => (
-          <div key={idx} className={`bg-white border ${item.border} rounded-2xl p-5 shadow-sm flex items-center gap-4`}>
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${item.bg}`}>
-              <item.icon className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 font-medium">{item.label}</p>
-              <h3 className="text-xl font-bold text-gray-900 mt-0.5">{item.val}</h3>
-            </div>
+      {/* 2. KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Sales Revenue */}
+        <div className="bg-white border border-[#DCE5EA] rounded-xl p-3.5 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Sales Revenue</p>
+            <h3 className="text-lg font-bold text-slate-900 mt-0.5">
+              ₹{salesMetrics.totalSales.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[10px] text-emerald-700 font-medium mt-0.5">
+              {sales.filter((s) => s.saleType === "SALE").length} Bills Logged
+            </p>
           </div>
-        ))}
+          <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0">
+            <CreditCard className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Estimate Volume */}
+        <div className="bg-white border border-[#DCE5EA] rounded-xl p-3.5 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Estimate Volume</p>
+            <h3 className="text-lg font-bold text-slate-900 mt-0.5">
+              ₹{salesMetrics.totalEstimates.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[10px] text-blue-700 font-medium mt-0.5">
+              {sales.filter((s) => s.saleType === "ESTIMATE").length} Estimates Drafted
+            </p>
+          </div>
+          <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100/80 text-blue-600 flex items-center justify-center shrink-0">
+            <FileText className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Outstanding Dues */}
+        <div className="bg-white border border-[#DCE5EA] rounded-xl p-3.5 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Outstanding Dues</p>
+            <h3 className="text-lg font-bold text-amber-700 mt-0.5">
+              ₹{salesMetrics.creditOutstanding.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[10px] text-amber-600 font-medium mt-0.5">
+              {sales.filter((s) => s.billingType === "Credit" && s.unpaidAmount > 0).length} Credit Bills
+            </p>
+          </div>
+          <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-100/80 text-amber-600 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Payments Logged */}
+        <div className="bg-white border border-[#DCE5EA] rounded-xl p-3.5 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Payments Logged</p>
+            <h3 className="text-lg font-bold text-slate-900 mt-0.5">
+              ₹{salesMetrics.paymentsReceived.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[10px] text-purple-700 font-medium mt-0.5">
+              {payments.length} Payment Receipts
+            </p>
+          </div>
+          <div className="w-9 h-9 rounded-lg bg-purple-50 border border-purple-100/80 text-purple-600 flex items-center justify-center shrink-0">
+            <IndianRupee className="w-4 h-4" />
+          </div>
+        </div>
       </div>
 
-      {/* 3. Navigation Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
+      {/* 3. ERP Register Tabs */}
+      <div className="flex border-b border-slate-200 pt-1">
         {TABS.map((t) => {
           const TabIcon = t.icon;
           const isSelected = activeTab === t.key;
@@ -513,12 +598,13 @@ export default function CounterSales() {
                 else if (t.key === "payments") navigate("/sell/receipts");
                 else if (t.key === "returns") navigate("/sell/returns");
               }}
-              className={`flex items-center gap-2 px-5 py-3 border-b-2 font-semibold text-sm transition-all duration-150 ${isSelected
-                ? "border-brand-650 text-brand-700"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200"
-                }`}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 cursor-pointer ${
+                isSelected
+                  ? "border-[#16A36A] text-[#16A36A] font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+              }`}
             >
-              <TabIcon size={16} />
+              <TabIcon size={15} />
               {t.label}
             </button>
           );
@@ -526,132 +612,138 @@ export default function CounterSales() {
       </div>
 
       {/* 4. Controls & Filter Bar */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row gap-3">
-        <form onSubmit={handleSearchSubmit} className="flex-1 relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+      <div className="bg-white border border-[#DCE5EA] rounded-xl p-2.5 shadow-2xs flex flex-col sm:flex-row gap-2.5 items-center">
+        <form onSubmit={handleSearchSubmit} className="flex-1 relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by buyer details, reference code..."
+            placeholder="Search buyer, mobile, invoice number or reference..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 placeholder-gray-400"
+            className="w-full pl-9 pr-4 h-[44px] text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#16A36A] focus:border-[#16A36A] placeholder-slate-400 text-slate-800 font-medium"
           />
         </form>
 
         {activeTab === "sales" && (
-          <div className="flex gap-3">
-            <select
-              value={saleTypeFilter}
-              onChange={(e) => setSaleTypeFilter(e.target.value)}
-              className="px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white"
-            >
-              <option value="all">All Types</option>
-              <option value="SALE">Sales Only</option>
-              <option value="ESTIMATE">Estimates Only</option>
-            </select>
-            <select
-              value={billingFilter}
-              onChange={(e) => setBillingFilter(e.target.value)}
-              className="px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white"
-            >
-              <option value="all">All Billing</option>
-              <option value="Cash">Cash</option>
-              <option value="Credit">Credit</option>
-            </select>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 h-[44px]">
+              <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Type:</span>
+              <select
+                value={saleTypeFilter}
+                onChange={(e) => setSaleTypeFilter(e.target.value)}
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
+              >
+                <option value="all">All Types</option>
+                <option value="SALE">Sales Only</option>
+                <option value="ESTIMATE">Estimates Only</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 h-[44px]">
+              <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Billing:</span>
+              <select
+                value={billingFilter}
+                onChange={(e) => setBillingFilter(e.target.value)}
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
+              >
+                <option value="all">All Billing</option>
+                <option value="Cash">Cash</option>
+                <option value="Credit">Credit</option>
+              </select>
+            </div>
           </div>
         )}
       </div>
 
       {/* 5. Lists Renderings */}
       {loading ? (
-        <div className="flex items-center justify-center min-h-[40vh] bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600" />
+        <div className="flex items-center justify-center min-h-[350px] bg-white rounded-xl border border-slate-200 shadow-2xs flex-1">
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="w-8 h-8 animate-spin text-[#16A36A]" />
+            <span className="text-xs font-semibold text-slate-500">Loading register data...</span>
+          </div>
         </div>
       ) : (
-        <div className="w-full bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-x-auto overflow-y-auto flex-1 min-h-[420px]">
+        <div className="w-full bg-white border border-[#DCE5EA] rounded-xl shadow-2xs overflow-x-auto overflow-y-auto flex-1 min-h-[450px] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {activeTab === "sales" && (
-            <table className="w-full border-collapse text-left text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-600 uppercase font-semibold sticky top-0 z-10">
-                <tr className="text-[10px] tracking-wider text-slate-500 bg-slate-50">
-                  <th className="px-3 py-3 font-bold bg-slate-50">SALES BILL #</th>
-                  <th className="px-3 py-3 text-center font-bold bg-slate-50">DATE</th>
-                  <th className="px-3 py-3 font-bold bg-slate-50">BUYER/PARTY</th>
-                  <th className="px-3 py-3 font-bold bg-slate-50">PAYMENT</th>
-                  <th className="px-3 py-3 font-bold bg-slate-50">TYPE</th>
-                  <th className="px-3 py-3 text-right font-bold bg-slate-50">TOTAL AMOUNT</th>
-                  <th className="px-3 py-3 text-right font-bold bg-slate-50">RECEIVED AMOUNT</th>
-                  <th className="px-3 py-3 text-right font-bold bg-slate-50">UNPAID AMOUNT</th>
-                  <th className="px-3 py-3 text-center font-bold bg-slate-50">E-INVOICE</th>
-                  <th className="px-3 py-3 text-center font-bold bg-slate-50">E-WAY BILL</th>
-                  <th className="px-3 py-3 text-right font-bold bg-slate-50">ACTIONS</th>
+            <table className="w-full border-collapse text-left text-xs">
+              <thead className="bg-[#F8FAFC] border-b border-slate-200/90 text-[11px] text-slate-500 uppercase font-bold tracking-wider sticky top-0 z-10">
+                <tr>
+                  <th className="px-3.5 py-3 font-bold bg-[#F8FAFC]">SALES BILL #</th>
+                  <th className="px-3.5 py-3 text-center font-bold bg-[#F8FAFC]">DATE</th>
+                  <th className="px-3.5 py-3 font-bold bg-[#F8FAFC]">BUYER / PARTY</th>
+                  <th className="px-3.5 py-3 font-bold bg-[#F8FAFC]">PAYMENT</th>
+                  <th className="px-3.5 py-3 font-bold bg-[#F8FAFC]">TYPE</th>
+                  <th className="px-3.5 py-3 text-right font-bold bg-[#F8FAFC]">TOTAL AMOUNT</th>
+                  <th className="px-3.5 py-3 text-right font-bold bg-[#F8FAFC]">RECEIVED</th>
+                  <th className="px-3.5 py-3 text-right font-bold bg-[#F8FAFC]">UNPAID</th>
+                  <th className="px-3.5 py-3 text-center font-bold bg-[#F8FAFC]">E-INVOICE</th>
+                  <th className="px-3.5 py-3 text-center font-bold bg-[#F8FAFC]">E-WAY BILL</th>
+                  <th className="px-3.5 py-3 text-right font-bold bg-[#F8FAFC]">ACTIONS</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
                 {sortedSales.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="px-6 py-16 text-center text-gray-400">
-                      <Receipt className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                      <p className="font-medium">No sales bills found</p>
+                    <td colSpan={11} className="px-6 py-16 text-center text-slate-400">
+                      <Receipt className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                      <p className="font-semibold text-xs text-slate-500">No sales bills found</p>
                     </td>
                   </tr>
                 ) : (
                   sortedSales.map((sale) => (
-                    <tr key={sale._id} className="hover:bg-gray-50 transition">
-                      <td className="px-3 py-2.5 font-bold text-gray-900 text-xs">{sale.invoiceNumber || sale._id.substring(0, 8).toUpperCase()}</td>
-                      <td className="px-3 py-2.5 text-gray-500">
-                        {(() => {
-                          const dateVal = new Date(sale.createdAt);
-                          if (isNaN(dateVal.getTime())) return "—";
-                          const day = dateVal.getDate();
-                          const month = dateVal.toLocaleDateString("en-IN", { month: "short" });
-                          const year = dateVal.getFullYear();
-                          return (
-                            <div className="flex flex-col items-center justify-center text-center font-medium leading-tight text-[11px] font-sans text-gray-500">
-                              <span className="text-gray-700 font-bold">{day}</span>
-                              <span className="text-[10px] text-gray-400 font-semibold">{month}</span>
-                              <span className="text-[9px] text-gray-400">{year}</span>
-                            </div>
-                          );
-                        })()}
+                    <tr key={sale._id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-3.5 py-2.5 font-bold font-mono text-slate-900 text-xs">
+                        {sale.invoiceNumber || sale._id.substring(0, 8).toUpperCase()}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3.5 py-2.5 text-center text-slate-600 text-xs font-semibold whitespace-nowrap">
+                        {formatDate(sale.createdAt)}
+                      </td>
+                      <td className="px-3.5 py-2.5">
                         <div>
-                          <p className="font-bold text-gray-800 text-xs">{sale.party?.name || sale.buyerName || "Walk-in Customer"}</p>
+                          <p className="font-bold text-slate-900 text-xs">{sale.party?.name || sale.buyerName || "Walk-in Customer"}</p>
                           {(sale.buyerPhone || sale.party?.phoneNumber) && (
-                            <span className="text-[10px] text-gray-400 mt-0.5 block font-semibold">{sale.buyerPhone || sale.party?.phoneNumber}</span>
+                            <span className="text-[10px] text-slate-400 font-medium block">{sale.buyerPhone || sale.party?.phoneNumber}</span>
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${sale.billingType === "Credit"
-                          ? "bg-amber-50 text-amber-700 border border-amber-100"
-                          : "bg-green-50 text-green-700 border border-green-100"
-                          }`}>
-                          {sale.billingType === "Cash" ? "Money Received" : "Udhar (Credit)"}
+                      <td className="px-3.5 py-2.5">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold border ${
+                            sale.billingType === "Credit"
+                              ? "bg-amber-50 text-amber-700 border-amber-200/70"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200/70"
+                          }`}
+                        >
+                          {sale.billingType === "Cash" ? "Cash" : "Udhar (Credit)"}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5">
-                        <span className="inline-block px-2 py-0.5 rounded-md bg-gray-100 text-gray-655 text-[10px] font-extrabold uppercase tracking-wider border border-gray-200">
+                      <td className="px-3.5 py-2.5">
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-slate-100 text-slate-600 border border-slate-200">
                           {sale.saleType}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-right font-extrabold text-gray-950 text-xs">₹{(sale.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                      <td className="px-3 py-2.5 text-right text-green-700 font-semibold text-xs">₹{(sale.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                      <td className={`px-3 py-2.5 text-right font-semibold text-xs ${sale.unpaidAmount > 0 ? "text-red-650" : "text-gray-900"}`}>
+                      <td className="px-3.5 py-2.5 text-right font-extrabold text-slate-900 text-xs whitespace-nowrap">
+                        ₹{(sale.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-right text-emerald-700 font-bold text-xs whitespace-nowrap">
+                        ₹{(sale.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td
+                        className={`px-3.5 py-2.5 text-right font-bold text-xs whitespace-nowrap ${
+                          sale.unpaidAmount > 0 ? "text-rose-600" : "text-slate-800"
+                        }`}
+                      >
                         ₹{(sale.unpaidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="px-3 py-2.5 text-center">
+                      <td className="px-3.5 py-2.5 text-center">
                         {(() => {
                           const partyId = typeof sale.party === "string" ? sale.party : sale.party?._id;
-                          const resolved = parties.find(p => p._id === partyId);
+                          const resolved = parties.find((p) => p._id === partyId);
                           const isB2B = sale.saleType === "SALE" && resolved && (resolved.gstin || resolved.gstNumber || resolved.gstType?.startsWith("Registered"));
 
                           if (!isB2B) {
-                            return (
-                              <span className="text-gray-450 font-semibold text-xs select-none">
-                                N/A
-                              </span>
-                            );
+                            return <span className="text-slate-400 font-medium text-[11px] select-none">N/A</span>;
                           }
 
                           const irnVal = sale.eInvoiceIrn || sale.irn || sale.eInvoiceInfo?.irn;
@@ -659,7 +751,7 @@ export default function CounterSales() {
                             return (
                               <button
                                 onClick={() => navigate(`/sell/compliance/${sale._id}`)}
-                                className="border border-emerald-500 bg-emerald-50/10 hover:bg-emerald-50 text-emerald-800 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
+                                className="border border-emerald-500 bg-emerald-50 text-emerald-800 font-bold px-2.5 py-1 text-[11px] rounded inline-flex items-center gap-1 transition active:scale-95 cursor-pointer"
                               >
                                 ✓ Generated
                               </button>
@@ -671,7 +763,7 @@ export default function CounterSales() {
                             return (
                               <button
                                 onClick={() => navigate(`/sell/compliance/${sale._id}`)}
-                                className="border border-rose-500 bg-rose-50/10 hover:bg-rose-50 text-rose-750 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
+                                className="border border-rose-400 bg-rose-50 text-rose-700 font-bold px-2.5 py-1 text-[11px] rounded inline-flex items-center gap-1 transition active:scale-95 cursor-pointer"
                               >
                                 ❌ Failed
                               </button>
@@ -681,21 +773,17 @@ export default function CounterSales() {
                           return (
                             <button
                               onClick={() => navigate(`/sell/compliance/${sale._id}`)}
-                              className="border border-gray-205 bg-white hover:bg-gray-50 text-gray-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer font-sans text-xs"
+                              className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold px-2.5 py-1 text-[11px] rounded inline-flex items-center gap-1 transition active:scale-95 cursor-pointer"
                             >
                               ⚡ Generate
                             </button>
                           );
                         })()}
                       </td>
-                      <td className="px-3 py-2.5 text-center">
+                      <td className="px-3.5 py-2.5 text-center">
                         {(() => {
                           if (sale.saleType === "ESTIMATE") {
-                            return (
-                              <span className="text-gray-400 font-medium text-[11px] select-none">
-                                —
-                              </span>
-                            );
+                            return <span className="text-slate-400 font-medium text-[11px] select-none">—</span>;
                           }
 
                           const ewbNo = sale.ewayBillNo || sale.eWayBillNo || sale.eInvoiceInfo?.ewayBillNo || sale.eInvoiceInfo?.eWayBillNo;
@@ -706,10 +794,11 @@ export default function CounterSales() {
                             return (
                               <button
                                 onClick={() => navigate(`/sell/compliance/${sale._id}`)}
-                                className={`font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs border ${ewbStatus === "CANCELLED"
-                                  ? "border-rose-300 bg-rose-50/10 text-rose-700"
-                                  : "border-emerald-500 bg-emerald-50/10 text-emerald-805"
-                                  }`}
+                                className={`font-bold px-2.5 py-1 text-[11px] rounded inline-flex items-center gap-1 transition active:scale-95 cursor-pointer border ${
+                                  ewbStatus === "CANCELLED"
+                                    ? "border-rose-300 bg-rose-50 text-rose-700"
+                                    : "border-emerald-500 bg-emerald-50 text-emerald-800"
+                                }`}
                               >
                                 {ewbStatus === "CANCELLED" ? "Cancelled" : "✓ Generated"}
                               </button>
@@ -717,67 +806,63 @@ export default function CounterSales() {
                           }
 
                           const partyId = typeof sale.party === "string" ? sale.party : sale.party?._id;
-                          const resolved = parties.find(p => p._id === partyId);
+                          const resolved = parties.find((p) => p._id === partyId);
                           const isB2B = sale.saleType === "SALE" && resolved && (resolved.gstin || resolved.gstNumber || resolved.gstType?.startsWith("Registered"));
 
                           if (isB2B) {
                             const irnVal = sale.eInvoiceIrn || sale.irn || sale.eInvoiceInfo?.irn;
                             if (!irnVal) {
-                              return (
-                                <span className="text-gray-400 font-semibold text-[11px] select-none">
-                                  Waiting IRN
-                                </span>
-                              );
+                              return <span className="text-slate-400 font-medium text-[11px] select-none">Waiting IRN</span>;
                             }
                           }
 
                           return (
                             <button
                               onClick={() => navigate(`/sell/compliance/${sale._id}`)}
-                              className="border border-amber-500 bg-amber-50/5 hover:bg-amber-50 text-amber-700 font-bold px-3 py-1.5 text-[11px] rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer text-xs"
+                              className="border border-amber-400 bg-amber-50 text-amber-800 font-bold px-2.5 py-1 text-[11px] rounded inline-flex items-center gap-1 transition active:scale-95 cursor-pointer"
                             >
                               Generate
                             </button>
                           );
                         })()}
                       </td>
-                      <td className="px-3 py-2.5 text-right">
+                      <td className="px-3.5 py-2.5 text-right">
                         <div className="relative inline-block text-left">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveDropdownId(activeDropdownId === sale._id ? null : sale._id);
                             }}
-                            className="p-1.5 hover:bg-gray-100 rounded-lg transition border-0 bg-transparent cursor-pointer text-gray-500 hover:text-gray-900"
+                            className="p-1 hover:bg-slate-100 rounded transition border-0 bg-transparent cursor-pointer text-slate-500 hover:text-slate-900"
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
 
                           {activeDropdownId === sale._id && (
-                            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                            <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-[100] py-1 text-xs font-semibold">
                               <button
                                 onClick={() => handleViewDetails(sale, "sale")}
-                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
                               >
-                                <Eye className="w-3.5 h-3.5 text-gray-400" />
+                                <Eye className="w-3.5 h-3.5 text-slate-400" />
                                 View Details
                               </button>
 
                               {sale.saleType === "SALE" && (
                                 <button
                                   onClick={() => navigate(`/sell/compliance/${sale._id}`)}
-                                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                  className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
                                 >
-                                  <Shield className="w-3.5 h-3.5 text-gray-400" />
+                                  <Shield className="w-3.5 h-3.5 text-slate-400" />
                                   Government Compliance
                                 </button>
                               )}
 
                               <button
                                 onClick={() => handleDownloadReceipt(sale._id, sale.invoiceNo || "Receipt", sale.supplyType)}
-                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
                               >
-                                <Download className="w-3.5 h-3.5 text-gray-400" />
+                                <Download className="w-3.5 h-3.5 text-slate-400" />
                                 Download PDF
                               </button>
 
@@ -787,9 +872,9 @@ export default function CounterSales() {
                                     setLinkedSellForPayment(sale);
                                     setPaymentModalOpen(true);
                                   }}
-                                  className="w-full text-left px-4 py-2 text-xs text-emerald-705 hover:bg-emerald-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                  className="w-full text-left px-3.5 py-2 text-emerald-700 hover:bg-emerald-50 cursor-pointer flex items-center gap-2 font-bold"
                                 >
-                                  <IndianRupee className="w-3.5 h-3.5 text-emerald-500" />
+                                  <IndianRupee className="w-3.5 h-3.5 text-emerald-600" />
                                   Receive Payment
                                 </button>
                               )}
@@ -797,26 +882,26 @@ export default function CounterSales() {
                               {sale.saleType === "ESTIMATE" && !isReadOnly && (
                                 <button
                                   onClick={() => handleConvertEstimate(sale._id)}
-                                  className="w-full text-left px-4 py-2 text-xs text-brand-700 hover:bg-brand-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                  className="w-full text-left px-3.5 py-2 text-blue-700 hover:bg-blue-50 cursor-pointer flex items-center gap-2 font-bold"
                                 >
-                                  <RefreshCw className="w-3.5 h-3.5 text-brand-500" />
+                                  <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
                                   Convert to Sale
                                 </button>
                               )}
 
                               {!isReadOnly && (
                                 <>
-                                  <div className="h-px bg-gray-100 my-1"></div>
+                                  <div className="h-px bg-slate-100 my-1"></div>
                                   <button
                                     onClick={() => navigate(`/sell/invoice/edit/${sale._id}`)}
-                                    className="w-full text-left px-4 py-2 text-xs text-amber-700 hover:bg-amber-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    className="w-full text-left px-3.5 py-2 text-amber-700 hover:bg-amber-50 cursor-pointer flex items-center gap-2"
                                   >
                                     <Pencil className="w-3.5 h-3.5 text-amber-500" />
                                     Edit
                                   </button>
                                   <button
                                     onClick={() => handleDeleteSale(sale._id)}
-                                    className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    className="w-full text-left px-3.5 py-2 text-rose-700 hover:bg-rose-50 cursor-pointer flex items-center gap-2"
                                   >
                                     <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                                     Delete
@@ -835,100 +920,102 @@ export default function CounterSales() {
           )}
 
           {activeTab === "payments" && (
-            <table className="w-full border-collapse text-left text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-600 uppercase font-semibold sticky top-0 z-10">
-                <tr className="bg-slate-50">
-                  <th className="px-6 py-4 bg-slate-50">Receipt #</th>
-                  <th className="px-6 py-4 bg-slate-50">Date</th>
-                  <th className="px-6 py-4 bg-slate-50">Party/Customer</th>
-                  <th className="px-6 py-4 bg-slate-50">Linked Sales Bill</th>
-                  <th className="px-6 py-4 bg-slate-50">Payment Breakdown</th>
-                  <th className="px-6 py-4 text-right bg-slate-50">Received Amount</th>
-                  <th className="px-6 py-4 text-right bg-slate-50">Actions</th>
+            <table className="w-full border-collapse text-left text-xs">
+              <thead className="bg-[#F8FAFC] border-b border-slate-200/90 text-[11px] text-slate-500 uppercase font-bold tracking-wider sticky top-0 z-10">
+                <tr>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">RECEIPT #</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">DATE</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">BUYER / PARTY</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">LINKED SALES BILL</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">PAYMENT BREAKDOWN</th>
+                  <th className="px-4 py-3 text-right bg-[#F8FAFC]">RECEIVED AMOUNT</th>
+                  <th className="px-4 py-3 text-right bg-[#F8FAFC]">ACTIONS</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
                 {sortedPayments.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-16 text-center text-gray-400">
-                      <IndianRupee className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                      <p className="font-medium">No customer payments recorded</p>
+                    <td colSpan={7} className="px-6 py-16 text-center text-slate-400">
+                      <IndianRupee className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                      <p className="font-semibold text-xs text-slate-500">No customer payments recorded</p>
                     </td>
                   </tr>
                 ) : (
                   sortedPayments.map((p) => (
-                    <tr key={p._id} className="hover:bg-gray-55 transition">
-                      <td className="px-6 py-4 font-bold text-gray-900">
+                    <tr key={p._id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-4 py-3 font-bold font-mono text-slate-900">
                         <div className="flex items-center gap-2">
                           <span>{p.receiptNo || p._id.substring(0, 8).toUpperCase()}</span>
                           {p.isAutoGenerated && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                               Auto
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-gray-550">{formatDate(p.createdAt)}</td>
-                      <td className="px-6 py-4 font-semibold text-gray-800">{p.party?.name || "Unassigned"}</td>
-                      <td className="px-6 py-4 font-mono text-xs text-gray-500 font-semibold">
-                        {p.linkedSell?.invoiceNumber || p.sell?.invoiceNumber || (p.sell && typeof p.sell === "string" ? p.sell.substring(0, 8).toUpperCase() : "—")}
+                      <td className="px-4 py-3 text-slate-600 text-xs">{formatDate(p.createdAt)}</td>
+                      <td className="px-4 py-3 font-bold text-slate-900 text-xs">{p.party?.name || p.buyerName || "Walk-in Customer"}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600 font-semibold">
+                        {resolveLinkedInvoiceNo(p, sales)}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="space-y-1">
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
                           {p.payments?.map((py, idx) => (
-                            <span key={idx} className="inline-block mr-2 px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs uppercase font-medium">
+                            <span key={idx} className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] uppercase font-semibold">
                               {py.paymentType}: ₹{py.amount}
                             </span>
                           ))}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right font-extrabold text-green-700">₹{(p.receivedAmount || 0).toLocaleString("en-IN")}</td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-4 py-3 text-right font-extrabold text-emerald-700 text-xs">
+                        ₹{(p.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3 text-right">
                         <div className="relative inline-block text-left">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveDropdownId(activeDropdownId === p._id ? null : p._id);
                             }}
-                            className="p-1.5 hover:bg-gray-100 rounded-lg transition border-0 bg-transparent cursor-pointer text-gray-500 hover:text-gray-900"
+                            className="p-1 hover:bg-slate-100 rounded transition border-0 bg-transparent cursor-pointer text-slate-500 hover:text-slate-900"
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
 
                           {activeDropdownId === p._id && (
-                            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                            <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-[100] py-1 text-xs font-semibold">
                               <button
                                 onClick={() => handleViewDetails(p, "payment")}
-                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
                               >
-                                <Eye className="w-3.5 h-3.5 text-gray-400" />
+                                <Eye className="w-3.5 h-3.5 text-slate-400" />
                                 View Details
                               </button>
 
                               <button
                                 onClick={() => handleDownloadPaymentReceipt(p._id)}
-                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
                               >
-                                <Download className="w-3.5 h-3.5 text-gray-400" />
+                                <Download className="w-3.5 h-3.5 text-slate-400" />
                                 Download PDF
                               </button>
 
                               {!isReadOnly && !p.isAutoGenerated && (
                                 <>
-                                  <div className="h-px bg-gray-100 my-1"></div>
+                                  <div className="h-px bg-slate-100 my-1"></div>
                                   <button
                                     onClick={() => {
                                       setEditPaymentRecord(p);
                                       setPaymentModalOpen(true);
                                     }}
-                                    className="w-full text-left px-4 py-2 text-xs text-amber-700 hover:bg-amber-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    className="w-full text-left px-3.5 py-2 text-amber-700 hover:bg-amber-50 cursor-pointer flex items-center gap-2"
                                   >
                                     <Pencil className="w-3.5 h-3.5 text-amber-500" />
                                     Edit
                                   </button>
                                   <button
                                     onClick={() => handleDeletePayment(p._id)}
-                                    className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    className="w-full text-left px-3.5 py-2 text-rose-700 hover:bg-rose-50 cursor-pointer flex items-center gap-2"
                                   >
                                     <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                                     Delete
@@ -947,79 +1034,81 @@ export default function CounterSales() {
           )}
 
           {activeTab === "returns" && (
-            <table className="w-full border-collapse text-left text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-600 uppercase font-semibold sticky top-0 z-10">
-                <tr className="bg-slate-50">
-                  <th className="px-6 py-4 bg-slate-50">Credit Note #</th>
-                  <th className="px-6 py-4 bg-slate-50">Date</th>
-                  <th className="px-6 py-4 bg-slate-50">Party/Customer</th>
-                  <th className="px-6 py-4 bg-slate-50">Linked Sales Bill</th>
-                  <th className="px-6 py-4 text-right bg-slate-50">Credit Value</th>
-                  <th className="px-6 py-4 text-right bg-slate-50">Actions</th>
+            <table className="w-full border-collapse text-left text-xs">
+              <thead className="bg-[#F8FAFC] border-b border-slate-200/90 text-[11px] text-slate-500 uppercase font-bold tracking-wider sticky top-0 z-10">
+                <tr>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">CREDIT NOTE #</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">DATE</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">BUYER / PARTY</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">LINKED SALES BILL</th>
+                  <th className="px-4 py-3 text-right bg-[#F8FAFC]">CREDIT VALUE</th>
+                  <th className="px-4 py-3 text-right bg-[#F8FAFC]">ACTIONS</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
                 {sortedReturns.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-16 text-center text-gray-400">
-                      <RefreshCw className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                      <p className="font-medium">No sales returns recorded</p>
+                    <td colSpan={6} className="px-6 py-16 text-center text-slate-400">
+                      <RefreshCw className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                      <p className="font-semibold text-xs text-slate-500">No sales returns recorded</p>
                     </td>
                   </tr>
                 ) : (
                   sortedReturns.map((r) => (
-                    <tr key={r._id} className="hover:bg-gray-50 transition">
-                      <td className="px-6 py-4 font-bold text-gray-900">{r.returnNo || r._id.substring(0, 8).toUpperCase()}</td>
-                      <td className="px-6 py-4 text-gray-500">{formatDate(r.createdAt)}</td>
-                      <td className="px-6 py-4 font-semibold text-gray-800">{r.party?.name || r.sale?.buyerName || "Walk-in"}</td>
-                      <td className="px-6 py-4 text-gray-500 font-mono">{r.sale?.invoiceNumber || "Sales Bill ID"}</td>
-                      <td className="px-6 py-4 text-right font-extrabold text-red-650">₹{(r.totalAmount || 0).toLocaleString("en-IN")}</td>
-                      <td className="px-6 py-4 text-right">
+                    <tr key={r._id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-4 py-3 font-bold font-mono text-slate-900">{r.returnNo || r._id.substring(0, 8).toUpperCase()}</td>
+                      <td className="px-4 py-3 text-slate-600 text-xs">{formatDate(r.createdAt)}</td>
+                      <td className="px-4 py-3 font-bold text-slate-900 text-xs">{r.party?.name || r.sale?.buyerName || "Walk-in"}</td>
+                      <td className="px-4 py-3 text-slate-600 font-mono text-xs font-semibold">{r.sale?.invoiceNumber || "Sales Bill ID"}</td>
+                      <td className="px-4 py-3 text-right font-extrabold text-rose-600 text-xs">
+                        ₹{(r.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3 text-right">
                         <div className="relative inline-block text-left">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveDropdownId(activeDropdownId === r._id ? null : r._id);
                             }}
-                            className="p-1.5 hover:bg-gray-100 rounded-lg transition border-0 bg-transparent cursor-pointer text-gray-500 hover:text-gray-900"
+                            className="p-1 hover:bg-slate-100 rounded transition border-0 bg-transparent cursor-pointer text-slate-500 hover:text-slate-900"
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
 
                           {activeDropdownId === r._id && (
-                            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-[100] py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                            <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-[100] py-1 text-xs font-semibold">
                               <button
                                 onClick={() => handleViewDetails(r, "return")}
-                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
                               >
-                                <Eye className="w-3.5 h-3.5 text-gray-400" />
+                                <Eye className="w-3.5 h-3.5 text-slate-400" />
                                 View Details
                               </button>
 
                               <button
                                 onClick={() => handleDownloadReturnReceipt(r._id)}
-                                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-0 bg-transparent cursor-pointer font-semibold flex items-center gap-2"
+                                className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
                               >
-                                <Download className="w-3.5 h-3.5 text-gray-400" />
+                                <Download className="w-3.5 h-3.5 text-slate-400" />
                                 Download Receipt
                               </button>
 
                               {!isReadOnly && (
                                 <>
-                                  <div className="h-px bg-gray-100 my-1"></div>
+                                  <div className="h-px bg-slate-100 my-1"></div>
                                   <button
                                     onClick={() => {
                                       setEditReturnRecord(r);
                                       setReturnModalOpen(true);
                                     }}
-                                    className="w-full text-left px-4 py-2 text-xs text-amber-700 hover:bg-amber-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    className="w-full text-left px-3.5 py-2 text-amber-700 hover:bg-amber-50 cursor-pointer flex items-center gap-2"
                                   >
                                     <Pencil className="w-3.5 h-3.5 text-amber-500" />
                                     Edit
                                   </button>
                                   <button
                                     onClick={() => handleDeleteReturn(r._id)}
-                                    className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 border-0 bg-transparent cursor-pointer font-bold flex items-center gap-2"
+                                    className="w-full text-left px-3.5 py-2 text-rose-700 hover:bg-rose-50 cursor-pointer flex items-center gap-2"
                                   >
                                     <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                                     Delete
@@ -1041,20 +1130,22 @@ export default function CounterSales() {
 
       {/* Pagination Controls */}
       {totalPages > 1 && (
-        <div className="flex justify-between items-center text-sm text-gray-500 px-2">
-          <span>Page {currentPage} of {totalPages}</span>
-          <div className="flex gap-2">
+        <div className="flex justify-between items-center text-xs font-medium text-slate-500 pt-1 px-1">
+          <span>
+            Page <strong className="text-slate-800">{currentPage}</strong> of {totalPages}
+          </span>
+          <div className="flex gap-1.5">
             <button
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((p) => p - 1)}
-              className="px-3.5 py-1.5 border rounded-lg hover:bg-gray-50 disabled:opacity-45 transition"
+              className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-white bg-slate-50 disabled:opacity-40 transition font-semibold text-slate-700 cursor-pointer"
             >
               Prev
             </button>
             <button
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage((p) => p + 1)}
-              className="px-3.5 py-1.5 border rounded-lg hover:bg-gray-50 disabled:opacity-45 transition"
+              className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-white bg-slate-50 disabled:opacity-40 transition font-semibold text-slate-700 cursor-pointer"
             >
               Next
             </button>

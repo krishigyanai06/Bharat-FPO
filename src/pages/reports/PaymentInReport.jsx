@@ -26,9 +26,42 @@ const PaymentInReport = () => {
   const dropdownRef = useRef(null);
 
   // Redux Selectors
-  const { payments, loading: paymentsLoading } = useSelector((state) => state.sell);
+  const { payments, sales, loading: paymentsLoading } = useSelector((state) => state.sell);
   const { parties } = useSelector((state) => state.party);
   const { paymentInDownloadLoading, error } = useSelector((state) => state.reports);
+
+  const resolveLinkedInvoiceNo = (item) => {
+    const sellObjOrId = item?.linkedSell || item?.sell;
+
+    if (sellObjOrId && typeof sellObjOrId === "object") {
+      const invNo = sellObjOrId.invoiceNumber || sellObjOrId.invoiceNo || sellObjOrId.billNumber;
+      if (invNo) return invNo;
+      if (sellObjOrId._id) return sellObjOrId._id.substring(0, 8).toUpperCase();
+    }
+
+    if (sellObjOrId && typeof sellObjOrId === "string") {
+      if (sales && sales.length > 0) {
+        const matched = sales.find(s => s._id === sellObjOrId);
+        if (matched) {
+          const invNo = matched.invoiceNumber || matched.invoiceNo || matched.billNumber;
+          if (invNo) return invNo;
+        }
+      }
+    }
+
+    if (item?.description) {
+      const descMatch = item.description.match(/Invoice\s+([A-Za-z0-9\-_]+)/i);
+      if (descMatch && descMatch[1]) {
+        return descMatch[1];
+      }
+    }
+
+    if (sellObjOrId && typeof sellObjOrId === "string") {
+      return sellObjOrId.substring(0, 8).toUpperCase();
+    }
+
+    return "—";
+  };
 
   // Filters State
   const [startDate, setStartDate] = useState('');
@@ -522,7 +555,7 @@ const PaymentInReport = () => {
 
                         {/* Linked Invoice */}
                         <td className="py-2 px-4 text-xs font-mono text-gray-550">
-                          {item.linkedSell?.invoiceNo || item.sell?.invoiceNo || '—'}
+                          {resolveLinkedInvoiceNo(item)}
                         </td>
 
                         {/* Breakdown */}
