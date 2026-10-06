@@ -12,7 +12,7 @@ export default function DetailsModal({
   handleDownloadPaymentOutReceipt,
   handleDownloadPurchaseReturnReceipt,
 }) {
-  const { products } = useSelector((state) => state.inventory);
+  const { products, stockSummary } = useSelector((state) => state.inventory);
   const [linkedBill, setLinkedBill] = useState(null);
   const [imageError, setImageError] = useState(false);
 
@@ -238,8 +238,8 @@ export default function DetailsModal({
                     <tr key={idx} className="hover:bg-gray-50/50">
                       <td className="px-4 py-3 font-semibold text-gray-850">
                         {type === "return"
-                          ? resolveReturnItemLabel(it, products, linkedBill)
-                          : resolveItemLabel(it, products)
+                          ? resolveReturnItemLabel(it, products, linkedBill, stockSummary)
+                          : resolveItemLabel(it, products, stockSummary)
                         }
                       </td>
                       <td className="px-4 py-3 text-right">{it.quantity} {it.unit || "pcs"}</td>

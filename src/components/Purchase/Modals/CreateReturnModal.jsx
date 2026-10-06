@@ -8,7 +8,7 @@ import { resolveVariantId, resolveItemLabel } from "../utils/purchaseHelpers";
 
 export default function CreateReturnModal({ onClose, onSuccess }) {
   const dispatch = useDispatch();
-  const { products } = useSelector((state) => state.inventory);
+  const { products, stockSummary } = useSelector((state) => state.inventory);
   const [returnNo, setReturnNo] = useState("");
   const [returnDate, setReturnDate] = useState(new Date().toISOString().split("T")[0]);
   const [description, setDescription] = useState("");
@@ -54,7 +54,7 @@ export default function CreateReturnModal({ onClose, onSuccess }) {
           const itemId = resolveVariantId(it, products);
           return {
             item: itemId,
-            productName: resolveItemLabel(it, products),
+            productName: resolveItemLabel(it, products, stockSummary),
             purchasedQty: it.quantity || 0,
             returnQty: 0,
             unit: it.unit || "pcs",

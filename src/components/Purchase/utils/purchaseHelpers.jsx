@@ -76,52 +76,104 @@ export function LinkedBillCell({ billId }) {
   return <span>{billNumber || "—"}</span>;
 }
 
-export function resolveItemLabel(it, products = []) {
+export function resolveItemLabel(it, products = [], stockSummary = []) {
   if (!it) return "Item";
-  if (it.itemName && String(it.itemName).trim() && it.itemName !== "Item") {
-    return it.itemName;
-  }
-  const itemId = typeof it.item === "object" ? it.item?._id : it.item;
-  if (itemId) {
-    const prod = products.find(
-      (p) => p._id === itemId || p.products?.some((v) => v._id === itemId)
-    );
-    if (prod) {
-      const variant = prod.products?.find((v) => v._id === itemId);
-      return variant
-        ? `${prod.productName} (${variant.parameter} ${variant.unit})`
-        : prod.productName;
-    }
-  }
-  return it.name || "Item";
-}
 
-export function resolveReturnItemLabel(it, products = [], linkedBill = null) {
-  if (!it) return "Item";
-  if (it.itemName && String(it.itemName).trim() && it.itemName !== "Item") {
-    return it.itemName;
+  const isInvalidName = (name) => {
+    if (!name) return true;
+    const str = String(name).trim();
+    if (str.length === 0) return true;
+    const lower = str.toLowerCase();
+    return lower === "item" || lower.includes("null") || lower.includes("undefined") || lower.includes("product id:");
+  };
+
+  // 1. Direct fields on line item 'it'
+  if (!isInvalidName(it.productName)) return String(it.productName).trim();
+  if (!isInvalidName(it.itemName)) return String(it.itemName).trim();
+  if (!isInvalidName(it.name)) return String(it.name).trim();
+  if (!isInvalidName(it.title)) return String(it.title).trim();
+
+  // 2. Object properties if 'it.item' or 'it.product' is populated as an object
+  if (typeof it.item === "object" && it.item) {
+    if (!isInvalidName(it.item.productName)) return String(it.item.productName).trim();
+    if (!isInvalidName(it.item.name)) return String(it.item.name).trim();
+    if (!isInvalidName(it.item.itemName)) return String(it.item.itemName).trim();
+    if (!isInvalidName(it.item.title)) return String(it.item.title).trim();
   }
-  const itemId = typeof it.item === "object" ? it.item?._id : it.item;
-  if (itemId) {
-    const prod = products.find(
-      (p) => p._id === itemId || p.products?.some((v) => v._id === itemId)
-    );
-    if (prod) {
-      const variant = prod.products?.find((v) => v._id === itemId);
-      return variant
-        ? `${prod.productName} (${variant.parameter} ${variant.unit})`
-        : prod.productName;
+  if (typeof it.product === "object" && it.product) {
+    if (!isInvalidName(it.product.productName)) return String(it.product.productName).trim();
+    if (!isInvalidName(it.product.name)) return String(it.product.name).trim();
+    if (!isInvalidName(it.product.title)) return String(it.product.title).trim();
+  }
+
+  // 3. Extract target item string ID
+  const itemId = typeof it.item === "object" ? it.item?._id : (it.item || it.productId || it.product);
+
+  if (itemId && typeof itemId === "string") {
+    // Search stockSummary if available
+    if (Array.isArray(stockSummary) && stockSummary.length > 0) {
+      const stockRecord = stockSummary.find((s) => s.item?._id === itemId || s._id === itemId);
+      if (stockRecord?.item) {
+        const sItem = stockRecord.item;
+        if (!isInvalidName(sItem.productName)) return String(sItem.productName).trim();
+        if (!isInvalidName(sItem.name)) return String(sItem.name).trim();
+        if (sItem.sourceRef) {
+          const matchedP = Array.isArray(products) ? products.find((p) => p._id === sItem.sourceRef) : null;
+          if (matchedP && !isInvalidName(matchedP.productName)) {
+            return sItem.parameter
+              ? `${matchedP.productName} (${sItem.parameter} ${sItem.unit || ""})`.trim()
+              : matchedP.productName;
+          }
+        }
+      }
     }
-    if (linkedBill && linkedBill.items) {
-      const matchedLine = linkedBill.items.find(
-        (line) => (typeof line.item === "object" ? line.item?._id : line.item) === itemId
+
+    // Search products array
+    if (Array.isArray(products) && products.length > 0) {
+      const prod = products.find(
+        (p) => p._id === itemId || p.products?.some((v) => v._id === itemId)
       );
-      if (matchedLine) {
-        return resolveItemLabel(matchedLine, products);
+      if (prod) {
+        const variant = prod.products?.find((v) => v._id === itemId);
+        return variant && variant.parameter
+          ? `${prod.productName} (${variant.parameter} ${variant.unit || ""})`.trim()
+          : prod.productName;
       }
     }
   }
-  return it.name || "Returned Item";
+
+  // 4. Fallbacks to raw string fields, itemCode, description or "Item"
+  if (it.productName) return String(it.productName);
+  if (it.itemName) return String(it.itemName);
+  if (it.name) return String(it.name);
+  if (it.itemCode) return String(it.itemCode);
+  if (it.description) return String(it.description);
+
+  return "Item";
+}
+
+export function resolveReturnItemLabel(it, products = [], linkedBill = null, stockSummary = []) {
+  if (!it) return "Item";
+
+  const label = resolveItemLabel(it, products, stockSummary);
+  if (label && label.toLowerCase() !== "item") {
+    return label;
+  }
+
+  const itemId = typeof it.item === "object" ? it.item?._id : (it.item || it.productId || it.product);
+  if (itemId && linkedBill && linkedBill.items) {
+    const matchedLine = linkedBill.items.find(
+      (line) => (typeof line.item === "object" ? line.item?._id : line.item) === itemId
+    );
+    if (matchedLine) {
+      const lineLabel = resolveItemLabel(matchedLine, products, stockSummary);
+      if (lineLabel && lineLabel.toLowerCase() !== "item") {
+        return lineLabel;
+      }
+    }
+  }
+
+  return "Returned Item";
 }
 
 export function resolveVariantId(it, products = []) {
