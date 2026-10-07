@@ -1952,382 +1952,354 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// COMPONENT: Transaction Details Modal
+// ─────────────────────────────────────────────────────────────
+// COMPONENT: Transaction Details Modal (Redesigned & Accurate)
 // ─────────────────────────────────────────────────────────────
 function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownloadPaymentReceipt, handleDownloadReturnReceipt }) {
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
   const [overrideSupplyType, setOverrideSupplyType] = useState(item.supplyType || "Tax Invoice");
   const { products, stockSummary } = useSelector((state) => state.inventory);
 
   const formatDisplayDate = (dateStr) => {
     if (!dateStr) return "—";
     const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
+    if (isNaN(d.getTime())) return "—";
     return d.toLocaleDateString("en-IN", {
-      day: "numeric",
+      day: "2-digit",
       month: "short",
       year: "numeric",
     });
   };
 
-  const calculateItemDiscountAmount = (it) => {
-    if (it.discountAmount !== undefined && it.discountAmount !== null) {
-      return Number(it.discountAmount);
-    }
-    const base = (it.quantity || 0) * (it.pricePerUnit || 0);
-    return Number((base * ((it.discountPercent || 0) / 100)).toFixed(2));
-  };
-
-  const calculateItemTaxAmount = (it) => {
-    if (it.taxAmount !== undefined && it.taxAmount !== null) {
-      return Number(it.taxAmount);
-    }
-    const base = (it.quantity || 0) * (it.pricePerUnit || 0);
-    const discAmt = calculateItemDiscountAmount(it);
-    const taxable = base - discAmt;
-    if (it.taxType === "With Tax") {
-      const exclTax = taxable / (1 + (it.taxPercent || 0) / 100);
-      return Number((taxable - exclTax).toFixed(2));
-    }
-    return Number((taxable * ((it.taxPercent || 0) / 100)).toFixed(2));
-  };
-
-  const calculateSubtotal = () => {
-    if (type === "payment") return item.amount || item.receivedAmount || 0;
-    return item.items?.reduce((sum, it) => sum + ((it.quantity || 0) * (it.pricePerUnit || 0)), 0) || 0;
-  };
-
-  // Determine label values based on transaction type
   const isSale = type === "sale";
   const isReturn = type === "return";
   const isPayment = type === "payment";
 
-  const titleText = isSale
-    ? `${item.saleType || "SALE"} DETAILS`
-    : isReturn
-      ? "CREDIT NOTE DETAILS"
-      : "PAYMENT RECEIPT DETAILS";
-
-  const billingTypeLabel = isSale
-    ? (item.billingType === "Cash" ? "Cash" : "Credit")
-    : isReturn
-      ? "Credit Note"
-      : "Receipt Entry";
-
+  // Transaction title & number
   const transactionNo = isSale
-    ? (item.invoiceNo || item._id?.substring(0, 8).toUpperCase())
+    ? (item.invoiceNo || item.invoiceNumber || item.billNumber || (item._id ? item._id.substring(0, 8).toUpperCase() : "—"))
     : isReturn
-      ? (item.returnNo || item._id?.substring(0, 8).toUpperCase())
-      : (item.receiptNo || item._id?.substring(0, 8).toUpperCase());
+      ? (item.returnNo || (item._id ? item._id.substring(0, 8).toUpperCase() : "—"))
+      : (item.receiptNo || (item._id ? item._id.substring(0, 8).toUpperCase() : "—"));
 
-  const dateLabel = isSale ? "Bill Date" : isReturn ? "Return Date" : "Payment Date";
-  const displayDate = formatDisplayDate(item.createdAt);
+  const displayDate = formatDisplayDate(item.createdAt || item.billDate || item.date);
 
-  const dueDateLabel = isSale ? "Due Date" : isReturn ? "Linked Bill #" : "Linked Bill";
-  const dueDateVal = isSale
-    ? (item.dueDate || (item.createdAt ? new Date(new Date(item.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000) : null))
-    : isReturn
-      ? (item.sale?.invoiceNo || "—")
-      : (item.linkedSell?.invoiceNo || item.sell?.invoiceNo || "—");
-  const displayDueDate = isSale ? formatDisplayDate(dueDateVal) : dueDateVal;
+  // Buyer Info
+  const buyerName = item.party?.name || item.buyerName || "Walk-in Customer";
+  const buyerPhone = item.party?.phoneNumber || item.buyerPhone || "";
+  const buyerAddress = item.party?.address || item.party?.village || item.buyerAddress || "";
+  const customerType = item.party?.partyType || item.buyerType || "";
+  const stateOfSupply = item.party?.state || item.stateOfSupply || "";
 
-  const totalAmountFormatted = `₹${(item.totalAmount || item.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+  // Process item rows with accurate calculation
+  const processedItems = useMemo(() => {
+    if (!item.items || !Array.isArray(item.items)) return [];
+    return item.items.map((it) => {
+      const label = resolveItemLabel(it, products, stockSummary);
+      const qty = Number(it.quantity) || 0;
+      const price = Number(it.pricePerUnit || it.rate) || 0;
+      const gross = qty * price;
+
+      let discAmt = 0;
+      if (it.discountAmount !== undefined && it.discountAmount !== null) {
+        discAmt = Number(it.discountAmount);
+      } else {
+        discAmt = gross * ((Number(it.discountPercent) || 0) / 100);
+      }
+
+      const taxable = gross - discAmt;
+
+      let taxAmt = 0;
+      const taxPct = Number(it.taxPercent) || 0;
+      if (it.taxAmount !== undefined && it.taxAmount !== null && Number(it.taxAmount) > 0) {
+        taxAmt = Number(it.taxAmount);
+      } else if (taxPct > 0) {
+        if (it.taxType === "With Tax") {
+          const excl = taxable / (1 + taxPct / 100);
+          taxAmt = taxable - excl;
+        } else {
+          taxAmt = taxable * (taxPct / 100);
+        }
+      }
+
+      let lineTotal = Number(it.amount) || 0;
+      if (!lineTotal) {
+        lineTotal = it.taxType === "With Tax" ? taxable : (taxable + taxAmt);
+      }
+
+      return {
+        ...it,
+        resolvedLabel: label,
+        qty,
+        price,
+        gross,
+        discAmt,
+        taxable,
+        taxPct,
+        taxAmt,
+        lineTotal,
+      };
+    });
+  }, [item.items, products, stockSummary]);
+
+  // Accurate Summary calculations
+  const totals = useMemo(() => {
+    if (isPayment) {
+      const amt = Number(item.receivedAmount || item.totalAmount || item.amount) || 0;
+      return {
+        subtotal: amt,
+        discount: 0,
+        tax: 0,
+        roundOff: 0,
+        grandTotal: amt,
+        received: amt,
+        unpaid: 0,
+      };
+    }
+
+    const calculatedSubtotal = processedItems.reduce((acc, i) => acc + i.taxable, 0);
+
+    const calculatedDiscount = (item.discountAmount !== undefined && Number(item.discountAmount) > 0)
+      ? Number(item.discountAmount)
+      : processedItems.reduce((acc, i) => acc + i.discAmt, 0);
+
+    const calculatedTaxFromItems = processedItems.reduce((acc, i) => acc + i.taxAmt, 0);
+    const calculatedTax = (item.taxAmount !== undefined && Number(item.taxAmount) > 0)
+      ? Number(item.taxAmount)
+      : calculatedTaxFromItems;
+
+    const roundOff = Number(item.roundOff) || 0;
+    const grandTotal = Number(item.totalAmount) || (calculatedSubtotal + calculatedTax + roundOff);
+
+    const received = item.receivedAmount !== undefined
+      ? Number(item.receivedAmount)
+      : (item.billingType === "Cash" ? grandTotal : 0);
+
+    const unpaid = item.unpaidAmount !== undefined
+      ? Number(item.unpaidAmount)
+      : Math.max(0, grandTotal - received);
+
+    return {
+      subtotal: (item.subTotal !== undefined && Number(item.subTotal) > 0) ? Number(item.subTotal) : calculatedSubtotal,
+      discount: calculatedDiscount,
+      tax: calculatedTax,
+      roundOff,
+      grandTotal,
+      received,
+      unpaid,
+    };
+  }, [item, processedItems, isPayment]);
+
+  const isCredit = item.billingType === "Credit" || totals.unpaid > 0;
+  const isEstimate = item.saleType === "ESTIMATE";
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
-      <div className="bg-white rounded-3xl w-full max-w-5xl p-8 space-y-6 max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-150 flex flex-col [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-
-        {/* Header Title */}
-        <div className="flex justify-between items-center border-b border-gray-100 pb-4">
-          <h2 className="text-base font-extrabold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-            <span className="w-10 h-10 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A]">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </span>
-            {titleText}
-          </h2>
+    <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 backdrop-blur-xs select-none">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+        
+        {/* MODAL HEADER */}
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-[#16A36A] font-bold">
+              <Receipt className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                  {isSale ? (isEstimate ? "Estimate" : "Sales Bill") : isReturn ? "Credit Note" : "Payment Receipt"} #{transactionNo}
+                </h2>
+                <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md uppercase tracking-wider ${
+                  isEstimate
+                    ? "bg-blue-50 text-blue-700 border border-blue-200"
+                    : isReturn
+                      ? "bg-purple-50 text-purple-700 border border-purple-200"
+                      : isPayment
+                        ? "bg-teal-50 text-teal-700 border border-teal-200"
+                        : isCredit
+                          ? "bg-amber-50 text-amber-700 border border-amber-200"
+                          : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                }`}>
+                  {isEstimate ? "ESTIMATE" : isReturn ? "CREDIT NOTE" : isPayment ? "PAYMENT IN" : isCredit ? "CREDIT SALE" : "CASH SALE"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-2">
+                <span>Date: <strong className="text-slate-700">{displayDate}</strong></span>
+                {isSale && item.dueDate && (
+                  <span>• Due: <strong className="text-slate-700">{formatDisplayDate(item.dueDate)}</strong></span>
+                )}
+              </p>
+            </div>
+          </div>
           <button
+            type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-650 transition duration-150 cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* 1. Core Summary Cards Box */}
-        <div className="flex flex-col lg:flex-row justify-between items-stretch gap-4">
-          {/* Summary Row */}
-          <div className="flex-1 bg-white border border-gray-150 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-5 gap-4 items-center">
-            {/* Sale / Transaction Type */}
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
-                <Tag className="w-4 h-4" />
+        {/* MODAL BODY */}
+        <div className="p-6 overflow-y-auto space-y-5 flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          
+          {/* TOP SUMMARY STRIP: CUSTOMER & SALE META */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Customer Information */}
+            <div className="p-4 bg-slate-50/60 rounded-xl border border-slate-150 space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-emerald-600" /> Buyer Details
+                </span>
+                {customerType && (
+                  <span className="px-2 py-0.5 text-[10px] font-semibold bg-slate-200 text-slate-700 rounded-md">
+                    {customerType}
+                  </span>
+                )}
               </div>
-              <div className="text-left leading-normal">
-                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">Type</span>
-                <span className="text-xs font-bold text-[#006C47] uppercase">{isSale ? item.saleType : type}</span>
+              <div className="text-xs space-y-1 pt-0.5">
+                <p className="font-bold text-slate-900 text-sm">{buyerName}</p>
+                {buyerPhone && <p className="text-slate-600 font-medium">📞 {buyerPhone}</p>}
+                {buyerAddress && <p className="text-slate-500 font-normal">📍 {buyerAddress}</p>}
+                {stateOfSupply && <p className="text-slate-500 font-normal">State of Supply: <strong className="text-slate-700">{stateOfSupply}</strong></p>}
               </div>
             </div>
 
-            {/* Billing Type */}
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
-                <ArrowLeftRight className="w-4 h-4" />
-              </div>
-              <div className="text-left leading-normal">
-                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">Billing Type</span>
-                <span className="text-xs font-bold text-gray-800">{billingTypeLabel}</span>
-              </div>
-            </div>
-
-            {/* Bill Number */}
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
-                <FileText className="w-4 h-4" />
-              </div>
-              <div className="text-left leading-normal">
-                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">Number</span>
-                <span className="text-xs font-bold text-gray-800 font-mono">
-                  {transactionNo}
+            {/* Sale / Payment Info */}
+            <div className="p-4 bg-slate-50/60 rounded-xl border border-slate-150 space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-emerald-600" /> Payment & Billing Info
+                </span>
+                <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md uppercase ${
+                  totals.unpaid > 0 ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                }`}>
+                  {totals.unpaid > 0 ? `Unpaid: ₹${totals.unpaid.toLocaleString("en-IN")}` : "Fully Settled"}
                 </span>
               </div>
-            </div>
-
-            {/* Date */}
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <div className="text-left leading-normal">
-                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">{dateLabel}</span>
-                <span className="text-xs font-bold text-gray-800">{displayDate}</span>
-              </div>
-            </div>
-
-            {/* Due Date or Linked Reference */}
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <div className="text-left leading-normal">
-                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">{dueDateLabel}</span>
-                <span className="text-xs font-bold text-gray-800 truncate max-w-[110px]">{displayDueDate}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Total Amount Box */}
-          <div className="w-full lg:w-48 bg-[#F4FBF7] border border-[#E3F4EC] rounded-2xl p-4 flex flex-col justify-center items-start lg:items-center text-left lg:text-center leading-normal">
-            <span className="text-[10px] text-[#006C47] font-bold block uppercase tracking-wider">Total Amount</span>
-            <span className="text-base sm:text-lg font-black text-[#006C47] mt-1 select-all">{totalAmountFormatted}</span>
-          </div>
-        </div>
-
-        {/* 2. Grid Compartment: Buyer Details vs Sale Info */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Buyer Details */}
-          <div className="border border-gray-150 rounded-2xl p-5 bg-white space-y-4 shadow-3xs">
-            <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2 border-b pb-2 border-gray-100 uppercase tracking-wide">
-              <User className="w-4 h-4 text-emerald-600" />
-              Buyer Details
-            </h3>
-            <div className="grid grid-cols-[120px_1fr] gap-y-3.5 text-xs">
-              <div className="text-gray-500 font-semibold">Buyer Name</div>
-              <div className="font-bold text-gray-900">{item.party?.name || item.buyerName || "Walk-in Customer"}</div>
-              <div className="text-gray-500 font-semibold">Phone</div>
-              <div className="font-bold text-gray-900">{item.buyerPhone || item.party?.phoneNumber || "—"}</div>
-              <div className="text-gray-500 font-semibold">Address</div>
-              <div className="font-bold text-gray-900">{item.party?.address || item.party?.village || "—"}</div>
-              <div className="text-gray-500 font-semibold">Buyer Type</div>
-              <div className="font-bold text-gray-900">{item.party?.partyType || item.buyerType || "—"}</div>
-              <div className="text-gray-500 font-semibold">State of Supply</div>
-              <div className="font-bold text-gray-900">{item.party?.state || item.stateOfSupply || "—"}</div>
-            </div>
-          </div>
-
-          {/* Sale Info */}
-          <div className="border border-gray-150 rounded-2xl p-5 bg-white space-y-4 shadow-3xs">
-            <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2 border-b pb-2 border-gray-100 uppercase tracking-wide">
-              <Clock className="w-4 h-4 text-emerald-600" />
-              {isSale ? "Sale Info" : isReturn ? "Return Info" : "Payment Info"}
-            </h3>
-            <div className="grid grid-cols-[120px_1fr] gap-y-3.5 text-xs">
-              <div className="text-gray-500 font-semibold">{isPayment ? "Payment Mode" : "Payment Type"}</div>
-              <div className="font-bold text-gray-900">{item.paymentMode || (item.billingType === "Cash" ? "Cash" : "Credit")}</div>
-              {isSale && (
-                <div style={{ display: "contents" }}>
-                  <div className="text-gray-500 font-semibold">Supply Format</div>
-                  <div className="font-bold text-emerald-700 font-bold">{item.supplyType || "Tax Invoice"}</div>
+              <div className="text-xs space-y-1.5 pt-0.5 grid grid-cols-2">
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Billing Mode</span>
+                  <span className="font-bold text-slate-800">{item.billingType || (item.paymentMode ? "Cash" : "Credit")}</span>
                 </div>
-              )}
-              <div className="text-gray-500 font-semibold">Reference No.</div>
-              <div className="font-bold text-gray-900 font-mono">{item.referenceNo || item.payments?.[0]?.referenceNo || "—"}</div>
-              <div className="text-gray-500 font-semibold">Description</div>
-              <div className="font-bold text-gray-900">{item.description || "—"}</div>
-              <div className="text-gray-500 font-semibold">Remarks</div>
-              <div className="font-bold text-gray-900">{item.remarks || "—"}</div>
-              <div className="text-gray-500 font-semibold">Terms & Conditions</div>
-              <div className="font-bold text-gray-900">{item.termsAndConditions || "Goods once sold will not be taken back."}</div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Payment Method</span>
+                  <span className="font-bold text-slate-800">{item.paymentType || item.paymentMode || (item.billingType === "Cash" ? "Cash" : "Credit")}</span>
+                </div>
+                {item.referenceNo && (
+                  <div className="col-span-2 pt-1">
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Reference / Transaction ID</span>
+                    <span className="font-mono font-bold text-slate-800">{item.referenceNo}</span>
+                  </div>
+                )}
+                {item.description && (
+                  <div className="col-span-2 pt-1">
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Notes / Description</span>
+                    <span className="font-medium text-slate-700 italic">{item.description}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* 3. Items list table */}
-        {(isSale || isReturn) && item.items?.length > 0 && (
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2 uppercase tracking-wide">
-              <Layers className="w-4 h-4 text-emerald-600" />
-              Items
-            </h3>
-            <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-3xs bg-white">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead className="bg-[#F8F9FA] text-gray-550 border-b border-gray-150 font-bold uppercase tracking-wider text-[10px]">
-                  <tr>
-                    <th className="px-4 py-3 text-center w-12">#</th>
-                    <th className="px-4 py-3">Item</th>
-                    <th className="px-4 py-3 text-center">Qty</th>
-                    <th className="px-4 py-3 text-center">Unit</th>
-                    <th className="px-4 py-3 text-right">Price / Unit</th>
-                    <th className="px-4 py-3 text-right">Rate</th>
-                    <th className="px-4 py-3 text-center">Discount</th>
-                    <th className="px-4 py-3 text-center">Tax</th>
-                    <th className="px-4 py-3 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {item.items.map((it, idx) => {
-                    const resolvedLabel = resolveItemLabel(it, products, stockSummary);
-                    const discountAmt = calculateItemDiscountAmount(it);
-                    const taxAmt = calculateItemTaxAmount(it);
-
-                    return (
-                      <tr key={idx} className="hover:bg-gray-50/50 transition duration-150">
-                        <td className="px-4 py-4 text-center font-bold text-gray-400">{idx + 1}</td>
-                        <td className="px-4 py-4">
-                          <div>
-                            <p className="font-bold text-gray-900 text-xs sm:text-[13px]">{resolvedLabel}</p>
-                            <span className="text-[10px] text-gray-400 font-mono mt-0.5 block">
-                              {it.item?._id || it.item || "INVENTORY_ITEM_ID"}
-                            </span>
-                          </div>
+          {/* ITEMS TABLE */}
+          {(isSale || isReturn) && processedItems.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-emerald-600" /> Items List ({processedItems.length})
+              </h3>
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 text-[10px] uppercase tracking-wider">
+                    <tr>
+                      <th className="px-3 py-2.5 text-center w-10">#</th>
+                      <th className="px-3 py-2.5">Item Description</th>
+                      <th className="px-3 py-2.5 text-center">Qty</th>
+                      <th className="px-3 py-2.5 text-right">Unit Price</th>
+                      <th className="px-3 py-2.5 text-center">Tax / Disc</th>
+                      <th className="px-3 py-2.5 text-right">Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                    {processedItems.map((it, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50 transition duration-150">
+                        <td className="px-3 py-3 text-center text-slate-400 font-bold">{idx + 1}</td>
+                        <td className="px-3 py-3">
+                          <p className="font-bold text-slate-900 text-xs">{it.resolvedLabel}</p>
                         </td>
-                        <td className="px-4 py-4 text-center font-bold text-gray-800 text-xs sm:text-[13px]">
-                          {it.quantity}
+                        <td className="px-3 py-3 text-center font-bold text-slate-900">
+                          {it.qty} <span className="text-[10px] text-slate-400 font-normal">{it.unit || "pcs"}</span>
                         </td>
-                        <td className="px-4 py-4 text-center font-semibold text-gray-500">{it.unit || "—"}</td>
-                        <td className="px-4 py-4 text-right font-semibold text-gray-700">₹{(it.pricePerUnit || 0).toFixed(2)}</td>
-                        <td className="px-4 py-4 text-right font-semibold text-gray-700">₹{(it.rate || it.pricePerUnit || 0).toFixed(2)}</td>
-                        <td className="px-4 py-4 text-center">
-                          <div className="leading-tight">
-                            <span className="font-semibold text-gray-700 block">{it.discountPercent > 0 ? `${it.discountPercent}%` : "—"}</span>
-                            {discountAmt > 0 && (
-                              <span className="text-[10px] text-emerald-600 font-bold block mt-0.5">(-₹{discountAmt.toFixed(2)})</span>
-                            )}
-                          </div>
+                        <td className="px-3 py-3 text-right font-semibold text-slate-700">
+                          ₹{it.price.toFixed(2)}
                         </td>
-                        <td className="px-4 py-4 text-center">
-                          <div className="leading-tight text-center">
-                            <span className="font-semibold text-gray-700 block">{it.taxPercent || 0}%</span>
-                            {taxAmt > 0 && (
-                              <span className="text-[9px] text-emerald-600 font-bold block mt-0.5">(₹{taxAmt.toFixed(2)})</span>
-                            )}
-                          </div>
+                        <td className="px-3 py-3 text-center text-[11px]">
+                          {it.discAmt > 0 && (
+                            <span className="text-emerald-600 font-bold block">-₹{it.discAmt.toFixed(2)} ({it.discountPercent}%)</span>
+                          )}
+                          {it.taxPct > 0 ? (
+                            <span className="text-slate-600 font-semibold block">{it.taxPct}% GST (₹{it.taxAmt.toFixed(2)})</span>
+                          ) : (
+                            <span className="text-slate-400">No Tax</span>
+                          )}
                         </td>
-                        <td className="px-4 py-4 text-right font-black text-gray-900 text-xs sm:text-[13px]">
-                          ₹{(it.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        <td className="px-3 py-3 text-right font-black text-slate-900 text-xs">
+                          ₹{it.lineTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* 4. Payment Summary Box */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2 uppercase tracking-wide">
-            <Wallet className="w-4 h-4 text-emerald-600" />
-            Payment Summary
-          </h3>
-          <div className="border border-gray-150 rounded-2xl p-6 bg-white grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-6 items-stretch shadow-3xs">
-            {/* Left column: values list */}
-            <div className="space-y-3.5 text-xs">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Sub Total</span>
-                <span className="font-bold text-gray-800">₹{calculateSubtotal().toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">{isReturn ? "Refunded Discount" : "Discount Amount"}</span>
-                <span className="font-bold text-[#00875A]">-₹{(item.discountAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">{isReturn ? "Refunded Tax" : "Tax Amount"}</span>
-                <span className="font-bold text-gray-800">₹{(item.taxAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Round Off</span>
-                <span className={`font-bold ${item.roundOff < 0 ? "text-emerald-600" : "text-gray-800"}`}>
-                  {item.roundOff < 0 ? "-" : ""}₹{Math.abs(item.roundOff || 0).toFixed(2)}
-                </span>
-              </div>
-              <div className="border-t border-gray-100 pt-3 flex justify-between items-center select-all">
-                <span className="text-sm font-extrabold text-gray-900">Total Amount</span>
-                <span className="text-base font-black text-gray-950">{totalAmountFormatted}</span>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
+          )}
 
-            {/* Vertical Divider */}
-            <div className="hidden md:block w-px bg-gray-100 self-stretch"></div>
-
-            {/* Right column: balances and credit alert card */}
-            <div className="flex flex-col justify-between gap-4 text-xs">
-              <div className="space-y-3.5">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 font-medium">{isReturn ? "Returned Cash" : isPayment ? "Received Cash" : "Received Amount"}</span>
-                  <span className="font-bold text-gray-800">₹{(item.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 font-medium">{isReturn ? "Pending Balance" : isPayment ? "Remaining Dues" : "Unpaid Amount"}</span>
-                  <span className={`font-bold ${(item.unpaidAmount || 0) > 0 ? "text-rose-600 font-bold" : "text-gray-800"}`}>
-                    ₹{(item.unpaidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
+          {/* FINANCIAL SUMMARY & BREAKDOWN */}
+          <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="w-full md:w-auto space-y-1 text-xs">
+              <div className="flex justify-between md:justify-start gap-6">
+                <span className="text-slate-500 font-medium">Subtotal (Taxable):</span>
+                <span className="font-bold text-slate-800">₹{totals.subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
               </div>
-
-              {/* Status alert card */}
-              <div className="border border-[#E3F4EC] bg-[#F4FBF7] rounded-2xl p-4 flex items-start gap-3 mt-1.5 shadow-2xs">
-                <span className="w-10 h-10 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
-                  <Wallet className="w-4 h-4" />
-                </span>
-                <div className="text-left leading-normal">
-                  <span className="font-bold text-[#006C47] block text-xs">
-                    {isReturn
-                      ? "Credit Issued"
-                      : (item.billingType === "Credit" || item.unpaidAmount > 0)
-                        ? "Credit Sale"
-                        : "Fully Settled"}
-                  </span>
-                  <span className="text-gray-500 text-[10px] block mt-0.5">
-                    {isReturn
-                      ? "Refund added to credit account"
-                      : (item.billingType === "Credit" || item.unpaidAmount > 0)
-                        ? "Amount pending from buyer"
-                        : "Fully settled at checkout"}
-                  </span>
+              {totals.tax > 0 && (
+                <div className="flex justify-between md:justify-start gap-6">
+                  <span className="text-slate-500 font-medium">Total GST Tax:</span>
+                  <span className="font-bold text-slate-800">+₹{totals.tax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
+              )}
+              {totals.discount > 0 && (
+                <div className="flex justify-between md:justify-start gap-6">
+                  <span className="text-slate-500 font-medium">Discount Amount:</span>
+                  <span className="font-bold text-emerald-600">-₹{totals.discount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              {totals.roundOff !== 0 && (
+                <div className="flex justify-between md:justify-start gap-6">
+                  <span className="text-slate-500 font-medium">Round Off:</span>
+                  <span className="font-bold text-slate-700">₹{totals.roundOff.toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="w-full md:w-auto flex flex-col md:items-end bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl text-right">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Total Amount</span>
+              <span className="text-xl font-black text-emerald-700 select-all">
+                ₹{totals.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              </span>
+              <div className="text-[11px] font-semibold text-slate-600 mt-1 flex gap-3">
+                <span>Received: <strong className="text-slate-900">₹{totals.received.toLocaleString("en-IN")}</strong></span>
+                {totals.unpaid > 0 && (
+                  <span>Balance: <strong className="text-rose-600 font-bold">₹{totals.unpaid.toLocaleString("en-IN")}</strong></span>
+                )}
               </div>
             </div>
           </div>
+
         </div>
 
-        {/* Footer Actions block */}
-        <div className="flex justify-between items-center border-t border-gray-100 pt-4 flex-wrap gap-4 select-none">
-          <div className="flex items-center gap-4 flex-wrap">
+        {/* MODAL FOOTER */}
+        <div className="px-6 py-3.5 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => {
                 if (isPayment) {
                   handleDownloadPaymentReceipt(item._id);
@@ -2337,18 +2309,18 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
                   handleDownloadReceipt(item._id, item.invoiceNo || "Invoice", overrideSupplyType);
                 }
               }}
-              className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-xl text-xs transition duration-150 active:scale-95 cursor-pointer shadow-3xs bg-white"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold rounded-lg transition active:scale-95 shadow-2xs cursor-pointer"
             >
-              <Printer size={14} /> Print / Download PDF
+              <Printer className="w-4 h-4 text-slate-600" /> Print / Download PDF
             </button>
 
             {!isPayment && (
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PDF Title Override:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">PDF Format:</span>
                 <select
                   value={overrideSupplyType}
                   onChange={(e) => setOverrideSupplyType(e.target.value)}
-                  className="border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-gray-800 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500"
+                  className="px-2 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg focus:outline-none cursor-pointer"
                 >
                   <option value="Tax Invoice">Tax Invoice</option>
                   <option value="Exempted Supply">Exempted Supply</option>
@@ -2358,13 +2330,15 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
             )}
           </div>
 
-          <div className="text-right flex items-baseline gap-2 leading-none">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</span>
-            <span className="text-xl font-black text-emerald-700">
-              {totalAmountFormatted}
-            </span>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-lg transition cursor-pointer"
+          >
+            Close
+          </button>
         </div>
+
       </div>
     </div>
   );
