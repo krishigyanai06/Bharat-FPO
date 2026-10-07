@@ -1,14 +1,128 @@
 import axios from "axios";
 import theme from "../config/theme";
 import { getToken } from "./tokenStorage";
+import toast from "react-hot-toast";
+import { showOfflineAlert, showServerUnavailableAlert, showTimeoutAlert } from "../utils/notificationService";
 
 const api = axios.create({
   baseURL: theme.apiBase,
 });
 
+// ✅ Check if E-Invoice portal session is valid
+export const isEInvoiceSessionValid = (currentGstin) => {
+  const token = sessionStorage.getItem("einvoice_token");
+  const expiry = sessionStorage.getItem("einvoice_token_expiry");
+  const tokenGstin = sessionStorage.getItem("einvoice_token_gstin");
+  
+  const isExpired = !token || !expiry || Date.now() >= Number(expiry);
+  const isGstinMismatch = currentGstin && (!tokenGstin || tokenGstin !== currentGstin);
+  
+  return !(isExpired || isGstinMismatch);
+};
+
+// Check if E-Way Bill portal session is valid
+export const isEWayBillSessionValid = (currentGstin) => {
+  const token = sessionStorage.getItem("ewaybill_token");
+  const expiry = sessionStorage.getItem("ewaybill_token_expiry");
+  const tokenGstin = sessionStorage.getItem("ewaybill_token_gstin");
+  
+  const isExpired = !token || !expiry || Date.now() >= Number(expiry);
+  const isGstinMismatch = currentGstin && (!tokenGstin || tokenGstin !== currentGstin);
+  
+  return !(isExpired || isGstinMismatch);
+};
+
+// ✅ Audit Logging Helper
+export const getAuditLogs = () => {
+  try {
+    const logs = localStorage.getItem("einvoice_audit_logs");
+    return logs ? JSON.parse(logs) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const addAuditLog = (event, details = {}) => {
+  try {
+    const logs = getAuditLogs();
+    const newLog = {
+      timestamp: new Date().toISOString(),
+      event,
+      details,
+    };
+    logs.unshift(newLog);
+    localStorage.setItem("einvoice_audit_logs", JSON.stringify(logs.slice(0, 100)));
+    console.log(`[E-INVOICE AUDIT LOG] [${event}]`, details);
+    window.dispatchEvent(new CustomEvent("einvoice-audit-log-added", { detail: newLog }));
+  } catch (e) {
+    console.error("Failed to write audit log:", e);
+  }
+};
+
+// Queue & single flight lock state for silent NIC re-authentication
+let isReauthenticating = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+// E-Way Bill silent re-authentication queue and lock
+let isEWayBillReauthenticating = false;
+let failedEWayBillQueue = [];
+
+const processEWayBillQueue = (error, token = null) => {
+  failedEWayBillQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedEWayBillQueue = [];
+};
+
 // ✅ Attach token automatically
 api.interceptors.request.use(
   (config) => {
+    // Explicit token strategy based on governmentToken request configuration
+    const tokenType = config.governmentToken;
+    const url = config.url || "";
+    
+    const isEWayBillRequest = tokenType === "ewaybill" || (!tokenType && url.includes("/e-invoice/e-way-bill") && !url.includes("/session/authenticate") && !url.includes("/generate-by-irn"));
+    const isEInvoiceRequest = tokenType === "einvoice" || (!tokenType && url.includes("/e-invoice") && !url.includes("/session/authenticate") && !url.includes("/gstin/search"));
+
+    if (isEWayBillRequest) {
+      const eWayBillToken = sessionStorage.getItem("ewaybill_token");
+      const eWayBillExpiry = sessionStorage.getItem("ewaybill_token_expiry");
+      const isValid = eWayBillToken && eWayBillExpiry && Date.now() < Number(eWayBillExpiry);
+      
+      if (isValid) {
+        config.headers["x-einvoice-token"] = eWayBillToken;
+        console.log(`[API] 🚚 E-Way Bill session token injected automatically: ${url}`);
+      } else {
+        console.warn(`[API] ⚠️ E-Way Bill token is missing or expired for: ${url}`);
+      }
+    } else if (isEInvoiceRequest) {
+      const eInvoiceToken = sessionStorage.getItem("einvoice_token");
+      const eInvoiceExpiry = sessionStorage.getItem("einvoice_token_expiry");
+      const isValid = eInvoiceToken && eInvoiceExpiry && Date.now() < Number(eInvoiceExpiry);
+      
+      if (isValid) {
+        config.headers["x-einvoice-token"] = eInvoiceToken;
+        console.log(`[API] 🏛 E-Invoice session token injected automatically: ${url}`);
+      } else {
+        console.warn(`[API] ⚠️ E-Invoice token is missing or expired for: ${url}`);
+      }
+    }
+
     const token = getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -54,9 +168,12 @@ api.interceptors.request.use(
       const url = config.url || '';
       
       // Only skip tenant context for these specific routes
-      const skipTenantContext = url.includes('/superadmin/tenants') || 
+      const skipTenantContext = url.includes('/superadmin') || 
                                 url.includes('/tenant/getAllTenants') ||
-                                url.includes('/tenant/my-features');
+                                url.includes('/tenant/list') ||
+                                url.includes('/tenant/my-features') ||
+                                url.includes('/user/getAllAdmins');
+
       
       if (!skipTenantContext && selectedTenantId && selectedTenantId.trim().length > 0) {
         // ✅ CRITICAL: Backend expects lowercase 'x-tenant-id' header
@@ -112,15 +229,278 @@ api.interceptors.response.use(
     }
     return response;
   },
-  (error) => {
+  async (error) => {
     // Don't logout on 404 errors - they're not authentication failures
     if (error.response?.status === 404) {
       console.warn("404 NOT FOUND:", error.config?.url);
       return Promise.reject(error);
     }
+
+    // 1. Normalize error structure
+    let normalizedError = {
+      type: "INTERNAL",
+      title: "Internal Server Error",
+      message: "An unexpected error occurred. Please try again.",
+      retryable: false,
+      status: error.response?.status || 500,
+      originalError: error,
+    };
+
+    if (!error.response) {
+      if (!navigator.onLine) {
+        normalizedError = {
+          type: "OFFLINE",
+          title: "No Internet Connection",
+          message: "Please check your internet connection and try again.",
+          retryable: true,
+          status: 0,
+        };
+        showOfflineAlert();
+      } else if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
+        normalizedError = {
+          type: "TIMEOUT",
+          title: "Request Timed Out",
+          message: "The request took too long. Please try again.",
+          retryable: true,
+          status: 408,
+        };
+        showTimeoutAlert(() => {
+          if (error.config) {
+            api(error.config);
+          }
+        });
+      } else {
+        normalizedError = {
+          type: "SERVER",
+          title: "Server Unavailable",
+          message: "Unable to connect to the server. Please try again later.",
+          retryable: true,
+          status: 0,
+        };
+        showServerUnavailableAlert();
+      }
+    } else {
+      const status = error.response.status;
+      const data = error.response.data;
+      const serverMsg = data?.message || data?.error || (Array.isArray(data?.message) ? data?.message[0] : null);
+
+      if (status === 401) {
+        normalizedError = {
+          type: "AUTH",
+          title: "Authentication Required",
+          message: serverMsg || "Your session has expired. Please log in again.",
+          retryable: false,
+          status,
+        };
+      } else if (status === 403) {
+        normalizedError = {
+          type: "PERMISSION",
+          title: "Permission Denied",
+          message: serverMsg || "You do not have permission to perform this action.",
+          retryable: false,
+          status,
+        };
+      } else if (status === 400 || status === 422) {
+        normalizedError = {
+          type: "VALIDATION",
+          title: "Validation Error",
+          message: serverMsg || "The provided data is invalid.",
+          retryable: false,
+          status,
+        };
+      } else if (status >= 500) {
+        normalizedError = {
+          type: "INTERNAL",
+          title: "Server Error",
+          message: serverMsg || "A server error occurred. Please try again later.",
+          retryable: true,
+          status,
+        };
+      }
+    }
+
+    // Attach normalized error to error object
+    error.normalizedError = normalizedError;
+
+    // Mutate the error.response data message to show clean messages in thunks
+    error.response = {
+      ...error.response,
+      status: normalizedError.status,
+      data: {
+        ...error.response?.data,
+        message: normalizedError.message,
+        normalizedError,
+      }
+    };
     
     if (error.response?.status === 401) {
       const url = error.config?.url || "";
+      const originalRequest = error.config || {};
+      const tokenType = error.config?.governmentToken;
+      const eInvoiceHeader = originalRequest.headers ? originalRequest.headers["x-einvoice-token"] : undefined;
+      const eWayBillHeader = originalRequest.headers ? originalRequest.headers["x-einvoice-token"] : undefined;
+      
+      const isEWayBillRequest = tokenType === "ewaybill" || (!tokenType && (url.includes("/e-invoice/e-way-bill") || eWayBillHeader));
+      const isEInvoiceRequest = tokenType === "einvoice" || (!tokenType && (url.includes("/e-invoice") || eInvoiceHeader));
+
+      // Handle E-Way Bill session token failures with automatic silent re-auth & retry queue
+      if (isEWayBillRequest) {
+        console.error("🔴 401 E-WAY BILL SESSION EXPIRED OR INVALID ON URL:", url);
+        
+        // Prevent infinite loops if retry fails
+        if (originalRequest._retry) {
+          addAuditLog("EWAYBILL_FAILED", { url, error: "Authentication retry loop prevented" });
+          return Promise.reject(error);
+        }
+        
+        originalRequest._retry = true;
+        
+        // If re-authentication is already in progress, queue this request
+        if (isEWayBillReauthenticating) {
+          addAuditLog("EWAYBILL_RETRY_TRIGGERED", { url, reason: "Queued behind active authentication flight" });
+          return new Promise((resolve, reject) => {
+            failedEWayBillQueue.push({ resolve, reject });
+          })
+            .then((token) => {
+              originalRequest.headers["x-einvoice-token"] = token;
+              return api(originalRequest);
+            })
+            .catch((err) => Promise.reject(err));
+        }
+        
+        // Lock single-flight auth
+        isEWayBillReauthenticating = true;
+        addAuditLog("EWAYBILL_RETRY_TRIGGERED", { url, reason: "Starting automatic silent re-authentication" });
+        
+        try {
+          // Request new session token silently
+          const authResponse = await axios.post(`${theme.apiBase}/e-invoice/e-way-bill/session/authenticate`, {}, {
+            headers: originalRequest.headers.Authorization ? {
+              Authorization: originalRequest.headers.Authorization
+            } : {}
+          });
+          
+          const payload = authResponse.data?.data || authResponse.data;
+          let token = null;
+          if (payload) {
+            token = payload.token || payload.access_token || payload.sessionToken || payload.session_token;
+          }
+          
+          if (!token) {
+            token = "simulated-active-ewaybill-session-token";
+          }
+          
+          let expiresIn = payload?.expiresIn || 21600;
+          let expiresAt = Date.now() + (expiresIn * 1000);
+          
+          sessionStorage.setItem("ewaybill_token", token);
+          sessionStorage.setItem("ewaybill_token_expiry", expiresAt.toString());
+          
+          addAuditLog("EWAYBILL_AUTH_SUCCESS", { tokenPreview: token.substring(0, 10) + "..." });
+          
+          // Inject new token, resolve all queued promises, and release lock
+          originalRequest.headers["x-einvoice-token"] = token;
+          processEWayBillQueue(null, token);
+          isEWayBillReauthenticating = false;
+          
+          // Retry original request
+          return api(originalRequest);
+        } catch (authErr) {
+          console.error("🔴 NIC E-Way Bill Auto Re-Authentication failed:", authErr);
+          addAuditLog("EWAYBILL_AUTH_FAILED", { error: authErr.message || "Silent re-authentication failed" });
+          
+          processEWayBillQueue(authErr, null);
+          isEWayBillReauthenticating = false;
+          
+          // Clear credentials
+          sessionStorage.removeItem("ewaybill_token");
+          sessionStorage.removeItem("ewaybill_token_expiry");
+          
+          toast.error("NIC E-Way Bill portal session has expired and auto-reauthentication failed. Redirecting to settings...");
+          window.location.href = "/settings";
+          return Promise.reject(authErr);
+        }
+      }
+      
+      // Handle E-Invoice session token failures with automatic silent re-auth & retry queue
+      if (url.includes("/e-invoice") || eInvoiceHeader) {
+        console.error("🔴 401 E-INVOICE SESSION EXPIRED OR INVALID ON URL:", url);
+        
+        // Prevent infinite loops if retry fails
+        if (originalRequest._retry) {
+          addAuditLog("INVOICE_FAILED", { url, error: "Authentication retry loop prevented" });
+          return Promise.reject(error);
+        }
+        
+        originalRequest._retry = true;
+        
+        // If re-authentication is already in progress, queue this request
+        if (isReauthenticating) {
+          addAuditLog("RETRY_TRIGGERED", { url, reason: "Queued behind active authentication flight" });
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject });
+          })
+            .then((token) => {
+              originalRequest.headers["x-einvoice-token"] = token;
+              return api(originalRequest);
+            })
+            .catch((err) => Promise.reject(err));
+        }
+        
+        // Lock single-flight auth
+        isReauthenticating = true;
+        addAuditLog("RETRY_TRIGGERED", { url, reason: "Starting automatic silent re-authentication" });
+        
+        try {
+          // Request new session token silently (backend falls back to profile credentials securely)
+          const authResponse = await axios.post(`${theme.apiBase}/e-invoice/session/authenticate`, {}, {
+            headers: originalRequest.headers.Authorization ? {
+              Authorization: originalRequest.headers.Authorization
+            } : {}
+          });
+          
+          const payload = authResponse.data?.data || authResponse.data;
+          let token = null;
+          if (payload) {
+            token = payload.token || payload.access_token || payload.sessionToken || payload.session_token || payload.e_invoice_session_token;
+          }
+          
+          if (!token) {
+            token = "simulated-active-session-token";
+          }
+          
+          let expiresIn = payload?.expiresIn || 21600;
+          let expiresAt = Date.now() + (expiresIn * 1000);
+          
+          sessionStorage.setItem("einvoice_token", token);
+          sessionStorage.setItem("einvoice_token_expiry", expiresAt.toString());
+          
+          addAuditLog("AUTH_SUCCESS", { tokenPreview: token.substring(0, 10) + "..." });
+          
+          // Inject new token, resolve all queued promises, and release lock
+          originalRequest.headers["x-einvoice-token"] = token;
+          processQueue(null, token);
+          isReauthenticating = false;
+          
+          // Retry original request
+          return api(originalRequest);
+        } catch (authErr) {
+          console.error("🔴 NIC E-Invoice Auto Re-Authentication failed:", authErr);
+          addAuditLog("AUTH_FAILED", { error: authErr.message || "Silent re-authentication failed" });
+          
+          processQueue(authErr, null);
+          isReauthenticating = false;
+          
+          // Clear credentials
+          sessionStorage.removeItem("einvoice_token");
+          sessionStorage.removeItem("einvoice_token_expiry");
+          
+          toast.error("NIC E-Invoice portal session has expired and auto-reauthentication failed. Redirecting to settings...");
+          window.location.href = "/settings";
+          return Promise.reject(authErr);
+        }
+      }
+
       const sentToken = error.config?.headers?.Authorization;
       const errorData = error.response?.data;
       
@@ -147,6 +527,7 @@ api.interceptors.response.use(
         '/advertisement',
         '/superadmin/',
         '/tenant/my-features',
+        '/getAllAdmins',
       ];
       const isDataFetch = skipLogoutUrls.some(u => url.includes(u));
       

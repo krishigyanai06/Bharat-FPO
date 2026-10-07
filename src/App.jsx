@@ -7,6 +7,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ROUTE_ROLES } from "./config/rbac";
+import { NetworkProvider } from "./context/NetworkProvider";
 
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
@@ -15,9 +16,10 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Listing = lazy(() => import('./pages/Listing'));
 const Inventory = lazy(() => import('./pages/Inventory'));
 const Buy = lazy(() => import('./pages/Buy'));
-const Members = lazy(() => import('./pages/Members'));
 const Documents = lazy(() => import('./pages/Documents'));
 const Reports = lazy(() => import('./pages/Reports'));
+const GstReportsDashboard = lazy(() => import('./pages/gst-reports/GstReportsWorkspace'));
+const Gstr1Report = lazy(() => import('./pages/gst-reports/Gstr1Report'));
 const Settings = lazy(() => import('./pages/Settings'));
 const CounterSales = lazy(() => import('./pages/CounterSales'));
 const CounterInvoiceForm = lazy(() => import('./pages/CounterInvoiceForm'));
@@ -29,6 +31,12 @@ const Advertisement = lazy(() => import('./pages/Advertisement'));
 const CreateTenant = lazy(() => import('./pages/CreateTenant'));
 const TierFeatures = lazy(() => import('./pages/TierFeatures'));
 const Party = lazy(() => import('./pages/Party'));
+const PartyForm = lazy(() => import('./pages/PartyForm'));
+const ProcurementSales = lazy(() => import('./pages/ProcurementSales/ProcurementSales'));
+const GovernmentCompliancePage = lazy(() => import('./pages/GovernmentCompliancePage'));
+const PurchaseCrop = lazy(() => import('./pages/PurchaseCrop'));
+const WhatsAppCampaign = lazy(() => import('./pages/WhatsAppCampaign'));
+const Customers = lazy(() => import('./pages/Customers'));
 
 
 const PageLoader = () => (
@@ -48,42 +56,114 @@ function App() {
 
   return (
     <Provider store={store}>
-      <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Suspense fallback={<PageLoader />}><Login /></Suspense>} />
-          <Route path="/register" element={<Suspense fallback={<PageLoader />}><Register /></Suspense>} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
+      <NetworkProvider>
+        <Toaster
+          position="top-right"
+          containerStyle={{
+            top: 75,
+            right: 20,
+            zIndex: 99999,
+          }}
+          toastOptions={{
+            duration: 3500,
+            style: {
+              background: "#ffffff",
+              color: "#1e293b",
+              boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+              borderRadius: "12px",
+              padding: "12px 16px",
+              minHeight: "50px",
+              maxWidth: "380px",
+              minWidth: "300px",
+              borderLeft: "4px solid #16A34A",
+              fontSize: "13px",
+              fontWeight: "600",
+              zIndex: 99999,
+            },
+            success: {
+              style: {
+                borderLeft: "4px solid #16A34A"
+              },
+              iconTheme: {
+                primary: "#16A34A",
+                secondary: "#ffffff"
+              }
+            },
+            error: {
+              style: {
+                borderLeft: "4px solid #EF4444"
+              },
+              iconTheme: {
+                primary: "#EF4444",
+                secondary: "#ffffff"
+              }
+            },
+            loading: {
+              style: {
+                borderLeft: "4px solid #3B82F6"
+              }
             }
-          >
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/dashboard']}><Suspense fallback={<PageLoader />}><Dashboard /></Suspense></ProtectedRoute>} />
-            <Route path="listing" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/listing']}><Suspense fallback={<PageLoader />}><Listing /></Suspense></ProtectedRoute>} />
-            <Route path="procurement" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/procurement']}><Suspense fallback={<PageLoader />}><Procurement /></Suspense></ProtectedRoute>} />
-            <Route path="inventory" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/inventory']}><Suspense fallback={<PageLoader />}><Inventory /></Suspense></ProtectedRoute>} />
-            <Route path="buy" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/buy']}><Suspense fallback={<PageLoader />}><Buy /></Suspense></ProtectedRoute>} />
-            <Route path="broadcast" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/broadcast']}><Suspense fallback={<PageLoader />}><Broadcast /></Suspense></ProtectedRoute>} />
-            <Route path="members" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/members']}><Suspense fallback={<PageLoader />}><Members /></Suspense></ProtectedRoute>} />
-            <Route path="documents" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/documents']}><Suspense fallback={<PageLoader />}><Documents /></Suspense></ProtectedRoute>} />
-            <Route path="ledger" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/ledger']}><Suspense fallback={<PageLoader />}><ErrorBoundary><Ledger /></ErrorBoundary></Suspense></ProtectedRoute>} />
-            <Route path="advertisement" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/advertisement']}><Suspense fallback={<PageLoader />}><Advertisement /></Suspense></ProtectedRoute>} />
-            <Route path="reports" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/reports']}><Suspense fallback={<PageLoader />}><Reports /></Suspense></ProtectedRoute>} />
-            <Route path="settings" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/settings']}><Suspense fallback={<PageLoader />}><Settings /></Suspense></ProtectedRoute>} />
-            <Route path="sell" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterSales /></Suspense></ProtectedRoute>} />
-            <Route path="sell/invoice/new" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterInvoiceForm /></Suspense></ProtectedRoute>} />
-            <Route path="sell/invoice/edit/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterInvoiceForm /></Suspense></ProtectedRoute>} />
-            <Route path="purchase" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
-            <Route path="create-tenant" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/create-tenant']}><Suspense fallback={<PageLoader />}><CreateTenant /></Suspense></ProtectedRoute>} />
-            <Route path="tier-features" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/tier-features']}><Suspense fallback={<PageLoader />}><TierFeatures /></Suspense></ProtectedRoute>} />
-            <Route path="party" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/party']}><Suspense fallback={<PageLoader />}><Party /></Suspense></ProtectedRoute>} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+          }}
+        />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Suspense fallback={<PageLoader />}><Login /></Suspense>} />
+            <Route path="/register" element={<Suspense fallback={<PageLoader />}><Register /></Suspense>} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="dashboard" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/dashboard']}><Suspense fallback={<PageLoader />}><Dashboard /></Suspense></ProtectedRoute>} />
+              <Route path="listing" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/listing']}><Suspense fallback={<PageLoader />}><Listing /></Suspense></ProtectedRoute>} />
+              <Route path="procurement" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/procurement']}><Suspense fallback={<PageLoader />}><Procurement /></Suspense></ProtectedRoute>} />
+              <Route path="inventory" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/inventory']}><Suspense fallback={<PageLoader />}><Inventory /></Suspense></ProtectedRoute>} />
+              <Route path="buy" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/buy']}><Suspense fallback={<PageLoader />}><Buy /></Suspense></ProtectedRoute>} />
+              <Route path="broadcast" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/broadcast']}><Suspense fallback={<PageLoader />}><Broadcast /></Suspense></ProtectedRoute>} />
+              <Route path="customers" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/customers']}><Suspense fallback={<PageLoader />}><Customers /></Suspense></ProtectedRoute>} />
+              <Route path="members" element={<Navigate to="/customers" replace />} />
+              <Route path="parties/customers" element={<Navigate to="/customers" replace />} />
+              <Route path="documents" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/documents']}><Suspense fallback={<PageLoader />}><Documents /></Suspense></ProtectedRoute>} />
+              <Route path="ledger" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/ledger']}><Suspense fallback={<PageLoader />}><ErrorBoundary><Ledger /></ErrorBoundary></Suspense></ProtectedRoute>} />
+              <Route path="advertisement" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/advertisement']}><Suspense fallback={<PageLoader />}><Advertisement /></Suspense></ProtectedRoute>} />
+              <Route path="reports" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/reports']}><Suspense fallback={<PageLoader />}><Reports /></Suspense></ProtectedRoute>} />
+              <Route path="gst-reports">
+                <Route index element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/gst-reports']}><Suspense fallback={<PageLoader />}><GstReportsDashboard /></Suspense></ProtectedRoute>} />
+                <Route path="gstr-1" element={<Navigate to="/gst-reports?tab=gstr1" replace />} />
+                <Route path="gstr-3b" element={<Navigate to="/gst-reports?tab=gstr3b" replace />} />
+              </Route>
+              <Route path="settings" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/settings']}><Suspense fallback={<PageLoader />}><Settings /></Suspense></ProtectedRoute>} />
+              <Route path="sell" element={<Navigate to="/sell/invoices" replace />} />
+              <Route path="sell/invoices" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterSales /></Suspense></ProtectedRoute>} />
+              <Route path="sell/receipts" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterSales /></Suspense></ProtectedRoute>} />
+              <Route path="sell/returns" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterSales /></Suspense></ProtectedRoute>} />
+              <Route path="sell/orders" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/buy']}><Suspense fallback={<PageLoader />}><Buy /></Suspense></ProtectedRoute>} />
+              <Route path="sell/invoice/new" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterInvoiceForm /></Suspense></ProtectedRoute>} />
+              <Route path="sell/invoice/edit/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><CounterInvoiceForm /></Suspense></ProtectedRoute>} />
+              <Route path="sell/compliance/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><GovernmentCompliancePage /></Suspense></ProtectedRoute>} />
+              <Route path="sales/procurement" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/sell']}><Suspense fallback={<PageLoader />}><ProcurementSales /></Suspense></ProtectedRoute>} />
+              <Route path="purchase" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
+              <Route path="purchase/bills" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
+              <Route path="purchase/orders" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
+              <Route path="purchase/payments" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
+              <Route path="purchase/debit-notes" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
+              <Route path="purchase/crop" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><PurchaseCrop /></Suspense></ProtectedRoute>} />
+              <Route path="purchase/crop/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><PurchaseCrop /></Suspense></ProtectedRoute>} />
+              <Route path="purchase/expenses" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/purchase']}><Suspense fallback={<PageLoader />}><Purchase /></Suspense></ProtectedRoute>} />
+              <Route path="create-tenant" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/create-tenant']}><Suspense fallback={<PageLoader />}><CreateTenant /></Suspense></ProtectedRoute>} />
+              <Route path="tier-features" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/tier-features']}><Suspense fallback={<PageLoader />}><TierFeatures /></Suspense></ProtectedRoute>} />
+              <Route path="superadmin/whatsapp-campaign" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/superadmin/whatsapp-campaign']}><Suspense fallback={<PageLoader />}><WhatsAppCampaign /></Suspense></ProtectedRoute>} />
+              <Route path="party" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/party']}><Suspense fallback={<PageLoader />}><Party /></Suspense></ProtectedRoute>} />
+              <Route path="party/new" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/party']}><Suspense fallback={<PageLoader />}><PartyForm /></Suspense></ProtectedRoute>} />
+              <Route path="party/edit/:id" element={<ProtectedRoute allowedRoles={ROUTE_ROLES['/party']}><Suspense fallback={<PageLoader />}><PartyForm /></Suspense></ProtectedRoute>} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </NetworkProvider>
     </Provider>
   );
 }

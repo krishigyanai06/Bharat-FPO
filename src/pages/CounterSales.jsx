@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   fetchSales,
@@ -21,7 +21,9 @@ import { fetchParties } from "../store/thunks/partyThunk";
 import { fetchProducts, fetchStockSummary } from "../store/thunks/inventoryThunk";
 import { clearSellStatus } from "../store/slices/sellSlice";
 import { usePermissions } from "../hooks/usePermissions";
-import api from "../lib/api";
+import api, { isEInvoiceSessionValid, addAuditLog } from "../lib/api";
+import { generateEInvoice, generateEInvoicePdf } from "../store/thunks/eInvoiceThunk";
+import { clearEInvoiceStatus } from "../store/slices/eInvoiceSlice";
 import {
   Receipt,
   Plus,
@@ -46,10 +48,18 @@ import {
   X,
   Pencil,
   Loader2,
+  Tag,
+  ArrowLeftRight,
+  Wallet,
+  Printer,
+  Layers,
+  Clock,
+  Shield,
+  MoreVertical,
 } from "lucide-react";
 
 const TABS = [
-  { key: "sales", label: "Sales Invoices", icon: FileText },
+  { key: "sales", label: "Sales Bills", icon: FileText },
   { key: "payments", label: "Payments In", icon: IndianRupee },
   { key: "returns", label: "Sales Returns", icon: RefreshCw },
 ];
@@ -123,11 +133,50 @@ const resolveItemLabel = (itemRow, products = [], stockSummary = []) => {
   return "Product";
 };
 
+const resolveLinkedInvoiceNo = (p, salesList = []) => {
+  const sellObjOrId = p?.linkedSell || p?.sell;
+
+  if (sellObjOrId && typeof sellObjOrId === "object") {
+    const invNo = sellObjOrId.invoiceNumber || sellObjOrId.invoiceNo || sellObjOrId.billNumber;
+    if (invNo) return invNo;
+    if (sellObjOrId._id) return sellObjOrId._id.substring(0, 8).toUpperCase();
+  }
+
+  if (sellObjOrId && typeof sellObjOrId === "string") {
+    if (salesList && salesList.length > 0) {
+      const matched = salesList.find(s => s._id === sellObjOrId);
+      if (matched) {
+        const invNo = matched.invoiceNumber || matched.invoiceNo || matched.billNumber;
+        if (invNo) return invNo;
+      }
+    }
+  }
+
+  if (p?.description) {
+    const descMatch = p.description.match(/Invoice\s+([A-Za-z0-9\-_]+)/i);
+    if (descMatch && descMatch[1]) {
+      return descMatch[1];
+    }
+  }
+
+  if (sellObjOrId && typeof sellObjOrId === "string") {
+    return sellObjOrId.substring(0, 8).toUpperCase();
+  }
+
+  return "—";
+};
+
 export default function CounterSales() {
   const dispatch = useDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const activeTab = searchParams.get("tab") || "sales";
+  const { pathname } = useLocation();
+  const getTabFromPath = (path) => {
+    if (path.includes("/sell/receipts")) return "payments";
+    if (path.includes("/sell/returns")) return "returns";
+    return "sales";
+  };
+  const activeTab = getTabFromPath(pathname);
 
   const { isReadOnly } = usePermissions();
 
@@ -143,7 +192,7 @@ export default function CounterSales() {
     error,
     success,
   } = useSelector((state) => state.sell);
-  
+
   const { parties } = useSelector((state) => state.party);
   const { products, stockSummary } = useSelector((state) => state.inventory);
 
@@ -154,21 +203,36 @@ export default function CounterSales() {
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [editReturnRecord, setEditReturnRecord] = useState(null);
   const [viewDetailModalOpen, setViewDetailModalOpen] = useState(false);
-  
+  const [quickEInvoiceItem, setQuickEInvoiceItem] = useState(null);
+  const [quickEInvoiceMode, setQuickEInvoiceMode] = useState("generate"); // "generate" | "details"
+
+  // Compliance drawer state
+  const [complianceDrawerOpen, setComplianceDrawerOpen] = useState(false);
+  const [complianceItem, setComplianceItem] = useState(null);
+
   // Local list filters
   const [searchQuery, setSearchQuery] = useState("");
   const [saleTypeFilter, setSaleTypeFilter] = useState("all");
   const [billingFilter, setBillingFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 8;
+  const ITEMS_PER_PAGE = 12;
 
   // Viewing detail state
   const [detailItem, setDetailItem] = useState(null);
   const [detailType, setDetailType] = useState("sale"); // 'sale', 'payment', 'return'
+  const [activeDropdownId, setActiveDropdownId] = useState(null);
+
+  useEffect(() => {
+    const handleOutsideClick = () => {
+      setActiveDropdownId(null);
+    };
+    window.addEventListener("click", handleOutsideClick);
+    return () => window.removeEventListener("click", handleOutsideClick);
+  }, []);
 
   useEffect(() => {
     dispatch(clearSellStatus());
-    dispatch(fetchParties());
+    dispatch(fetchParties({ partyType: "BUYER" }));
     dispatch(fetchProducts());
     dispatch(fetchStockSummary());
   }, [dispatch]);
@@ -220,10 +284,11 @@ export default function CounterSales() {
   };
 
   // PDF Receipt download/preview handler
-  const handleDownloadReceipt = async (id, invoiceNo = "Invoice") => {
+  const handleDownloadReceipt = async (id, invoiceNo = "Invoice", supplyType) => {
     try {
       toast.loading("Generating receipt PDF...", { id: "pdf-download" });
-      const res = await api.get(`/sell/receipt/${id}`, { responseType: "blob" });
+      const queryParam = supplyType ? `?supplyType=${encodeURIComponent(supplyType)}` : "";
+      const res = await api.get(`/sell/receipt/${id}${queryParam}`, { responseType: "blob" });
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       window.open(url, "_blank");
@@ -249,6 +314,50 @@ export default function CounterSales() {
     }
   };
 
+  // PDF Sales Return Receipt download/preview handler
+  const handleDownloadReturnReceipt = async (id) => {
+    try {
+      toast.loading("Generating sales return receipt PDF...", { id: "return-pdf-download" });
+      let res;
+      try {
+        res = await api.get(`/sell/sell-return/receipt/${id}`, { responseType: "blob" });
+      } catch (err) {
+        if (err.response?.status === 404) {
+          res = await api.get(`/sell/return/receipt/${id}`, { responseType: "blob" });
+        } else {
+          throw err;
+        }
+      }
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const printWindow = window.open(url, "_blank");
+      if (!printWindow || printWindow.closed || typeof printWindow.closed === "undefined") {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `credit_note_${id}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success("Credit note downloaded successfully", { id: "return-pdf-download" });
+      } else {
+        toast.success("Sales return receipt opened in print preview", { id: "return-pdf-download" });
+      }
+    } catch (err) {
+      console.error(err);
+      let errorMsg = "Failed to open sales return receipt PDF";
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const json = JSON.parse(text);
+          if (json.message) errorMsg = json.message;
+        } catch (_) { }
+      } else if (err.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      }
+      toast.error(errorMsg, { id: "return-pdf-download" });
+    }
+  };
+
   // Convert estimate to sale
   const handleConvertEstimate = async (id) => {
     const loadingToast = toast.loading("Converting estimate to sale...");
@@ -263,13 +372,13 @@ export default function CounterSales() {
 
   // Delete transaction handlers
   const handleDeleteSale = async (id) => {
-    if (window.confirm("Are you sure you want to delete this invoice? This will revert inventory stock and ledger updates!")) {
+    if (window.confirm("Are you sure you want to delete this sales bill? This will revert inventory stock and ledger updates!")) {
       try {
         await dispatch(deleteSale(id)).unwrap();
-        toast.success("Invoice deleted successfully");
+        toast.success("Sales Bill deleted successfully");
         loadListData();
       } catch (err) {
-        toast.error(err || "Failed to delete invoice");
+        toast.error(err || "Failed to delete sales bill");
       }
     }
   };
@@ -305,6 +414,43 @@ export default function CounterSales() {
     setViewDetailModalOpen(true);
   };
 
+  // Sort data to ensure latest entries are always at the top
+  const sortedSales = useMemo(() => {
+    if (!sales) return [];
+    return [...sales].sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (dateA !== dateB) return dateB - dateA;
+      const idA = String(a._id || a.id || "");
+      const idB = String(b._id || b.id || "");
+      return idB.localeCompare(idA);
+    });
+  }, [sales]);
+
+  const sortedPayments = useMemo(() => {
+    if (!payments) return [];
+    return [...payments].sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (dateA !== dateB) return dateB - dateA;
+      const idA = String(a._id || a.id || "");
+      const idB = String(b._id || b.id || "");
+      return idB.localeCompare(idA);
+    });
+  }, [payments]);
+
+  const sortedReturns = useMemo(() => {
+    if (!returns) return [];
+    return [...returns].sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (dateA !== dateB) return dateB - dateA;
+      const idA = String(a._id || a.id || "");
+      const idB = String(b._id || b.id || "");
+      return idB.localeCompare(idA);
+    });
+  }, [returns]);
+
   // Summary Metrics calculations (from loaded lists)
   const salesMetrics = {
     totalSales: sales.filter((s) => s.saleType === "SALE").reduce((acc, s) => acc + (s.totalAmount || 0), 0),
@@ -318,24 +464,29 @@ export default function CounterSales() {
   );
 
   return (
-    <div className="space-y-6">
-      {/* 1. Header Area */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="w-full h-full flex flex-col space-y-3 select-none text-slate-800 flex-1">
+      {/* 1. Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-200/60">
         <div>
-          <h1 className="text-2xl font-bold text-gray-950">Counter Sales (Direct Sell)</h1>
-          <p className="text-sm text-gray-500">Manage walk-in cash checkouts, credit sales, customer invoices, and returns</p>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Receipt className="w-5 h-5 text-[#16A36A]" />
+            Counter Sales
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Manage sales bills, payments, credit sales and returns
+          </p>
         </div>
-        
-        <div className="flex gap-2 flex-wrap">
+
+        <div className="flex items-center gap-2">
           {!isReadOnly && (
             <>
               {activeTab === "sales" && (
                 <button
                   onClick={() => navigate("/sell/invoice/new")}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold transition shadow-sm active:scale-95"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#16A36A] hover:bg-[#128857] text-white rounded-lg text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  New Invoice
+                  New Sales Bill
                 </button>
               )}
               {activeTab === "payments" && (
@@ -344,7 +495,7 @@ export default function CounterSales() {
                     setEditPaymentRecord(null);
                     setPaymentModalOpen(true);
                   }}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold transition shadow-sm active:scale-95"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#16A36A] hover:bg-[#128857] text-white rounded-lg text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   Record Payment
@@ -356,7 +507,7 @@ export default function CounterSales() {
                     setEditReturnRecord(null);
                     setReturnModalOpen(true);
                   }}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition shadow-sm active:scale-95"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   Record Return
@@ -367,42 +518,93 @@ export default function CounterSales() {
         </div>
       </div>
 
-      {/* 2. Stat Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Sales Revenue", val: `₹${salesMetrics.totalSales.toLocaleString("en-IN")}`, icon: CreditCard, bg: "bg-emerald-50 text-emerald-700", border: "border-emerald-100" },
-          { label: "Estimate Volume", val: `₹${salesMetrics.totalEstimates.toLocaleString("en-IN")}`, icon: FileText, bg: "bg-blue-50 text-blue-700", border: "border-blue-100" },
-          { label: "Outstanding Dues", val: `₹${salesMetrics.creditOutstanding.toLocaleString("en-IN")}`, icon: AlertTriangle, bg: "bg-amber-50 text-amber-700", border: "border-amber-100" },
-          { label: "Payments Logged", val: `₹${salesMetrics.paymentsReceived.toLocaleString("en-IN")}`, icon: IndianRupee, bg: "bg-purple-50 text-purple-700", border: "border-purple-100" },
-        ].map((item, idx) => (
-          <div key={idx} className={`bg-white border ${item.border} rounded-2xl p-5 shadow-sm flex items-center gap-4`}>
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${item.bg}`}>
-              <item.icon className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 font-medium">{item.label}</p>
-              <h3 className="text-xl font-bold text-gray-900 mt-0.5">{item.val}</h3>
-            </div>
+      {/* 2. KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Sales Revenue */}
+        <div className="bg-white border border-[#DCE5EA] rounded-xl p-3.5 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Sales Revenue</p>
+            <h3 className="text-lg font-bold text-slate-900 mt-0.5">
+              ₹{salesMetrics.totalSales.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[10px] text-emerald-700 font-medium mt-0.5">
+              {sales.filter((s) => s.saleType === "SALE").length} Bills Logged
+            </p>
           </div>
-        ))}
+          <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0">
+            <CreditCard className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Estimate Volume */}
+        <div className="bg-white border border-[#DCE5EA] rounded-xl p-3.5 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Estimate Volume</p>
+            <h3 className="text-lg font-bold text-slate-900 mt-0.5">
+              ₹{salesMetrics.totalEstimates.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[10px] text-blue-700 font-medium mt-0.5">
+              {sales.filter((s) => s.saleType === "ESTIMATE").length} Estimates Drafted
+            </p>
+          </div>
+          <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100/80 text-blue-600 flex items-center justify-center shrink-0">
+            <FileText className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Outstanding Dues */}
+        <div className="bg-white border border-[#DCE5EA] rounded-xl p-3.5 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Outstanding Dues</p>
+            <h3 className="text-lg font-bold text-amber-700 mt-0.5">
+              ₹{salesMetrics.creditOutstanding.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[10px] text-amber-600 font-medium mt-0.5">
+              {sales.filter((s) => s.billingType === "Credit" && s.unpaidAmount > 0).length} Credit Bills
+            </p>
+          </div>
+          <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-100/80 text-amber-600 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Payments Logged */}
+        <div className="bg-white border border-[#DCE5EA] rounded-xl p-3.5 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Payments Logged</p>
+            <h3 className="text-lg font-bold text-slate-900 mt-0.5">
+              ₹{salesMetrics.paymentsReceived.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </h3>
+            <p className="text-[10px] text-purple-700 font-medium mt-0.5">
+              {payments.length} Payment Receipts
+            </p>
+          </div>
+          <div className="w-9 h-9 rounded-lg bg-purple-50 border border-purple-100/80 text-purple-600 flex items-center justify-center shrink-0">
+            <IndianRupee className="w-4 h-4" />
+          </div>
+        </div>
       </div>
 
-      {/* 3. Navigation Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
+      {/* 3. ERP Register Tabs */}
+      <div className="flex border-b border-slate-200 pt-1">
         {TABS.map((t) => {
           const TabIcon = t.icon;
           const isSelected = activeTab === t.key;
           return (
             <button
               key={t.key}
-              onClick={() => setSearchParams({ tab: t.key })}
-              className={`flex items-center gap-2 px-5 py-3 border-b-2 font-semibold text-sm transition-all duration-150 ${
+              onClick={() => {
+                if (t.key === "sales") navigate("/sell/invoices");
+                else if (t.key === "payments") navigate("/sell/receipts");
+                else if (t.key === "returns") navigate("/sell/returns");
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold transition-colors duration-150 border-b-2 cursor-pointer ${
                 isSelected
-                  ? "border-brand-650 text-brand-700"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200"
+                  ? "border-[#16A36A] text-[#16A36A] font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
               }`}
             >
-              <TabIcon size={16} />
+              <TabIcon size={15} />
               {t.label}
             </button>
           );
@@ -410,352 +612,540 @@ export default function CounterSales() {
       </div>
 
       {/* 4. Controls & Filter Bar */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row gap-3">
-        <form onSubmit={handleSearchSubmit} className="flex-1 relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+      <div className="bg-white border border-[#DCE5EA] rounded-xl p-2.5 shadow-2xs flex flex-col sm:flex-row gap-2.5 items-center">
+        <form onSubmit={handleSearchSubmit} className="flex-1 relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by buyer details, reference code..."
+            placeholder="Search buyer, mobile, invoice number or reference..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 placeholder-gray-400"
+            className="w-full pl-9 pr-4 h-[44px] text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#16A36A] focus:border-[#16A36A] placeholder-slate-400 text-slate-800 font-medium"
           />
         </form>
-        
+
         {activeTab === "sales" && (
-          <div className="flex gap-3">
-            <select
-              value={saleTypeFilter}
-              onChange={(e) => setSaleTypeFilter(e.target.value)}
-              className="px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white"
-            >
-              <option value="all">All Types</option>
-              <option value="SALE">Sales Only</option>
-              <option value="ESTIMATE">Estimates Only</option>
-            </select>
-            <select
-              value={billingFilter}
-              onChange={(e) => setBillingFilter(e.target.value)}
-              className="px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white"
-            >
-              <option value="all">All Billing</option>
-              <option value="Cash">Cash</option>
-              <option value="Credit">Credit</option>
-            </select>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 h-[44px]">
+              <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Type:</span>
+              <select
+                value={saleTypeFilter}
+                onChange={(e) => setSaleTypeFilter(e.target.value)}
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
+              >
+                <option value="all">All Types</option>
+                <option value="SALE">Sales Only</option>
+                <option value="ESTIMATE">Estimates Only</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 h-[44px]">
+              <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Billing:</span>
+              <select
+                value={billingFilter}
+                onChange={(e) => setBillingFilter(e.target.value)}
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
+              >
+                <option value="all">All Billing</option>
+                <option value="Cash">Cash</option>
+                <option value="Credit">Credit</option>
+              </select>
+            </div>
           </div>
         )}
       </div>
 
       {/* 5. Lists Renderings */}
       {loading ? (
-        <div className="flex items-center justify-center min-h-[40vh] bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600" />
+        <div className="flex items-center justify-center min-h-[350px] bg-white rounded-xl border border-slate-200 shadow-2xs flex-1">
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="w-8 h-8 animate-spin text-[#16A36A]" />
+            <span className="text-xs font-semibold text-slate-500">Loading register data...</span>
+          </div>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            {activeTab === "sales" && (
-              <table className="w-full border-collapse text-left text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100 text-xs text-gray-600 uppercase font-semibold">
+        <div className="w-full bg-white border border-[#DCE5EA] rounded-xl shadow-2xs overflow-x-auto overflow-y-auto flex-1 min-h-[450px] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          {activeTab === "sales" && (
+            <table className="w-full border-collapse text-left text-xs">
+              <thead className="bg-[#F8FAFC] border-b border-slate-200/90 text-[11px] text-slate-500 uppercase font-bold tracking-wider sticky top-0 z-10">
+                <tr>
+                  <th className="px-3.5 py-3 font-bold bg-[#F8FAFC]">SALES BILL #</th>
+                  <th className="px-3.5 py-3 text-center font-bold bg-[#F8FAFC]">DATE</th>
+                  <th className="px-3.5 py-3 font-bold bg-[#F8FAFC]">BUYER / PARTY</th>
+                  <th className="px-3.5 py-3 font-bold bg-[#F8FAFC]">PAYMENT</th>
+                  <th className="px-3.5 py-3 font-bold bg-[#F8FAFC]">TYPE</th>
+                  <th className="px-3.5 py-3 text-right font-bold bg-[#F8FAFC]">TOTAL AMOUNT</th>
+                  <th className="px-3.5 py-3 text-right font-bold bg-[#F8FAFC]">RECEIVED</th>
+                  <th className="px-3.5 py-3 text-right font-bold bg-[#F8FAFC]">UNPAID</th>
+                  <th className="px-3.5 py-3 text-center font-bold bg-[#F8FAFC]">E-INVOICE</th>
+                  <th className="px-3.5 py-3 text-center font-bold bg-[#F8FAFC]">E-WAY BILL</th>
+                  <th className="px-3.5 py-3 text-right font-bold bg-[#F8FAFC]">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+                {sortedSales.length === 0 ? (
                   <tr>
-                    <th className="px-6 py-4">Invoice #</th>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Buyer/Party</th>
-                    <th className="px-6 py-4">Payment</th>
-                    <th className="px-6 py-4">Type</th>
-                    <th className="px-6 py-4 text-right">Total Amount</th>
-                    <th className="px-6 py-4 text-right">Received Amount</th>
-                    <th className="px-6 py-4 text-right">Unpaid Amount</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    <td colSpan={11} className="px-6 py-16 text-center text-slate-400">
+                      <Receipt className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                      <p className="font-semibold text-xs text-slate-500">No sales bills found</p>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {sales.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="px-6 py-16 text-center text-gray-400">
-                        <Receipt className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                        <p className="font-medium">No sales invoices found</p>
+                ) : (
+                  sortedSales.map((sale) => (
+                    <tr key={sale._id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-3.5 py-2.5 font-bold font-mono text-slate-900 text-xs">
+                        {sale.invoiceNumber || sale._id.substring(0, 8).toUpperCase()}
                       </td>
-                    </tr>
-                  ) : (
-                    sales.map((sale) => (
-                      <tr key={sale._id} className="hover:bg-gray-50 transition">
-                        <td className="px-6 py-4 font-bold text-gray-900">{sale.invoiceNo || sale._id.substring(0, 8).toUpperCase()}</td>
-                        <td className="px-6 py-4 text-gray-500">{formatDate(sale.createdAt)}</td>
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="font-bold text-gray-800">{sale.party?.name || sale.buyerName || "Walk-in Customer"}</p>
-                            {(sale.buyerPhone || sale.party?.phoneNumber) && (
-                              <p className="text-xs text-gray-400 mt-0.5">{sale.buyerPhone || sale.party?.phoneNumber}</p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                      <td className="px-3.5 py-2.5 text-center text-slate-600 text-xs font-semibold whitespace-nowrap">
+                        {formatDate(sale.createdAt)}
+                      </td>
+                      <td className="px-3.5 py-2.5">
+                        <div>
+                          <p className="font-bold text-slate-900 text-xs">{sale.party?.name || sale.buyerName || "Walk-in Customer"}</p>
+                          {(sale.buyerPhone || sale.party?.phoneNumber) && (
+                            <span className="text-[10px] text-slate-400 font-medium block">{sale.buyerPhone || sale.party?.phoneNumber}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3.5 py-2.5">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold border ${
                             sale.billingType === "Credit"
-                              ? "bg-amber-50 text-amber-700 border border-amber-100"
-                              : "bg-green-50 text-green-700 border border-green-100"
-                          }`}>
-                            {sale.billingType === "Cash" ? "Money Received" : "Udhar (Credit)"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                            sale.saleType === "SALE"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-blue-100 text-blue-800"
-                          }`}>
-                            {sale.saleType}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right font-extrabold text-gray-950">₹{(sale.totalAmount || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-6 py-4 text-right text-green-700 font-semibold">₹{(sale.receivedAmount || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-6 py-4 text-right text-red-650 font-semibold">₹{(sale.unpaidAmount || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => handleViewDetails(sale, "sale")}
-                              className="p-2 text-gray-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition"
-                              title="View Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDownloadReceipt(sale._id, sale.invoiceNo || "Receipt")}
-                              className="p-2 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
-                              title="Download Invoice PDF"
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
-                            {sale.billingType === "Credit" && sale.saleType === "SALE" && sale.unpaidAmount > 0 && !isReadOnly && (
-                              <button
-                                onClick={() => {
-                                  setLinkedSellForPayment(sale);
-                                  setPaymentModalOpen(true);
-                                }}
-                                className="p-2 text-gray-650 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition animate-pulse"
-                                title="Receive Payment"
-                              >
-                                <IndianRupee className="w-4 h-4 text-emerald-650" />
-                              </button>
-                            )}
-                            {!isReadOnly && (
-                              <button
-                                onClick={() => navigate(`/sell/invoice/edit/${sale._id}`)}
-                                className="p-2 text-gray-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition"
-                                title="Edit Invoice/Estimate"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                            )}
-                            {sale.saleType === "ESTIMATE" && !isReadOnly && (
-                              <button
-                                onClick={() => handleConvertEstimate(sale._id)}
-                                className="px-2.5 py-1 bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-bold rounded-lg transition"
-                                title="Convert to Sale"
-                              >
-                                Convert to Sale
-                              </button>
-                            )}
-                            {!isReadOnly && (
-                              <button
-                                onClick={() => handleDeleteSale(sale._id)}
-                                className="p-2 text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
-                                title="Delete Invoice"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
+                              ? "bg-amber-50 text-amber-700 border-amber-200/70"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200/70"
+                          }`}
+                        >
+                          {sale.billingType === "Cash" ? "Cash" : "Udhar (Credit)"}
+                        </span>
+                      </td>
+                      <td className="px-3.5 py-2.5">
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-slate-100 text-slate-600 border border-slate-200">
+                          {sale.saleType}
+                        </span>
+                      </td>
+                      <td className="px-3.5 py-2.5 text-right font-extrabold text-slate-900 text-xs whitespace-nowrap">
+                        ₹{(sale.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-right text-emerald-700 font-bold text-xs whitespace-nowrap">
+                        ₹{(sale.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td
+                        className={`px-3.5 py-2.5 text-right font-bold text-xs whitespace-nowrap ${
+                          sale.unpaidAmount > 0 ? "text-rose-600" : "text-slate-800"
+                        }`}
+                      >
+                        ₹{(sale.unpaidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-center">
+                        {(() => {
+                          const partyId = typeof sale.party === "string" ? sale.party : sale.party?._id;
+                          const resolved = parties.find((p) => p._id === partyId);
+                          const isB2B = sale.saleType === "SALE" && resolved && (resolved.gstin || resolved.gstNumber || resolved.gstType?.startsWith("Registered"));
 
-            {activeTab === "payments" && (
-              <table className="w-full border-collapse text-left text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100 text-xs text-gray-600 uppercase font-semibold">
-                  <tr>
-                    <th className="px-6 py-4">Receipt #</th>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Party/Customer</th>
-                    <th className="px-6 py-4">Linked Invoice</th>
-                    <th className="px-6 py-4">Payment Breakdown</th>
-                    <th className="px-6 py-4 text-right">Received Amount</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {payments.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-16 text-center text-gray-400">
-                        <IndianRupee className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                        <p className="font-medium">No customer payments recorded</p>
+                          if (!isB2B) {
+                            return <span className="text-slate-400 font-medium text-[11px] select-none">N/A</span>;
+                          }
+
+                          const irnVal = sale.eInvoiceIrn || sale.irn || sale.eInvoiceInfo?.irn;
+                          if (irnVal) {
+                            return (
+                              <button
+                                onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                                className="border border-emerald-500 bg-emerald-50 text-emerald-800 font-bold px-2.5 py-1 text-[11px] rounded inline-flex items-center gap-1 transition active:scale-95 cursor-pointer"
+                              >
+                                ✓ Generated
+                              </button>
+                            );
+                          }
+
+                          const isFailed = sale.eInvoiceStatus === "FAILED" || sale.eInvoiceStatus === "Failed" || sale.eInvoiceError || (sale.eInvoiceInfo && (sale.eInvoiceInfo.status === "FAILED" || sale.eInvoiceInfo.error));
+                          if (isFailed) {
+                            return (
+                              <button
+                                onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                                className="border border-rose-400 bg-rose-50 text-rose-700 font-bold px-2.5 py-1 text-[11px] rounded inline-flex items-center gap-1 transition active:scale-95 cursor-pointer"
+                              >
+                                ❌ Failed
+                              </button>
+                            );
+                          }
+
+                          return (
+                            <button
+                              onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                              className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold px-2.5 py-1 text-[11px] rounded inline-flex items-center gap-1 transition active:scale-95 cursor-pointer"
+                            >
+                              ⚡ Generate
+                            </button>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-center">
+                        {(() => {
+                          if (sale.saleType === "ESTIMATE") {
+                            return <span className="text-slate-400 font-medium text-[11px] select-none">—</span>;
+                          }
+
+                          const ewbNo = sale.ewayBillNo || sale.eWayBillNo || sale.eInvoiceInfo?.ewayBillNo || sale.eInvoiceInfo?.eWayBillNo;
+                          const ewbStatus = sale.ewayBillStatus || sale.eInvoiceInfo?.ewayBillStatus || "ACTIVE";
+                          const hasEwb = !!ewbNo;
+
+                          if (hasEwb) {
+                            return (
+                              <button
+                                onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                                className={`font-bold px-2.5 py-1 text-[11px] rounded inline-flex items-center gap-1 transition active:scale-95 cursor-pointer border ${
+                                  ewbStatus === "CANCELLED"
+                                    ? "border-rose-300 bg-rose-50 text-rose-700"
+                                    : "border-emerald-500 bg-emerald-50 text-emerald-800"
+                                }`}
+                              >
+                                {ewbStatus === "CANCELLED" ? "Cancelled" : "✓ Generated"}
+                              </button>
+                            );
+                          }
+
+                          const partyId = typeof sale.party === "string" ? sale.party : sale.party?._id;
+                          const resolved = parties.find((p) => p._id === partyId);
+                          const isB2B = sale.saleType === "SALE" && resolved && (resolved.gstin || resolved.gstNumber || resolved.gstType?.startsWith("Registered"));
+
+                          if (isB2B) {
+                            const irnVal = sale.eInvoiceIrn || sale.irn || sale.eInvoiceInfo?.irn;
+                            if (!irnVal) {
+                              return <span className="text-slate-400 font-medium text-[11px] select-none">Waiting IRN</span>;
+                            }
+                          }
+
+                          return (
+                            <button
+                              onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                              className="border border-amber-400 bg-amber-50 text-amber-800 font-bold px-2.5 py-1 text-[11px] rounded inline-flex items-center gap-1 transition active:scale-95 cursor-pointer"
+                            >
+                              Generate
+                            </button>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-right">
+                        <div className="relative inline-block text-left">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDropdownId(activeDropdownId === sale._id ? null : sale._id);
+                            }}
+                            className="p-1 hover:bg-slate-100 rounded transition border-0 bg-transparent cursor-pointer text-slate-500 hover:text-slate-900"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+
+                          {activeDropdownId === sale._id && (
+                            <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-[100] py-1 text-xs font-semibold">
+                              <button
+                                onClick={() => handleViewDetails(sale, "sale")}
+                                className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-slate-400" />
+                                View Details
+                              </button>
+
+                              {sale.saleType === "SALE" && (
+                                <button
+                                  onClick={() => navigate(`/sell/compliance/${sale._id}`)}
+                                  className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
+                                >
+                                  <Shield className="w-3.5 h-3.5 text-slate-400" />
+                                  Government Compliance
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleDownloadReceipt(sale._id, sale.invoiceNo || "Receipt", sale.supplyType)}
+                                className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
+                              >
+                                <Download className="w-3.5 h-3.5 text-slate-400" />
+                                Download PDF
+                              </button>
+
+                              {sale.billingType === "Credit" && sale.saleType === "SALE" && sale.unpaidAmount > 0 && !isReadOnly && (
+                                <button
+                                  onClick={() => {
+                                    setLinkedSellForPayment(sale);
+                                    setPaymentModalOpen(true);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 text-emerald-700 hover:bg-emerald-50 cursor-pointer flex items-center gap-2 font-bold"
+                                >
+                                  <IndianRupee className="w-3.5 h-3.5 text-emerald-600" />
+                                  Receive Payment
+                                </button>
+                              )}
+
+                              {sale.saleType === "ESTIMATE" && !isReadOnly && (
+                                <button
+                                  onClick={() => handleConvertEstimate(sale._id)}
+                                  className="w-full text-left px-3.5 py-2 text-blue-700 hover:bg-blue-50 cursor-pointer flex items-center gap-2 font-bold"
+                                >
+                                  <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+                                  Convert to Sale
+                                </button>
+                              )}
+
+                              {!isReadOnly && (
+                                <>
+                                  <div className="h-px bg-slate-100 my-1"></div>
+                                  <button
+                                    onClick={() => navigate(`/sell/invoice/edit/${sale._id}`)}
+                                    className="w-full text-left px-3.5 py-2 text-amber-700 hover:bg-amber-50 cursor-pointer flex items-center gap-2"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5 text-amber-500" />
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteSale(sale._id)}
+                                    className="w-full text-left px-3.5 py-2 text-rose-700 hover:bg-rose-50 cursor-pointer flex items-center gap-2"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                    Delete
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                  ) : (
-                    payments.map((p) => (
-                      <tr key={p._id} className="hover:bg-gray-55 transition">
-                        <td className="px-6 py-4 font-bold text-gray-900">
-                          <div className="flex items-center gap-2">
-                            <span>{p.receiptNo || p._id.substring(0, 8).toUpperCase()}</span>
-                            {p.isAutoGenerated && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                Auto
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-gray-550">{formatDate(p.createdAt)}</td>
-                        <td className="px-6 py-4 font-semibold text-gray-800">{p.party?.name || "Unassigned"}</td>
-                        <td className="px-6 py-4 font-mono text-xs text-gray-500 font-semibold">
-                          {p.linkedSell?.invoiceNo || p.sell?.invoiceNo || (p.sell && typeof p.sell === "string" ? p.sell.substring(0, 8).toUpperCase() : "—")}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="space-y-1">
-                            {p.payments?.map((py, idx) => (
-                              <span key={idx} className="inline-block mr-2 px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs uppercase font-medium">
-                                {py.paymentType}: ₹{py.amount}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right font-extrabold text-green-700">₹{(p.receivedAmount || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => handleViewDetails(p, "payment")}
-                              className="p-2 text-gray-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition"
-                              title="View Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDownloadPaymentReceipt(p._id)}
-                              className="p-2 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
-                              title="Download Payment Receipt PDF"
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
-                            {!isReadOnly && !p.isAutoGenerated && (
-                              <button
-                                onClick={() => {
-                                  setEditPaymentRecord(p);
-                                  setPaymentModalOpen(true);
-                                }}
-                                className="p-2 text-gray-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition"
-                                title="Edit Payment Receipt"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                            )}
-                            {!isReadOnly && !p.isAutoGenerated && (
-                              <button
-                                onClick={() => handleDeletePayment(p._id)}
-                                className="p-2 text-gray-600 hover:text-red-750 hover:bg-red-50 rounded-lg transition"
-                                title="Delete Payment Receipt"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
 
-            {activeTab === "returns" && (
-              <table className="w-full border-collapse text-left text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100 text-xs text-gray-600 uppercase font-semibold">
+          {activeTab === "payments" && (
+            <table className="w-full border-collapse text-left text-xs">
+              <thead className="bg-[#F8FAFC] border-b border-slate-200/90 text-[11px] text-slate-500 uppercase font-bold tracking-wider sticky top-0 z-10">
+                <tr>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">RECEIPT #</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">DATE</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">BUYER / PARTY</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">LINKED SALES BILL</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">PAYMENT BREAKDOWN</th>
+                  <th className="px-4 py-3 text-right bg-[#F8FAFC]">RECEIVED AMOUNT</th>
+                  <th className="px-4 py-3 text-right bg-[#F8FAFC]">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+                {sortedPayments.length === 0 ? (
                   <tr>
-                    <th className="px-6 py-4">Credit Note #</th>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Party/Customer</th>
-                    <th className="px-6 py-4">Linked Invoice</th>
-                    <th className="px-6 py-4 text-right">Credit Value</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    <td colSpan={7} className="px-6 py-16 text-center text-slate-400">
+                      <IndianRupee className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                      <p className="font-semibold text-xs text-slate-500">No customer payments recorded</p>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {returns.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-16 text-center text-gray-400">
-                        <RefreshCw className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                        <p className="font-medium">No sales returns recorded</p>
+                ) : (
+                  sortedPayments.map((p) => (
+                    <tr key={p._id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-4 py-3 font-bold font-mono text-slate-900">
+                        <div className="flex items-center gap-2">
+                          <span>{p.receiptNo || p._id.substring(0, 8).toUpperCase()}</span>
+                          {p.isAutoGenerated && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              Auto
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 text-xs">{formatDate(p.createdAt)}</td>
+                      <td className="px-4 py-3 font-bold text-slate-900 text-xs">{p.party?.name || p.buyerName || "Walk-in Customer"}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600 font-semibold">
+                        {resolveLinkedInvoiceNo(p, sales)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {p.payments?.map((py, idx) => (
+                            <span key={idx} className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] uppercase font-semibold">
+                              {py.paymentType}: ₹{py.amount}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-extrabold text-emerald-700 text-xs">
+                        ₹{(p.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="relative inline-block text-left">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDropdownId(activeDropdownId === p._id ? null : p._id);
+                            }}
+                            className="p-1 hover:bg-slate-100 rounded transition border-0 bg-transparent cursor-pointer text-slate-500 hover:text-slate-900"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+
+                          {activeDropdownId === p._id && (
+                            <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-[100] py-1 text-xs font-semibold">
+                              <button
+                                onClick={() => handleViewDetails(p, "payment")}
+                                className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-slate-400" />
+                                View Details
+                              </button>
+
+                              <button
+                                onClick={() => handleDownloadPaymentReceipt(p._id)}
+                                className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
+                              >
+                                <Download className="w-3.5 h-3.5 text-slate-400" />
+                                Download PDF
+                              </button>
+
+                              {!isReadOnly && !p.isAutoGenerated && (
+                                <>
+                                  <div className="h-px bg-slate-100 my-1"></div>
+                                  <button
+                                    onClick={() => {
+                                      setEditPaymentRecord(p);
+                                      setPaymentModalOpen(true);
+                                    }}
+                                    className="w-full text-left px-3.5 py-2 text-amber-700 hover:bg-amber-50 cursor-pointer flex items-center gap-2"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5 text-amber-500" />
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeletePayment(p._id)}
+                                    className="w-full text-left px-3.5 py-2 text-rose-700 hover:bg-rose-50 cursor-pointer flex items-center gap-2"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                    Delete
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                  ) : (
-                    returns.map((r) => (
-                      <tr key={r._id} className="hover:bg-gray-50 transition">
-                        <td className="px-6 py-4 font-bold text-gray-900">{r.returnNo || r._id.substring(0, 8).toUpperCase()}</td>
-                        <td className="px-6 py-4 text-gray-500">{formatDate(r.createdAt)}</td>
-                        <td className="px-6 py-4 font-semibold text-gray-800">{r.party?.name || r.sale?.buyerName || "Walk-in"}</td>
-                        <td className="px-6 py-4 text-gray-500 font-mono">{r.sale?.invoiceNo || "Invoice ID"}</td>
-                        <td className="px-6 py-4 text-right font-extrabold text-red-650">₹{(r.totalAmount || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => handleViewDetails(r, "return")}
-                              className="p-2 text-gray-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition"
-                              title="View Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            {!isReadOnly && (
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {activeTab === "returns" && (
+            <table className="w-full border-collapse text-left text-xs">
+              <thead className="bg-[#F8FAFC] border-b border-slate-200/90 text-[11px] text-slate-500 uppercase font-bold tracking-wider sticky top-0 z-10">
+                <tr>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">CREDIT NOTE #</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">DATE</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">BUYER / PARTY</th>
+                  <th className="px-4 py-3 bg-[#F8FAFC]">LINKED SALES BILL</th>
+                  <th className="px-4 py-3 text-right bg-[#F8FAFC]">CREDIT VALUE</th>
+                  <th className="px-4 py-3 text-right bg-[#F8FAFC]">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+                {sortedReturns.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-16 text-center text-slate-400">
+                      <RefreshCw className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                      <p className="font-semibold text-xs text-slate-500">No sales returns recorded</p>
+                    </td>
+                  </tr>
+                ) : (
+                  sortedReturns.map((r) => (
+                    <tr key={r._id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-4 py-3 font-bold font-mono text-slate-900">{r.returnNo || r._id.substring(0, 8).toUpperCase()}</td>
+                      <td className="px-4 py-3 text-slate-600 text-xs">{formatDate(r.createdAt)}</td>
+                      <td className="px-4 py-3 font-bold text-slate-900 text-xs">{r.party?.name || r.sale?.buyerName || "Walk-in"}</td>
+                      <td className="px-4 py-3 text-slate-600 font-mono text-xs font-semibold">{r.sale?.invoiceNumber || "Sales Bill ID"}</td>
+                      <td className="px-4 py-3 text-right font-extrabold text-rose-600 text-xs">
+                        ₹{(r.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="relative inline-block text-left">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDropdownId(activeDropdownId === r._id ? null : r._id);
+                            }}
+                            className="p-1 hover:bg-slate-100 rounded transition border-0 bg-transparent cursor-pointer text-slate-500 hover:text-slate-900"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+
+                          {activeDropdownId === r._id && (
+                            <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-[100] py-1 text-xs font-semibold">
                               <button
-                                onClick={() => {
-                                  setEditReturnRecord(r);
-                                  setReturnModalOpen(true);
-                                }}
-                                className="p-2 text-gray-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition"
-                                title="Edit Sales Return"
+                                onClick={() => handleViewDetails(r, "return")}
+                                className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
                               >
-                                <Pencil className="w-4 h-4" />
+                                <Eye className="w-3.5 h-3.5 text-slate-400" />
+                                View Details
                               </button>
-                            )}
-                            {!isReadOnly && (
+
                               <button
-                                onClick={() => handleDeleteReturn(r._id)}
-                                className="p-2 text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
-                                title="Delete Return"
+                                onClick={() => handleDownloadReturnReceipt(r._id)}
+                                className="w-full text-left px-3.5 py-2 text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Download className="w-3.5 h-3.5 text-slate-400" />
+                                Download Receipt
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
-          </div>
+
+                              {!isReadOnly && (
+                                <>
+                                  <div className="h-px bg-slate-100 my-1"></div>
+                                  <button
+                                    onClick={() => {
+                                      setEditReturnRecord(r);
+                                      setReturnModalOpen(true);
+                                    }}
+                                    className="w-full text-left px-3.5 py-2 text-amber-700 hover:bg-amber-50 cursor-pointer flex items-center gap-2"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5 text-amber-500" />
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteReturn(r._id)}
+                                    className="w-full text-left px-3.5 py-2 text-rose-700 hover:bg-rose-50 cursor-pointer flex items-center gap-2"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                    Delete
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
       {/* Pagination Controls */}
       {totalPages > 1 && (
-        <div className="flex justify-between items-center text-sm text-gray-500 px-2">
-          <span>Page {currentPage} of {totalPages}</span>
-          <div className="flex gap-2">
+        <div className="flex justify-between items-center text-xs font-medium text-slate-500 pt-1 px-1">
+          <span>
+            Page <strong className="text-slate-800">{currentPage}</strong> of {totalPages}
+          </span>
+          <div className="flex gap-1.5">
             <button
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((p) => p - 1)}
-              className="px-3.5 py-1.5 border rounded-lg hover:bg-gray-50 disabled:opacity-45 transition"
+              className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-white bg-slate-50 disabled:opacity-40 transition font-semibold text-slate-700 cursor-pointer"
             >
               Prev
             </button>
             <button
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage((p) => p + 1)}
-              className="px-3.5 py-1.5 border rounded-lg hover:bg-gray-50 disabled:opacity-45 transition"
+              className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-white bg-slate-50 disabled:opacity-40 transition font-semibold text-slate-700 cursor-pointer"
             >
               Next
             </button>
@@ -805,6 +1195,9 @@ export default function CounterSales() {
           }}
         />
       )}
+
+
+
       {/* ════════════════════════════════════════════════════════════
          4. DETAILS VIEWING MODAL
       ════════════════════════════════════════════════════════════ */}
@@ -813,13 +1206,17 @@ export default function CounterSales() {
           item={detailItem}
           type={detailType}
           onClose={() => {
+            dispatch(clearEInvoiceStatus());
             setViewDetailModalOpen(false);
             setDetailItem(null);
           }}
           handleDownloadReceipt={handleDownloadReceipt}
           handleDownloadPaymentReceipt={handleDownloadPaymentReceipt}
+          handleDownloadReturnReceipt={handleDownloadReturnReceipt}
         />
       )}
+
+
     </div>
   );
 }
@@ -1035,7 +1432,7 @@ function RecordPaymentModal({ editRecord = null, linkedSell = null, parties, onC
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-gray-900 mb-2">2. Link Sales Invoice (Optional)</label>
+            <label className="block text-xs font-bold text-gray-900 mb-2">2. Link Sales Bill (Optional)</label>
             <div className="relative">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
                 <FileText className="w-4 h-4" />
@@ -1055,17 +1452,17 @@ function RecordPaymentModal({ editRecord = null, linkedSell = null, parties, onC
                 className="w-full border border-gray-200 rounded-xl pl-10 pr-10 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed font-semibold text-gray-700 h-[42px] appearance-none transition-all"
               >
                 {loadingInvoices ? (
-                  <option value="">-- Loading customer invoices... --</option>
+                  <option value="">-- Loading customer sales bills... --</option>
                 ) : !partyId ? (
                   <option value="">-- Choose Customer First --</option>
                 ) : unpaidInvoices.length === 0 ? (
-                  <option value="">-- No outstanding invoices found --</option>
+                  <option value="">-- No outstanding sales bills found --</option>
                 ) : (
                   <>
-                    <option value="">-- Select Bill invoice --</option>
+                    <option value="">-- Select Sales Bill --</option>
                     {unpaidInvoices.map((s) => (
                       <option key={s._id} value={s._id}>
-                        Invoice {s.invoiceNo || s._id.substring(0, 8).toUpperCase()} (Date: {new Date(s.createdAt).toLocaleDateString("en-IN")} - Outstanding: ₹{s.unpaidAmount})
+                        Bill {s.invoiceNo || s._id.substring(0, 8).toUpperCase()} (Date: {new Date(s.createdAt).toLocaleDateString("en-IN")} - Outstanding: ₹{s.unpaidAmount})
                       </option>
                     ))}
                   </>
@@ -1086,13 +1483,13 @@ function RecordPaymentModal({ editRecord = null, linkedSell = null, parties, onC
                 </div>
                 <div className="flex-1 space-y-1.5">
                   <h4 className="font-bold text-emerald-800 text-[13px] leading-tight">Customer account is fully settled.</h4>
-                  <p className="text-gray-550 font-semibold">No unpaid invoices found.</p>
-                  
+                  <p className="text-gray-550 font-semibold">No unpaid sales bills found.</p>
+
                   <div className="border-t border-emerald-200/40 my-3"></div>
-                  
+
                   <div className="flex items-start gap-2 text-slate-600 font-medium text-[11px] leading-relaxed">
                     <Info className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                    <span>Any amount received now will be recorded as an Advance Payment and adjusted against future invoices.</span>
+                    <span>Any amount received now will be recorded as an Advance Payment and adjusted against future sales bills.</span>
                   </div>
                 </div>
               </div>
@@ -1338,7 +1735,18 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
     setReturnItems((prev) => {
       const copy = [...prev];
       const item = { ...copy[idx] };
-      const v = Math.min(item.purchasedQty, Math.max(0, parseInt(val) || 0));
+
+      if (val === "") {
+        item.returnQty = "";
+        copy[idx] = item;
+        return copy;
+      }
+
+      const v = Math.min(
+        item.purchasedQty,
+        Math.max(0, parseInt(val, 10) || 0)
+      );
+
       item.returnQty = v;
       copy[idx] = item;
       return copy;
@@ -1351,7 +1759,7 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
     const base = q * item.pricePerUnit;
     const disc = base * (item.discountPercent / 100);
     const taxable = base - disc;
-    
+
     if (item.taxType === "With Tax") {
       return taxable;
     } else {
@@ -1416,11 +1824,11 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
 
     const payload = {
       sale: selectedSaleId,
-      party: sale?.party?._id || sale?.party || null,
+      party: sale?.party?._id || sale?.party || undefined,
       items: validReturns,
       subTotal,
       totalAmount,
-      description,
+      description: description.trim() || undefined,
     };
 
     try {
@@ -1453,16 +1861,16 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
         {/* Modal Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 bg-gray-50/20">
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Select Original Sale Invoice *</label>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Select Original Sales Bill *</label>
             <select
               value={selectedSaleId}
               onChange={(e) => setSelectedSaleId(e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white cursor-pointer"
             >
-              <option value="">-- Select Invoice --</option>
+              <option value="">-- Select Sales Bill --</option>
               {dropdownSales.map((s) => (
                 <option key={s._id} value={s._id}>
-                  Invoice {s.invoiceNo || s._id.substring(0,8).toUpperCase()} - {s.party?.name || s.buyerName} (₹{s.totalAmount})
+                  Sales Bill {s.invoiceNo || s._id.substring(0, 8).toUpperCase()} - {s.party?.name || s.buyerName} (₹{s.totalAmount})
                 </option>
               ))}
             </select>
@@ -1471,14 +1879,14 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
           {returnItems.length > 0 && (
             <div className="space-y-3">
               <label className="text-xs font-semibold text-gray-500 block border-b pb-1.5">Returned Quantities</label>
-              
+
               <div className="max-h-60 overflow-y-auto space-y-2.5">
                 {returnItems.map((item, idx) => (
                   <div key={idx} className="flex gap-4 items-center justify-between bg-white p-3 rounded-lg border border-gray-150">
                     <div className="flex-1">
                       <p className="font-semibold text-xs text-gray-800 truncate">{item.name}</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">
-                        Purchased: {item.purchasedQty} {item.unit} @ ₹{item.pricePerUnit} (Disc: {item.discountPercent}%)
+                        Purchased: {item.purchasedQty}  @ ₹{item.pricePerUnit} (Disc: {item.discountPercent}%)
                       </p>
                     </div>
 
@@ -1522,7 +1930,7 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="px-4 py-2 border rounded-lg text-sm text-gray-600 bg-white hover:bg-gray-100 disabled:opacity-50"
+            className="px-4 py-2 border rounded-lg text-sm text-gray-655 bg-white hover:bg-gray-100 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -1546,123 +1954,290 @@ function RecordReturnModal({ editRecord = null, sales, onClose, onSuccess }) {
 // ─────────────────────────────────────────────────────────────
 // COMPONENT: Transaction Details Modal
 // ─────────────────────────────────────────────────────────────
-function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownloadPaymentReceipt }) {
+function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownloadPaymentReceipt, handleDownloadReturnReceipt }) {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const [overrideSupplyType, setOverrideSupplyType] = useState(item.supplyType || "Tax Invoice");
   const { products, stockSummary } = useSelector((state) => state.inventory);
 
+  const formatDisplayDate = (dateStr) => {
+    if (!dateStr) return "—";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const calculateItemDiscountAmount = (it) => {
+    if (it.discountAmount !== undefined && it.discountAmount !== null) {
+      return Number(it.discountAmount);
+    }
+    const base = (it.quantity || 0) * (it.pricePerUnit || 0);
+    return Number((base * ((it.discountPercent || 0) / 100)).toFixed(2));
+  };
+
+  const calculateItemTaxAmount = (it) => {
+    if (it.taxAmount !== undefined && it.taxAmount !== null) {
+      return Number(it.taxAmount);
+    }
+    const base = (it.quantity || 0) * (it.pricePerUnit || 0);
+    const discAmt = calculateItemDiscountAmount(it);
+    const taxable = base - discAmt;
+    if (it.taxType === "With Tax") {
+      const exclTax = taxable / (1 + (it.taxPercent || 0) / 100);
+      return Number((taxable - exclTax).toFixed(2));
+    }
+    return Number((taxable * ((it.taxPercent || 0) / 100)).toFixed(2));
+  };
+
+  const calculateSubtotal = () => {
+    if (type === "payment") return item.amount || item.receivedAmount || 0;
+    return item.items?.reduce((sum, it) => sum + ((it.quantity || 0) * (it.pricePerUnit || 0)), 0) || 0;
+  };
+
+  // Determine label values based on transaction type
+  const isSale = type === "sale";
+  const isReturn = type === "return";
+  const isPayment = type === "payment";
+
+  const titleText = isSale
+    ? `${item.saleType || "SALE"} DETAILS`
+    : isReturn
+      ? "CREDIT NOTE DETAILS"
+      : "PAYMENT RECEIPT DETAILS";
+
+  const billingTypeLabel = isSale
+    ? (item.billingType === "Cash" ? "Cash" : "Credit")
+    : isReturn
+      ? "Credit Note"
+      : "Receipt Entry";
+
+  const transactionNo = isSale
+    ? (item.invoiceNo || item._id?.substring(0, 8).toUpperCase())
+    : isReturn
+      ? (item.returnNo || item._id?.substring(0, 8).toUpperCase())
+      : (item.receiptNo || item._id?.substring(0, 8).toUpperCase());
+
+  const dateLabel = isSale ? "Bill Date" : isReturn ? "Return Date" : "Payment Date";
+  const displayDate = formatDisplayDate(item.createdAt);
+
+  const dueDateLabel = isSale ? "Due Date" : isReturn ? "Linked Bill #" : "Linked Bill";
+  const dueDateVal = isSale
+    ? (item.dueDate || (item.createdAt ? new Date(new Date(item.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000) : null))
+    : isReturn
+      ? (item.sale?.invoiceNo || "—")
+      : (item.linkedSell?.invoiceNo || item.sell?.invoiceNo || "—");
+  const displayDueDate = isSale ? formatDisplayDate(dueDateVal) : dueDateVal;
+
+  const totalAmountFormatted = `₹${(item.totalAmount || item.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+
   return (
-    <div className="fixed inset-0 bg-black/45 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl w-full max-w-2xl p-6 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl border border-gray-100">
-        <div className="flex justify-between items-center border-b border-gray-100 pb-3">
-          <h2 className="text-lg font-bold text-gray-900 uppercase tracking-wide">
-            {type === "sale"
-              ? `${item.saleType} DETAILS`
-              : type === "payment"
-              ? "PAYMENT RECEIPT DETAILS"
-              : "CREDIT NOTE DETAILS"}
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+      <div className="bg-white rounded-3xl w-full max-w-5xl p-8 space-y-6 max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-150 flex flex-col [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+
+        {/* Header Title */}
+        <div className="flex justify-between items-center border-b border-gray-100 pb-4">
+          <h2 className="text-base font-extrabold text-gray-900 uppercase tracking-wide flex items-center gap-2">
+            <span className="w-10 h-10 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A]">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </span>
+            {titleText}
           </h2>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-650 text-xl font-bold">✕</button>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-650 transition duration-150 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
-        {/* Core details block */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs bg-gray-50/50 p-4 rounded-xl border border-gray-100">
-          <div>
-            <p className="text-gray-400 font-semibold uppercase tracking-wider">Reference Code / ID</p>
-            <p className="font-bold text-gray-800 mt-0.5">
-              {item.invoiceNo || item.billNumber || item.receiptNo || item.returnNo || (item._id ? item._id.substring(0, 8).toUpperCase() : "—")}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400 font-semibold uppercase tracking-wider">Recorded On</p>
-            <p className="font-bold text-gray-800 mt-0.5">
-              {new Date(item.createdAt).toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400 font-semibold uppercase tracking-wider">Party/Customer</p>
-            <p className="font-bold text-gray-800 mt-0.5">{item.party?.name || item.buyerName || "Walk-in Customer"}</p>
-          </div>
-          {type === "sale" && (
-            <>
-              <div>
-                <p className="text-gray-400 font-semibold uppercase tracking-wider">Payment</p>
-                <p className="font-bold text-gray-800 mt-0.5">{item.billingType === "Cash" ? "Money Received" : "Udhar (Credit)"}</p>
+        {/* 1. Core Summary Cards Box */}
+        <div className="flex flex-col lg:flex-row justify-between items-stretch gap-4">
+          {/* Summary Row */}
+          <div className="flex-1 bg-white border border-gray-150 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-5 gap-4 items-center">
+            {/* Sale / Transaction Type */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
+                <Tag className="w-4 h-4" />
               </div>
-              <div>
-                <p className="text-gray-400 font-semibold uppercase tracking-wider">Type</p>
-                <p className="font-bold text-gray-800 mt-0.5">{item.saleType}</p>
+              <div className="text-left leading-normal">
+                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">Type</span>
+                <span className="text-xs font-bold text-[#006C47] uppercase">{isSale ? item.saleType : type}</span>
               </div>
-            </>
-          )}
-          {type === "return" && (
-            <div>
-              <p className="text-gray-400 font-semibold uppercase tracking-wider">Linked Invoice #</p>
-              <p className="font-bold text-gray-800 mt-0.5 font-mono">{item.sale?.invoiceNo || "Invoice ID"}</p>
             </div>
-          )}
-          {type === "payment" && (
-            <>
-              <div>
-                <p className="text-gray-400 font-semibold uppercase tracking-wider">Linked Invoice</p>
-                <p className="font-bold text-gray-800 mt-0.5 font-mono">
-                  {item.linkedSell?.invoiceNo || item.sell?.invoiceNo || "None (General)"}
-                </p>
+
+            {/* Billing Type */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
+                <ArrowLeftRight className="w-4 h-4" />
               </div>
-              <div>
-                <p className="text-gray-400 font-semibold uppercase tracking-wider">Receipt Type</p>
-                <p className="font-bold text-gray-800 mt-0.5">
-                  {item.isAutoGenerated ? "Auto-Generated" : "Manual Entry"}
-                </p>
+              <div className="text-left leading-normal">
+                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">Billing Type</span>
+                <span className="text-xs font-bold text-gray-800">{billingTypeLabel}</span>
               </div>
-            </>
-          )}
+            </div>
+
+            {/* Bill Number */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div className="text-left leading-normal">
+                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">Number</span>
+                <span className="text-xs font-bold text-gray-800 font-mono">
+                  {transactionNo}
+                </span>
+              </div>
+            </div>
+
+            {/* Date */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
+                <Calendar className="w-4 h-4" />
+              </div>
+              <div className="text-left leading-normal">
+                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">{dateLabel}</span>
+                <span className="text-xs font-bold text-gray-800">{displayDate}</span>
+              </div>
+            </div>
+
+            {/* Due Date or Linked Reference */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
+                <Calendar className="w-4 h-4" />
+              </div>
+              <div className="text-left leading-normal">
+                <span className="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">{dueDateLabel}</span>
+                <span className="text-xs font-bold text-gray-800 truncate max-w-[110px]">{displayDueDate}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Total Amount Box */}
+          <div className="w-full lg:w-48 bg-[#F4FBF7] border border-[#E3F4EC] rounded-2xl p-4 flex flex-col justify-center items-start lg:items-center text-left lg:text-center leading-normal">
+            <span className="text-[10px] text-[#006C47] font-bold block uppercase tracking-wider">Total Amount</span>
+            <span className="text-base sm:text-lg font-black text-[#006C47] mt-1 select-all">{totalAmountFormatted}</span>
+          </div>
         </div>
 
-        {/* Item Arrays for sales / returns */}
-        {(type === "sale" || type === "return") && item.items?.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Particular Items</h4>
-            <div className="border border-gray-150 rounded-xl overflow-hidden shadow-xs">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-100">
+        {/* 2. Grid Compartment: Buyer Details vs Sale Info */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Buyer Details */}
+          <div className="border border-gray-150 rounded-2xl p-5 bg-white space-y-4 shadow-3xs">
+            <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2 border-b pb-2 border-gray-100 uppercase tracking-wide">
+              <User className="w-4 h-4 text-emerald-600" />
+              Buyer Details
+            </h3>
+            <div className="grid grid-cols-[120px_1fr] gap-y-3.5 text-xs">
+              <div className="text-gray-500 font-semibold">Buyer Name</div>
+              <div className="font-bold text-gray-900">{item.party?.name || item.buyerName || "Walk-in Customer"}</div>
+              <div className="text-gray-500 font-semibold">Phone</div>
+              <div className="font-bold text-gray-900">{item.buyerPhone || item.party?.phoneNumber || "—"}</div>
+              <div className="text-gray-500 font-semibold">Address</div>
+              <div className="font-bold text-gray-900">{item.party?.address || item.party?.village || "—"}</div>
+              <div className="text-gray-500 font-semibold">Buyer Type</div>
+              <div className="font-bold text-gray-900">{item.party?.partyType || item.buyerType || "—"}</div>
+              <div className="text-gray-500 font-semibold">State of Supply</div>
+              <div className="font-bold text-gray-900">{item.party?.state || item.stateOfSupply || "—"}</div>
+            </div>
+          </div>
+
+          {/* Sale Info */}
+          <div className="border border-gray-150 rounded-2xl p-5 bg-white space-y-4 shadow-3xs">
+            <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2 border-b pb-2 border-gray-100 uppercase tracking-wide">
+              <Clock className="w-4 h-4 text-emerald-600" />
+              {isSale ? "Sale Info" : isReturn ? "Return Info" : "Payment Info"}
+            </h3>
+            <div className="grid grid-cols-[120px_1fr] gap-y-3.5 text-xs">
+              <div className="text-gray-500 font-semibold">{isPayment ? "Payment Mode" : "Payment Type"}</div>
+              <div className="font-bold text-gray-900">{item.paymentMode || (item.billingType === "Cash" ? "Cash" : "Credit")}</div>
+              {isSale && (
+                <div style={{ display: "contents" }}>
+                  <div className="text-gray-500 font-semibold">Supply Format</div>
+                  <div className="font-bold text-emerald-700 font-bold">{item.supplyType || "Tax Invoice"}</div>
+                </div>
+              )}
+              <div className="text-gray-500 font-semibold">Reference No.</div>
+              <div className="font-bold text-gray-900 font-mono">{item.referenceNo || item.payments?.[0]?.referenceNo || "—"}</div>
+              <div className="text-gray-500 font-semibold">Description</div>
+              <div className="font-bold text-gray-900">{item.description || "—"}</div>
+              <div className="text-gray-500 font-semibold">Remarks</div>
+              <div className="font-bold text-gray-900">{item.remarks || "—"}</div>
+              <div className="text-gray-500 font-semibold">Terms & Conditions</div>
+              <div className="font-bold text-gray-900">{item.termsAndConditions || "Goods once sold will not be taken back."}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Items list table */}
+        {(isSale || isReturn) && item.items?.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2 uppercase tracking-wide">
+              <Layers className="w-4 h-4 text-emerald-600" />
+              Items
+            </h3>
+            <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-3xs bg-white">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="bg-[#F8F9FA] text-gray-550 border-b border-gray-150 font-bold uppercase tracking-wider text-[10px]">
                   <tr>
-                    <th className="px-4 py-2">Item Description</th>
-                    <th className="px-4 py-2 text-center">Qty</th>
-                    <th className="px-4 py-2 text-center">Unit</th>
-                    <th className="px-4 py-2 text-right">Price / Unit</th>
-                    <th className="px-4 py-2 text-right">Rate</th>
-                    <th className="px-4 py-2 text-right">Discount</th>
-                    <th className="px-4 py-2 text-right">Discount Amt.</th>
-                    <th className="px-4 py-2 text-center">Tax</th>
-                    <th className="px-4 py-2 text-right">Tax Amt.</th>
-                    <th className="px-4 py-2 text-right">Net Amount</th>
+                    <th className="px-4 py-3 text-center w-12">#</th>
+                    <th className="px-4 py-3">Item</th>
+                    <th className="px-4 py-3 text-center">Qty</th>
+                    <th className="px-4 py-3 text-center">Unit</th>
+                    <th className="px-4 py-3 text-right">Price / Unit</th>
+                    <th className="px-4 py-3 text-right">Rate</th>
+                    <th className="px-4 py-3 text-center">Discount</th>
+                    <th className="px-4 py-3 text-center">Tax</th>
+                    <th className="px-4 py-3 text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {item.items.map((it, idx) => {
                     const resolvedLabel = resolveItemLabel(it, products, stockSummary);
+                    const discountAmt = calculateItemDiscountAmount(it);
+                    const taxAmt = calculateItemTaxAmount(it);
+
                     return (
-                      <tr key={idx} className="hover:bg-gray-55/30 transition-colors">
-                        <td className="px-4 py-3 font-medium text-gray-800">
-                          {resolvedLabel}
+                      <tr key={idx} className="hover:bg-gray-50/50 transition duration-150">
+                        <td className="px-4 py-4 text-center font-bold text-gray-400">{idx + 1}</td>
+                        <td className="px-4 py-4">
+                          <div>
+                            <p className="font-bold text-gray-900 text-xs sm:text-[13px]">{resolvedLabel}</p>
+                            <span className="text-[10px] text-gray-400 font-mono mt-0.5 block">
+                              {it.item?._id || it.item || "INVENTORY_ITEM_ID"}
+                            </span>
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-center font-semibold text-gray-700">{it.quantity}</td>
-                        <td className="px-4 py-3 text-center text-gray-500 font-medium">{it.unit || "—"}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-gray-700">₹{(it.pricePerUnit || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-gray-700">₹{(it.rate || it.pricePerUnit || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right text-gray-550">{it.discountPercent > 0 ? `${it.discountPercent}%` : "—"}</td>
-                        <td className="px-4 py-3 text-right text-red-655">-₹{(it.discountAmount || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-center text-gray-550">
-                          <div>{it.taxPercent || 0}%</div>
-                          <div className="text-[9px] text-gray-400 font-semibold">{it.taxType || "Without Tax"}</div>
+                        <td className="px-4 py-4 text-center font-bold text-gray-800 text-xs sm:text-[13px]">
+                          {it.quantity}
                         </td>
-                        <td className="px-4 py-3 text-right text-gray-700 font-bold">₹{(it.taxAmount || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-black text-emerald-600">₹{(it.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-4 text-center font-semibold text-gray-500">{it.unit || "—"}</td>
+                        <td className="px-4 py-4 text-right font-semibold text-gray-700">₹{(it.pricePerUnit || 0).toFixed(2)}</td>
+                        <td className="px-4 py-4 text-right font-semibold text-gray-700">₹{(it.rate || it.pricePerUnit || 0).toFixed(2)}</td>
+                        <td className="px-4 py-4 text-center">
+                          <div className="leading-tight">
+                            <span className="font-semibold text-gray-700 block">{it.discountPercent > 0 ? `${it.discountPercent}%` : "—"}</span>
+                            {discountAmt > 0 && (
+                              <span className="text-[10px] text-emerald-600 font-bold block mt-0.5">(-₹{discountAmt.toFixed(2)})</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <div className="leading-tight text-center">
+                            <span className="font-semibold text-gray-700 block">{it.taxPercent || 0}%</span>
+                            {taxAmt > 0 && (
+                              <span className="text-[9px] text-emerald-600 font-bold block mt-0.5">(₹{taxAmt.toFixed(2)})</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-right font-black text-gray-900 text-xs sm:text-[13px]">
+                          ₹{(it.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
                       </tr>
                     );
                   })}
@@ -1672,57 +2247,121 @@ function DetailsModal({ item, type, onClose, handleDownloadReceipt, handleDownlo
           </div>
         )}
 
-        {/* Payments breakdown arrays */}
-        {type === "payment" && item.payments?.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Payment Breakdown</h4>
-            <div className="border border-gray-150 rounded-xl overflow-hidden shadow-xs bg-white p-3 divide-y divide-gray-100">
-              {item.payments.map((py, idx) => (
-                <div key={idx} className="flex justify-between py-2 text-xs">
-                  <div>
-                    <span className="font-bold text-gray-800 uppercase">{py.paymentType}</span>
-                    {py.referenceNo && <span className="text-[10px] text-gray-400 ml-2 font-mono">(Ref: {py.referenceNo})</span>}
-                  </div>
-                  <span className="font-extrabold text-green-700">₹{py.amount.toLocaleString("en-IN")}</span>
+        {/* 4. Payment Summary Box */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2 uppercase tracking-wide">
+            <Wallet className="w-4 h-4 text-emerald-600" />
+            Payment Summary
+          </h3>
+          <div className="border border-gray-150 rounded-2xl p-6 bg-white grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-6 items-stretch shadow-3xs">
+            {/* Left column: values list */}
+            <div className="space-y-3.5 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">Sub Total</span>
+                <span className="font-bold text-gray-800">₹{calculateSubtotal().toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">{isReturn ? "Refunded Discount" : "Discount Amount"}</span>
+                <span className="font-bold text-[#00875A]">-₹{(item.discountAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">{isReturn ? "Refunded Tax" : "Tax Amount"}</span>
+                <span className="font-bold text-gray-800">₹{(item.taxAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">Round Off</span>
+                <span className={`font-bold ${item.roundOff < 0 ? "text-emerald-600" : "text-gray-800"}`}>
+                  {item.roundOff < 0 ? "-" : ""}₹{Math.abs(item.roundOff || 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="border-t border-gray-100 pt-3 flex justify-between items-center select-all">
+                <span className="text-sm font-extrabold text-gray-900">Total Amount</span>
+                <span className="text-base font-black text-gray-950">{totalAmountFormatted}</span>
+              </div>
+            </div>
+
+            {/* Vertical Divider */}
+            <div className="hidden md:block w-px bg-gray-100 self-stretch"></div>
+
+            {/* Right column: balances and credit alert card */}
+            <div className="flex flex-col justify-between gap-4 text-xs">
+              <div className="space-y-3.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 font-medium">{isReturn ? "Returned Cash" : isPayment ? "Received Cash" : "Received Amount"}</span>
+                  <span className="font-bold text-gray-800">₹{(item.receivedAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
-              ))}
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 font-medium">{isReturn ? "Pending Balance" : isPayment ? "Remaining Dues" : "Unpaid Amount"}</span>
+                  <span className={`font-bold ${(item.unpaidAmount || 0) > 0 ? "text-rose-600 font-bold" : "text-gray-800"}`}>
+                    ₹{(item.unpaidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Status alert card */}
+              <div className="border border-[#E3F4EC] bg-[#F4FBF7] rounded-2xl p-4 flex items-start gap-3 mt-1.5 shadow-2xs">
+                <span className="w-10 h-10 rounded-full bg-[#EAF7F0] flex items-center justify-center text-[#00875A] shrink-0">
+                  <Wallet className="w-4 h-4" />
+                </span>
+                <div className="text-left leading-normal">
+                  <span className="font-bold text-[#006C47] block text-xs">
+                    {isReturn
+                      ? "Credit Issued"
+                      : (item.billingType === "Credit" || item.unpaidAmount > 0)
+                        ? "Credit Sale"
+                        : "Fully Settled"}
+                  </span>
+                  <span className="text-gray-500 text-[10px] block mt-0.5">
+                    {isReturn
+                      ? "Refund added to credit account"
+                      : (item.billingType === "Credit" || item.unpaidAmount > 0)
+                        ? "Amount pending from buyer"
+                        : "Fully settled at checkout"}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Description / remarks */}
-        {(item.remarks || item.description) && (
-          <div className="text-xs">
-            <span className="font-semibold text-gray-400 block uppercase tracking-wider mb-1">Remarks/Notes</span>
-            <p className="bg-gray-50 border border-gray-100 rounded-lg p-3 font-medium text-gray-700 italic">
-              {item.remarks || item.description}
-            </p>
+        {/* Footer Actions block */}
+        <div className="flex justify-between items-center border-t border-gray-100 pt-4 flex-wrap gap-4 select-none">
+          <div className="flex items-center gap-4 flex-wrap">
+            <button
+              onClick={() => {
+                if (isPayment) {
+                  handleDownloadPaymentReceipt(item._id);
+                } else if (isReturn) {
+                  handleDownloadReturnReceipt(item._id);
+                } else {
+                  handleDownloadReceipt(item._id, item.invoiceNo || "Invoice", overrideSupplyType);
+                }
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-xl text-xs transition duration-150 active:scale-95 cursor-pointer shadow-3xs bg-white"
+            >
+              <Printer size={14} /> Print / Download PDF
+            </button>
+
+            {!isPayment && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PDF Title Override:</span>
+                <select
+                  value={overrideSupplyType}
+                  onChange={(e) => setOverrideSupplyType(e.target.value)}
+                  className="border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-gray-800 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500"
+                >
+                  <option value="Tax Invoice">Tax Invoice</option>
+                  <option value="Exempted Supply">Exempted Supply</option>
+                  <option value="Zero Rated">Zero Rated</option>
+                </select>
+              </div>
+            )}
           </div>
-        )}
 
-        {/* Invoice Grand Totals block */}
-        <div className="flex justify-between items-center border-t border-gray-100 pt-3 flex-wrap gap-2">
-          {type === "sale" && (
-            <button
-              onClick={() => handleDownloadReceipt(item._id, item.invoiceNo || "Invoice")}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-brand-500 text-brand-650 hover:bg-brand-50 font-bold rounded-lg text-xs transition"
-            >
-              <Download size={13} /> Print/Download PDF
-            </button>
-          )}
-          {type === "payment" && (
-            <button
-              onClick={() => handleDownloadPaymentReceipt(item._id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-brand-500 text-brand-650 hover:bg-brand-50 font-bold rounded-lg text-xs transition"
-            >
-              <Download size={13} /> Print/Download PDF
-            </button>
-          )}
-
-          <div className="text-right ml-auto">
-            <span className="text-[10px] font-bold text-gray-400 block uppercase tracking-wider">Total Valuation</span>
-            <span className={`text-xl font-extrabold ${type === "return" ? "text-red-650" : "text-brand-700"}`}>
-              ₹{(item.totalAmount || item.receivedAmount || 0).toLocaleString("en-IN")}
+          <div className="text-right flex items-baseline gap-2 leading-none">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</span>
+            <span className="text-xl font-black text-emerald-700">
+              {totalAmountFormatted}
             </span>
           </div>
         </div>

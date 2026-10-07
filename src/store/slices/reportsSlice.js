@@ -9,12 +9,17 @@ import {
   downloadExpenseReport,
   fetchPartySalePurchase,
   fetchItemwiseProfitLoss,
+  downloadGstr1Report,
+  downloadGstr3bReport,
+  fetchGstr3bReport,
+  downloadProcurementReport,
 } from '../thunks/reportsThunk';
 
 const initialState = {
   salesReportLoading: false,
   purchaseReportLoading: false,
   balanceSheetLoading: false,
+  gstr3bLoading: false,
 
   salesDownloadLoading: false,
   purchaseDownloadLoading: false,
@@ -22,8 +27,12 @@ const initialState = {
   paymentInDownloadLoading: false,
   paymentOutDownloadLoading: false,
   expenseDownloadLoading: false,
+  gstr1DownloadLoading: false,
+  gstr3bDownloadLoading: false,
+  procurementDownloadLoading: false,
 
   balanceSheet: null,
+  gstr3bData: null,
   error: null,
 
   partySalePurchase: [],
@@ -164,6 +173,61 @@ const reportsSlice = createSlice({
       .addCase(fetchItemwiseProfitLoss.rejected, (state, action) => {
         if (action.meta?.aborted) return;
         state.itemwiseProfitLossLoading = false;
+        state.error = action.payload;
+      })
+
+      /* ================= DOWNLOAD GSTR-1 REPORT ================= */
+      .addCase(downloadGstr1Report.pending, (state) => {
+        state.gstr1DownloadLoading = true;
+        state.error = null;
+      })
+      .addCase(downloadGstr1Report.fulfilled, (state) => {
+        state.gstr1DownloadLoading = false;
+      })
+      .addCase(downloadGstr1Report.rejected, (state, action) => {
+        state.gstr1DownloadLoading = false;
+        state.error = action.payload;
+      })
+
+      /* ================= DOWNLOAD GSTR-3B REPORT ================= */
+      .addCase(downloadGstr3bReport.pending, (state) => {
+        state.gstr3bDownloadLoading = true;
+        state.error = null;
+      })
+      .addCase(downloadGstr3bReport.fulfilled, (state) => {
+        state.gstr3bDownloadLoading = false;
+      })
+      .addCase(downloadGstr3bReport.rejected, (state, action) => {
+        state.gstr3bDownloadLoading = false;
+        state.error = action.payload;
+      })
+
+      /* ================= DOWNLOAD PROCUREMENT PDF ================= */
+      .addCase(downloadProcurementReport.pending, (state) => {
+        state.procurementDownloadLoading = true;
+        state.error = null;
+      })
+      .addCase(downloadProcurementReport.fulfilled, (state) => {
+        state.procurementDownloadLoading = false;
+      })
+      .addCase(downloadProcurementReport.rejected, (state, action) => {
+        state.procurementDownloadLoading = false;
+        state.error = action.payload;
+      })
+
+      /* ================= FETCH GSTR-3B REPORT JSON ================= */
+      .addCase(fetchGstr3bReport.pending, (state) => {
+        state.gstr3bLoading = true;
+        state.gstr3bData = null;
+        state.error = null;
+      })
+      .addCase(fetchGstr3bReport.fulfilled, (state, action) => {
+        state.gstr3bLoading = false;
+        state.gstr3bData = action.payload;
+      })
+      .addCase(fetchGstr3bReport.rejected, (state, action) => {
+        state.gstr3bLoading = false;
+        state.gstr3bData = null;
         state.error = action.payload;
       });
   },

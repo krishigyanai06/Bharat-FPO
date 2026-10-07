@@ -45,6 +45,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -74,6 +75,23 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    proxy: {
+      "/api": {
+        target: process.env.VITE_API_PROXY_TARGET || "https://bharat-fpo.krishigyanai.com",
+        changeOrigin: true,
+        configure: (proxy, _options) => {
+          proxy.on("error", (err, _req, _res) => {
+            console.warn(
+              `\n[Vite Proxy Warning]: Connection failed to target backend "${
+                process.env.VITE_API_PROXY_TARGET || "https://bharat-fpo.krishigyanai.com"
+              }".\nDetail: ${err.message}\n`
+            );
+          });
+        },
+      },
+    },
+  },
   optimizeDeps: { exclude: ["lucide-react"] },
   build: {
     rollupOptions: {

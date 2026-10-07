@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchItemwiseProfitLoss } from '../../store/thunks/reportsThunk';
-import { 
-  RotateCw, 
-  Search, 
-  ChevronLeft, 
-  ChevronRight, 
+import ErrorState from '../../components/ErrorState';
+import {
+  RotateCw,
+  Search,
+  ArrowLeft,
+  ArrowRight,
   Loader2,
   Wallet,
   AlertCircle,
@@ -117,7 +118,7 @@ const ItemwiseProfitLossReport = () => {
     const filters = {};
     if (rawFilters.startDate) filters.startDate = rawFilters.startDate;
     if (rawFilters.endDate) filters.endDate = rawFilters.endDate;
-    
+
     // itemsHavingSale is set to false/true depending on whether reportType asks for All Items or not
     filters.itemsHavingSale = rawFilters.reportType !== 'all';
 
@@ -207,7 +208,7 @@ const ItemwiseProfitLossReport = () => {
     // Filter by Search (Instant Client-side Search)
     if (search) {
       const q = search.toLowerCase();
-      result = result.filter(item => 
+      result = result.filter(item =>
         String(item.itemName || '').toLowerCase().includes(q)
       );
     }
@@ -285,7 +286,7 @@ const ItemwiseProfitLossReport = () => {
         item.taxPayable || 0,
         item.netProfitLoss || 0
       ]);
-      const csvContent = "data:text/csv;charset=utf-8," 
+      const csvContent = "data:text/csv;charset=utf-8,"
         + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
@@ -357,50 +358,10 @@ const ItemwiseProfitLossReport = () => {
         {/* Header Quick Actions */}
         <div className="flex flex-wrap gap-2">
           {/* Export Dropdown Button */}
-          <div className="relative" ref={exportDropdownRef}>
-            <button
-              onClick={() => setExportOpen(!exportOpen)}
-              className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 hover:bg-gray-50 rounded-lg text-xs font-bold text-gray-700 bg-white shadow-sm transition-all cursor-pointer h-[38px]"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export</span>
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-            
-            {exportOpen && (
-              <div className="absolute right-0 mt-1.5 w-36 bg-white border border-gray-150 rounded-lg shadow-lg py-1 z-50 animate-fade-in text-left">
-                <button
-                  onClick={() => {
-                    setExportOpen(false);
-                    handleExport('excel');
-                  }}
-                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-semibold flex items-center gap-1.5"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-green-600" />
-                  Excel / CSV
-                </button>
-                <button
-                  onClick={() => {
-                    setExportOpen(false);
-                    handleExport('pdf');
-                  }}
-                  className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-semibold flex items-center gap-1.5"
-                >
-                  <FileText className="w-3.5 h-3.5 text-red-500" />
-                  PDF Report
-                </button>
-              </div>
-            )}
-          </div>
+
 
           {/* Print Button */}
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 hover:bg-gray-50 rounded-lg text-xs font-bold text-gray-700 bg-white shadow-sm transition-all cursor-pointer h-[38px]"
-          >
-            <Printer className="w-3.5 h-3.5 text-gray-500" />
-            <span>Print</span>
-          </button>
+
 
           {/* Refresh Button */}
           <button
@@ -415,9 +376,12 @@ const ItemwiseProfitLossReport = () => {
 
       {/* Error alert */}
       {error && (
-        <div className="bg-red-50 border border-red-100 text-red-700 text-[11px] px-3.5 py-2.5 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span className="font-semibold">{error}</span>
+        <div className="mb-4">
+          <ErrorState
+            error={error}
+            variant="inline"
+            onRetry={() => handleFetchData()}
+          />
         </div>
       )}
 
@@ -517,16 +481,14 @@ const ItemwiseProfitLossReport = () => {
 
             {/* Card 2: Net Profit / Loss */}
             <div className="bg-white rounded-xl border border-gray-150 p-4 shadow-sm flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                summaryMetrics.netProfitLoss >= 0 ? 'bg-green-50 text-[#16A34A]' : 'bg-red-50 text-red-650'
-              }`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${summaryMetrics.netProfitLoss >= 0 ? 'bg-green-50 text-[#16A34A]' : 'bg-red-50 text-red-650'
+                }`}>
                 {summaryMetrics.netProfitLoss >= 0 ? <TrendingUp className="w-4.5 h-4.5" /> : <TrendingDown className="w-4.5 h-4.5" />}
               </div>
               <div className="space-y-0.5">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Net Profit/Loss</span>
-                <h3 className={`text-sm font-bold tabular-nums ${
-                  summaryMetrics.netProfitLoss >= 0 ? 'text-[#16A34A]' : 'text-red-600'
-                }`}>
+                <h3 className={`text-sm font-bold tabular-nums ${summaryMetrics.netProfitLoss >= 0 ? 'text-[#16A34A]' : 'text-red-600'
+                  }`}>
                   {summaryMetrics.netProfitLoss >= 0 ? '+' : ''}{formatCurrency(summaryMetrics.netProfitLoss)}
                 </h3>
               </div>
@@ -590,7 +552,7 @@ const ItemwiseProfitLossReport = () => {
       {/* ── Quick Insights ── */}
       <div className="space-y-3">
         <h2 className="text-xs font-bold text-gray-450 uppercase tracking-wider">Report Quick Insights</h2>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {itemwiseProfitLossLoading ? (
             Array.from({ length: 3 }).map((_, idx) => <SkeletonInsight key={idx} />)
@@ -705,8 +667,8 @@ const ItemwiseProfitLossReport = () => {
                   <tr className="h-[44px]">
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Item Name</th>
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Unit</th>
-                    
-                    <th 
+
+                    <th
                       onClick={() => handleSort('sale')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                     >
@@ -722,7 +684,7 @@ const ItemwiseProfitLossReport = () => {
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Purchase</th>
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Purchase Return</th>
 
-                    <th 
+                    <th
                       onClick={() => handleSort('openingStock')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                     >
@@ -734,7 +696,7 @@ const ItemwiseProfitLossReport = () => {
                       </div>
                     </th>
 
-                    <th 
+                    <th
                       onClick={() => handleSort('closingStock')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                     >
@@ -748,7 +710,7 @@ const ItemwiseProfitLossReport = () => {
 
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Tax Payable</th>
 
-                    <th 
+                    <th
                       onClick={() => handleSort('netProfitLoss')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                     >
@@ -759,7 +721,7 @@ const ItemwiseProfitLossReport = () => {
                         </span>
                       </div>
                     </th>
-                    
+
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Status</th>
                   </tr>
                 </thead>
@@ -773,13 +735,13 @@ const ItemwiseProfitLossReport = () => {
                     const clStock = Number(item.closingStock || 0);
                     const taxPay = Number(item.taxPayable || 0);
                     const profit = Number(item.netProfitLoss || 0);
-                    
+
                     const isExpanded = expandedItemId === item.itemId;
 
                     return (
                       <React.Fragment key={item.itemId || index}>
                         {/* Main clickable row */}
-                        <tr 
+                        <tr
                           onClick={() => setExpandedItemId(isExpanded ? null : item.itemId)}
                           className="hover:bg-slate-50/40 transition-colors h-[52px] cursor-pointer"
                         >
@@ -810,7 +772,7 @@ const ItemwiseProfitLossReport = () => {
                           <td className="py-2.5 px-4 text-sm text-gray-650 tabular-nums">
                             {formatCurrency(taxPay)}
                           </td>
-                          
+
                           {/* Net Profit Column with arrows */}
                           <td className={`py-2.5 px-4 text-sm font-bold tabular-nums`}>
                             {profit > 0 ? (
@@ -824,13 +786,12 @@ const ItemwiseProfitLossReport = () => {
 
                           {/* Status Badge */}
                           <td className="py-2.5 px-4">
-                            <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
-                              profit > 0 
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${profit > 0
                                 ? 'bg-green-50 text-green-700 border-green-100'
                                 : profit < 0
                                   ? 'bg-red-50 text-red-700 border-red-100'
                                   : 'bg-gray-50 text-gray-500 border-gray-150'
-                            }`}>
+                              }`}>
                               {profit > 0 ? 'Profit' : profit < 0 ? 'Loss' : 'Break Even'}
                             </span>
                           </td>
@@ -844,7 +805,7 @@ const ItemwiseProfitLossReport = () => {
                                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-50 pb-2">
                                   Expanded Inventory Stock & Cost Details
                                 </h4>
-                                
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-3.5">
                                   {/* Column 1 */}
                                   <div className="space-y-3">
@@ -914,47 +875,44 @@ const ItemwiseProfitLossReport = () => {
             </div>
 
             {/* Pagination footer */}
-            <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between bg-[#F8FAFC] flex-wrap gap-4 select-none">
-              <span className="text-sm text-gray-500 font-medium">
-                Showing {startIndex} to {endIndex} of {processedData.length} records
-              </span>
+            {Math.ceil(processedData.length / itemsPerPage) > 1 && (
+              <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between bg-white flex-wrap gap-4 select-none">
+                {/* Left: Item Range */}
+                <div className="text-xs font-semibold text-gray-500">
+                  Showing{' '}
+                  <span className="text-[#15803D] font-bold">
+                    {processedData.length === 0 ? 0 : startIndex}–{endIndex}
+                  </span>{' '}
+                  of <span className="text-[#15803D] font-bold">{Number(processedData.length).toLocaleString('en-IN')}</span> items
+                </div>
 
-              <div className="inline-flex gap-1 items-center">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                  disabled={currentPage <= 1}
-                  className="p-1.5 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-500 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
+                {/* Center: Current Page Status */}
+                <div className="text-xs font-semibold text-gray-500">
+                  Page <span className="text-[#15803D] font-bold">{currentPage}</span> of {Math.ceil(processedData.length / itemsPerPage)}
+                </div>
 
-                {Array.from({ length: Math.ceil(processedData.length / itemsPerPage) || 1 }).map((_, idx) => {
-                  const pg = idx + 1;
-                  const isCurrent = pg === currentPage;
-                  return (
-                    <button
-                      key={pg}
-                      onClick={() => setCurrentPage(pg)}
-                      className={`w-8 h-8 text-xs font-bold rounded-lg transition-all ${
-                        isCurrent 
-                          ? 'bg-slate-900 text-white shadow-sm' 
-                          : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
-                      } cursor-pointer`}
-                    >
-                      {pg}
-                    </button>
-                  );
-                })}
+                {/* Right: Previous / Next Buttons */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                    disabled={currentPage <= 1}
+                    className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2 font-bold text-xs text-gray-700 shadow-sm transition-all hover:bg-gray-55 active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                  >
+                    <ArrowLeft className="w-4 h-4 text-[#15803D]" />
+                    <span>Previous</span>
+                  </button>
 
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(p + 1, Math.ceil(processedData.length / itemsPerPage)))}
-                  disabled={currentPage >= Math.ceil(processedData.length / itemsPerPage)}
-                  className="p-1.5 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-500 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(p + 1, Math.ceil(processedData.length / itemsPerPage)))}
+                    disabled={currentPage >= Math.ceil(processedData.length / itemsPerPage)}
+                    className="flex items-center gap-2 bg-[#15803D] hover:bg-green-700 text-white rounded-xl px-4 py-2 font-bold text-xs shadow-sm shadow-green-600/10 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                  >
+                    <span>Next</span>
+                    <ArrowRight className="w-4 h-4 text-white" />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>

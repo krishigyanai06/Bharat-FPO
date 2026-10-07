@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchPartySalePurchase } from '../../store/thunks/reportsThunk';
-import { 
-  RotateCw, 
-  Search, 
-  ChevronLeft, 
-  ChevronRight, 
+import ErrorState from '../../components/ErrorState';
+import {
+  RotateCw,
+  Search,
+  ArrowLeft,
+  ArrowRight,
   Loader2,
   AlertCircle,
   ShoppingBag,
@@ -43,7 +44,7 @@ const PartySalePurchaseReport = () => {
   const [startDate, setStartDate] = useState(initialDates.start);
   const [endDate, setEndDate] = useState(initialDates.end);
   const [search, setSearch] = useState('');
-  
+
   // UI Dropdowns State
   const [exportOpen, setExportOpen] = useState(false);
   const [openRowActionId, setOpenRowActionId] = useState(null);
@@ -225,7 +226,7 @@ const PartySalePurchaseReport = () => {
         item.saleAmount || 0,
         item.purchaseAmount || 0
       ]);
-      const csvContent = "data:text/csv;charset=utf-8," 
+      const csvContent = "data:text/csv;charset=utf-8,"
         + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
@@ -252,48 +253,21 @@ const PartySalePurchaseReport = () => {
             View total sales and purchases for customers & suppliers.
           </p>
         </div>
-        
+
         {/* Export Dropdown Button */}
-        <div className="relative" ref={exportDropdownRef}>
-          <button
-            onClick={() => setExportOpen(!exportOpen)}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-250 hover:bg-gray-550 rounded-lg text-xs font-bold text-gray-700 bg-white shadow-sm transition-all cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export</span>
-            <ChevronDown className="w-3.5 h-3.5" />
-          </button>
-          
-          {exportOpen && (
-            <div className="absolute right-0 mt-1.5 w-36 bg-white border border-gray-150 rounded-lg shadow-lg py-1 z-50 animate-fade-in text-left">
-              <button
-                onClick={() => {
-                  setExportOpen(false);
-                  handleExport('csv');
-                }}
-                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-semibold"
-              >
-                Export CSV
-              </button>
-              <button
-                onClick={() => {
-                  setExportOpen(false);
-                  handleExport('pdf');
-                }}
-                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 font-semibold"
-              >
-                Export PDF
-              </button>
-            </div>
-          )}
-        </div>
+
+
+
       </div>
 
       {/* Error alert */}
       {error && (
-        <div className="bg-red-50 border border-red-100 text-red-700 text-[11px] px-3.5 py-2.5 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span className="font-semibold">{error}</span>
+        <div className="mb-4">
+          <ErrorState
+            error={error}
+            variant="inline"
+            onRetry={() => handleFetchData()}
+          />
         </div>
       )}
 
@@ -418,7 +392,7 @@ const PartySalePurchaseReport = () => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#F8FAFC] border-b border-gray-150">
-                    <th 
+                    <th
                       onClick={() => handleSort('partyName')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-50 select-none"
                     >
@@ -430,7 +404,7 @@ const PartySalePurchaseReport = () => {
                       </div>
                     </th>
                     <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider">Phone Number</th>
-                    <th 
+                    <th
                       onClick={() => handleSort('saleAmount')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-50 select-none"
                     >
@@ -441,7 +415,7 @@ const PartySalePurchaseReport = () => {
                         </span>
                       </div>
                     </th>
-                    <th 
+                    <th
                       onClick={() => handleSort('purchaseAmount')}
                       className="py-3 px-4 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-50 select-none"
                     >
@@ -486,26 +460,8 @@ const PartySalePurchaseReport = () => {
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
-                          
-                          {openRowActionId === item.partyId && (
-                            <div 
-                              ref={rowMenuRef}
-                              className="absolute right-6 top-2 w-36 bg-white border border-gray-205 rounded-lg shadow-lg py-1.5 z-30 text-left animate-fade-in"
-                            >
-                              <button
-                                onClick={() => setOpenRowActionId(null)}
-                                className="w-full px-4 py-1.5 text-xs text-gray-700 hover:bg-gray-50 font-semibold"
-                              >
-                                View Ledger
-                              </button>
-                              <button
-                                onClick={() => setOpenRowActionId(null)}
-                                className="w-full px-4 py-1.5 text-xs text-gray-750 hover:bg-gray-50 font-semibold"
-                              >
-                                Party Details
-                              </button>
-                            </div>
-                          )}
+
+
                         </td>
                       </tr>
                     );
@@ -515,47 +471,44 @@ const PartySalePurchaseReport = () => {
             </div>
 
             {/* Pagination footer */}
-            <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between bg-white flex-wrap gap-4 select-none">
-              <span className="text-sm text-gray-500 font-medium">
-                Showing {startIndex} to {endIndex} of {processedData.length} records
-              </span>
+            {Math.ceil(processedData.length / itemsPerPage) > 1 && (
+              <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between bg-white flex-wrap gap-4 select-none">
+                {/* Left: Item Range */}
+                <div className="text-xs font-semibold text-gray-500">
+                  Showing{' '}
+                  <span className="text-[#15803D] font-bold">
+                    {processedData.length === 0 ? 0 : startIndex}–{endIndex}
+                  </span>{' '}
+                  of <span className="text-[#15803D] font-bold">{Number(processedData.length).toLocaleString('en-IN')}</span> items
+                </div>
 
-              <div className="inline-flex gap-1 items-center">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                  disabled={currentPage <= 1}
-                  className="p-1.5 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-500 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
+                {/* Center: Current Page Status */}
+                <div className="text-xs font-semibold text-gray-500">
+                  Page <span className="text-[#15803D] font-bold">{currentPage}</span> of {Math.ceil(processedData.length / itemsPerPage)}
+                </div>
 
-                {Array.from({ length: Math.ceil(processedData.length / itemsPerPage) || 1 }).map((_, idx) => {
-                  const pg = idx + 1;
-                  const isCurrent = pg === currentPage;
-                  return (
-                    <button
-                      key={pg}
-                      onClick={() => setCurrentPage(pg)}
-                      className={`w-8 h-8 text-xs font-bold rounded-lg transition-all ${
-                        isCurrent 
-                          ? 'bg-slate-900 text-white shadow-sm' 
-                          : 'bg-white text-gray-505 border border-gray-205 hover:bg-gray-50'
-                      } cursor-pointer`}
-                    >
-                      {pg}
-                    </button>
-                  );
-                })}
+                {/* Right: Previous / Next Buttons */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                    disabled={currentPage <= 1}
+                    className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2 font-bold text-xs text-gray-700 shadow-sm transition-all hover:bg-gray-50 active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                  >
+                    <ArrowLeft className="w-4 h-4 text-[#15803D]" />
+                    <span>Previous</span>
+                  </button>
 
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(p + 1, Math.ceil(processedData.length / itemsPerPage)))}
-                  disabled={currentPage >= Math.ceil(processedData.length / itemsPerPage)}
-                  className="p-1.5 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-500 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(p + 1, Math.ceil(processedData.length / itemsPerPage)))}
+                    disabled={currentPage >= Math.ceil(processedData.length / itemsPerPage)}
+                    className="flex items-center gap-2 bg-[#15803D] hover:bg-green-700 text-white rounded-xl px-4 py-2 font-bold text-xs shadow-sm shadow-green-600/10 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                  >
+                    <span>Next</span>
+                    <ArrowRight className="w-4 h-4 text-white" />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>

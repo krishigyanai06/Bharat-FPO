@@ -2,6 +2,8 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../lib/api';
 import theme from '../../config/theme';
 
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export const fetchMembers = createAsyncThunk(
   'members/fetch',
   async (_, { rejectWithValue }) => {
@@ -34,6 +36,16 @@ export const fetchMembers = createAsyncThunk(
         err.response?.data?.message || 'Failed to fetch members'
       );
     }
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { members, loading, lastFetched } = getState().members;
+      if (loading) return false;
+      if (arg?.force !== true && members && members.length > 0 && lastFetched && (Date.now() - lastFetched < CACHE_TTL)) {
+        console.log('[fetchMembers] Returning cached members list');
+        return false;
+      }
+    }
   }
 );
 
@@ -55,6 +67,37 @@ export const updateKyc = createAsyncThunk(
   'members/updateKyc',
   async ({ id, kycStatus }, { rejectWithValue }) => {
     return rejectWithValue('Admin KYC update endpoint not available. Contact backend developer to add PUT /admin/update-user/:id');
+  }
+);
+
+export const fetchFarmerDue = createAsyncThunk(
+  'members/fetchFarmerDue',
+  async (farmerId, { rejectWithValue }) => {
+    try {
+      const res = await api.get(`/admin/farmers/${farmerId}/due`);
+      return res.data?.data ?? res.data;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to fetch farmer due details'
+      );
+    }
+  }
+);
+
+export const updateFarmerDue = createAsyncThunk(
+  'members/updateFarmerDue',
+  async ({ farmerId, dueAmount, dueAmountNote }, { rejectWithValue }) => {
+    try {
+      const res = await api.patch(`/admin/farmers/${farmerId}/due`, {
+        dueAmount: Number(dueAmount),
+        dueAmountNote,
+      });
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || 'Failed to update farmer due amount'
+      );
+    }
   }
 );
 

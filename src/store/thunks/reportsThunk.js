@@ -2,6 +2,17 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import reportService from '../../services/reportService';
 import { downloadBlob } from '../../utils/downloadFile';
 
+const parseBlobError = async (err, defaultMsg) => {
+  if (err.response?.data instanceof Blob) {
+    try {
+      const text = await err.response.data.text();
+      const parsed = JSON.parse(text);
+      return parsed.message || parsed.error || defaultMsg;
+    } catch (_) {}
+  }
+  return err.response?.data?.message || err.response?.data?.error || defaultMsg;
+};
+
 export const downloadSalesReport = createAsyncThunk(
   'reports/downloadSalesPdf',
   async (filters, { rejectWithValue }) => {
@@ -18,8 +29,8 @@ export const downloadSalesReport = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadSalesReport error:', err);
-      // For blobs, Axios error details are stored inside blob text sometimes, but we catch them cleanly
-      return rejectWithValue(err.response?.data?.message || 'Failed to download Sales Report PDF');
+      const msg = await parseBlobError(err, 'Failed to download Sales Report PDF');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -40,7 +51,8 @@ export const downloadPurchaseReport = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadPurchaseReport error:', err);
-      return rejectWithValue(err.response?.data?.message || 'Failed to download Purchase Report PDF');
+      const msg = await parseBlobError(err, 'Failed to download Purchase Report PDF');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -72,7 +84,8 @@ export const downloadBalanceSheetPdf = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadBalanceSheetPdf error:', err);
-      return rejectWithValue(err.response?.data?.message || 'Failed to download Balance Sheet PDF');
+      const msg = await parseBlobError(err, 'Failed to download Balance Sheet PDF');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -90,7 +103,8 @@ export const downloadPaymentInReport = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadPaymentInReport error:', err);
-      return rejectWithValue(err.response?.data?.message || 'Failed to download Payment In Report PDF');
+      const msg = await parseBlobError(err, 'Failed to download Payment In Report PDF');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -108,7 +122,8 @@ export const downloadPaymentOutReport = createAsyncThunk(
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadPaymentOutReport error:', err);
-      return rejectWithValue(err.response?.data?.message || 'Failed to download Payment Out Report PDF');
+      const msg = await parseBlobError(err, 'Failed to download Payment Out Report PDF');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -118,15 +133,33 @@ export const downloadExpenseReport = createAsyncThunk(
   async (filters, { rejectWithValue }) => {
     try {
       console.log('[reportsThunk] Downloading expense PDF with filters:', filters);
-      const blob = await reportService.downloadExpenseReport(filters);
-      const startDateStr = filters.startDate || 'start';
-      const endDateStr = filters.endDate || 'end';
-      const filename = `Expense_Report_${startDateStr}_to_${endDateStr}.pdf`;
+      const res = await reportService.downloadExpenseReport(filters);
+      const blob = res.data;
+      
+      if (blob && (blob.type?.includes('html') || blob.type?.includes('json'))) {
+        return rejectWithValue('Unable to download Expense Report.\nPlease try again.');
+      }
+
+      // Check Content-Disposition header for filename from backend
+      let filename = 'Expense_Report.pdf';
+      const contentDisposition = res.headers?.['content-disposition'];
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) {
+          filename = match[1];
+        }
+      } else if (filters.startDate || filters.endDate) {
+        const startDateStr = filters.startDate || 'start';
+        const endDateStr = filters.endDate || 'end';
+        filename = `Expense_Report_${startDateStr}_to_${endDateStr}.pdf`;
+      }
+
       downloadBlob(blob, filename);
       return { success: true };
     } catch (err) {
       console.error('[reportsThunk] downloadExpenseReport error:', err);
-      return rejectWithValue(err.response?.data?.message || 'Failed to download Expense Report PDF');
+      const msg = await parseBlobError(err, 'Unable to download Expense Report.\nPlease try again.');
+      return rejectWithValue(msg);
     }
   }
 );
@@ -155,6 +188,129 @@ export const fetchItemwiseProfitLoss = createAsyncThunk(
     } catch (err) {
       console.error('[reportsThunk] fetchItemwiseProfitLoss error:', err);
       return rejectWithValue(err.response?.data?.message || 'Failed to fetch Itemwise Profit-Loss details');
+    }
+  }
+);
+
+export const downloadGstr1Report = createAsyncThunk(
+  'reports/downloadGstr1Report',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Downloading GSTR-1 report with filters:', filters);
+      const blob = await reportService.downloadGstr1Report(filters);
+      
+      let ext = 'json';
+      if (filters.format === 'csv') {
+        ext = 'csv';
+      } else if (filters.format === 'excel' || filters.format === 'xlsx') {
+        ext = 'xlsx';
+      }
+      let filename = 'GSTR1';
+      
+      if (filters.month && filters.year) {
+        const monthNames = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const monthIdx = parseInt(filters.month, 10) - 1;
+        const monthName = monthNames[monthIdx] || filters.month;
+        filename = `GSTR1_${monthName}_${filters.year}.${ext}`;
+      } else if (filters.startDate && filters.endDate) {
+        filename = `GSTR1_${filters.startDate}_to_${filters.endDate}.${ext}`;
+      } else {
+        const monthNames = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const now = new Date();
+        const monthName = monthNames[now.getMonth()];
+        const year = now.getFullYear();
+        filename = `GSTR1_${monthName}_${year}.${ext}`;
+      }
+      
+      downloadBlob(blob, filename);
+      return { success: true };
+    } catch (err) {
+      console.error('[reportsThunk] downloadGstr1Report error:', err);
+      const msg = await parseBlobError(err, 'Failed to download GSTR-1 Report');
+      return rejectWithValue(msg);
+    }
+  }
+);
+
+export const downloadGstr3bReport = createAsyncThunk(
+  'reports/downloadGstr3bReport',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Downloading GSTR-3B report with filters:', filters);
+      const blob = await reportService.downloadGstr3bReport(filters);
+      
+      let ext = 'json';
+      if (filters.format === 'excel' || filters.format === 'xlsx') {
+        ext = 'xlsx';
+      }
+      let filename = 'GSTR3B';
+      
+      if (filters.month && filters.year) {
+        const monthNames = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const monthIdx = parseInt(filters.month, 10) - 1;
+        const monthName = monthNames[monthIdx] || filters.month;
+        filename = `GSTR3B_${monthName}_${filters.year}.${ext}`;
+      } else if (filters.startDate && filters.endDate) {
+        filename = `GSTR3B_${filters.startDate}_to_${filters.endDate}.${ext}`;
+      } else {
+        const monthNames = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const now = new Date();
+        const monthName = monthNames[now.getMonth()];
+        const year = now.getFullYear();
+        filename = `GSTR3B_${monthName}_${year}.${ext}`;
+      }
+      
+      downloadBlob(blob, filename);
+      return { success: true };
+    } catch (err) {
+      console.error('[reportsThunk] downloadGstr3bReport error:', err);
+      const msg = await parseBlobError(err, 'Failed to download GSTR-3B Report');
+      return rejectWithValue(msg);
+    }
+  }
+);
+
+export const fetchGstr3bReport = createAsyncThunk(
+  'reports/fetchGstr3bReport',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Fetching GSTR-3B report JSON with filters:', filters);
+      const data = await reportService.fetchGstr3bReport(filters);
+      return data?.data || data || null;
+    } catch (err) {
+      console.error('[reportsThunk] fetchGstr3bReport error:', err);
+      return rejectWithValue(err.response?.data?.message || 'Failed to fetch GSTR-3B details');
+    }
+  }
+);
+
+export const downloadProcurementReport = createAsyncThunk(
+  'reports/downloadProcurementPdf',
+  async (filters, { rejectWithValue }) => {
+    try {
+      console.log('[reportsThunk] Downloading procurement PDF with filters:', filters);
+      const blob = await reportService.downloadProcurementReport(filters);
+      const startDateStr = filters.startDate || 'start';
+      const endDateStr = filters.endDate || 'end';
+      const filename = `Procurement_Report_${startDateStr}_to_${endDateStr}.pdf`;
+      downloadBlob(blob, filename);
+      return { success: true };
+    } catch (err) {
+      console.error('[reportsThunk] downloadProcurementReport error:', err);
+      const msg = await parseBlobError(err, 'Failed to download Procurement Report PDF');
+      return rejectWithValue(msg);
     }
   }
 );

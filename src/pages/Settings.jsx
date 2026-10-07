@@ -2,8 +2,17 @@ import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchProfile, updateProfile } from "../store/thunks/settingsThunk";
 import { clearStatus } from "../store/slices/settingsSlice";
-import { Save } from "lucide-react";
+import { Save, Lock, CheckCircle2, Landmark, Info, RefreshCw, Edit2, Copy, Eye, EyeOff, Loader2, User, Wifi, Calendar, Shield, Activity, FileSpreadsheet } from "lucide-react";
 import { usePermissions } from "../hooks/usePermissions";
+import toast from "react-hot-toast";
+import { authenticateSession } from "../store/thunks/eInvoiceThunk";
+import { clearEInvoiceStatus } from "../store/slices/eInvoiceSlice";
+import { isEInvoiceSessionValid, isEWayBillSessionValid } from "../lib/api";
+import { getUserFriendlyEInvoiceError } from "../utils/eInvoiceErrors";
+import { authenticateEWayBillSession } from "../store/thunks/eWayBillThunk";
+import { clearEWayBillStatus } from "../store/slices/eWayBillSlice";
+import { fetchBankDetails, updateBankDetails } from "../store/thunks/bankDetailsThunk";
+import { clearBankDetailsStatus } from "../store/slices/bankDetailsSlice";
 
 function Settings() {
   const dispatch = useDispatch();
@@ -11,6 +20,147 @@ function Settings() {
   const authUser = useSelector((s) => s.auth.user);
   const { isReadOnly } = usePermissions();
   const data = profile || authUser;
+  const { sessionLoading, sessionToken, sessionError } = useSelector((s) => s.eInvoice);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [lastConnectedTime, setLastConnectedTime] = useState(null);
+  const [connectLoading, setConnectLoading] = useState(false);
+
+  // Validation state
+  const [profileErrors, setProfileErrors] = useState({});
+  const [eInvoiceErrors, setEInvoiceErrors] = useState({});
+  const [eWayBillErrors, setEWayBillErrors] = useState({});
+  const [bankErrors, setBankErrors] = useState({});
+
+  // FPO Bank Details Redux State
+  const {
+    bankDetails,
+    loading: bankLoading,
+    saving: bankSaving,
+    error: bankError,
+  } = useSelector((s) => s.bankDetails || {
+    bankDetails: {},
+    loading: false,
+    saving: false,
+    error: null,
+  });
+
+  const [bankForm, setBankForm] = useState({
+    bankName: "",
+    accountHolderName: "",
+    accountNumber: "",
+    ifscCode: "",
+    upiId: "",
+  });
+
+  const handleProfileChange = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (profileErrors[key]) {
+      setProfileErrors((prev) => ({ ...prev, [key]: "" }));
+    }
+  };
+
+  const handleEInvoiceChange = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (eInvoiceErrors[key]) {
+      setEInvoiceErrors((prev) => ({ ...prev, [key]: "" }));
+    }
+  };
+
+  const handleEWayBillChange = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (eWayBillErrors[key]) {
+      setEWayBillErrors((prev) => ({ ...prev, [key]: "" }));
+    }
+  };
+
+  const validateProfile = () => {
+    const errs = {};
+    if (!form.firstName?.trim()) {
+      errs.firstName = "First Name is required.";
+    }
+    if (!form.phone?.trim()) {
+      errs.phone = "Phone number is required.";
+    } else if (!/^[6-9]\d{9}$/.test(form.phone.trim())) {
+      errs.phone = "Enter a valid 10-digit mobile number.";
+    }
+    if (form.emailId?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.emailId.trim())) {
+      errs.emailId = "Enter a valid email address.";
+    }
+    if (form.gstNumber?.trim() && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/i.test(form.gstNumber.trim()) && form.gstNumber.trim().length !== 15) {
+      errs.gstNumber = "GSTIN must be 15 alphanumeric characters.";
+    }
+    if (form.estimatedTurnover && (isNaN(form.estimatedTurnover) || Number(form.estimatedTurnover) < 0)) {
+      errs.estimatedTurnover = "Must be a valid positive amount.";
+    }
+
+    setProfileErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const validateEInvoice = () => {
+    const errs = {};
+    const gstin = form.eInvoiceGstin?.trim();
+    if (!gstin) {
+      errs.eInvoiceGstin = "Business GSTIN is required.";
+    } else if (gstin.length !== 15) {
+      errs.eInvoiceGstin = "GSTIN must be exactly 15 alphanumeric characters.";
+    }
+    if (!form.eInvoiceUsername?.trim()) {
+      errs.eInvoiceUsername = "Username is required.";
+    }
+    if (!form.eInvoicePassword) {
+      errs.eInvoicePassword = "Password is required.";
+    }
+
+    setEInvoiceErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const validateEWayBill = () => {
+    const errs = {};
+    const gstin = form.eInvoiceGstin?.trim();
+    if (!gstin) {
+      errs.eInvoiceGstin = "Business GSTIN is required.";
+    } else if (gstin.length !== 15) {
+      errs.eInvoiceGstin = "GSTIN must be exactly 15 alphanumeric characters.";
+    }
+    if (!form.eWayBillUsername?.trim()) {
+      errs.eWayBillUsername = "Username is required.";
+    }
+    if (!form.eWayBillPassword) {
+      errs.eWayBillPassword = "Password is required.";
+    }
+
+    setEWayBillErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  // E-Way Bill States
+  const { 
+    sessionToken: ewayBillSessionToken, 
+    sessionLoading: ewayBillSessionLoading, 
+    sessionError: ewayBillSessionError 
+  } = useSelector((s) => s.eWayBill);
+  const [isEWayBillEditing, setIsEWayBillEditing] = useState(false);
+  const [showEWayBillPassword, setShowEWayBillPassword] = useState(false);
+  const [lastEWayBillConnectedTime, setLastEWayBillConnectedTime] = useState(null);
+  const [connectEWayBillLoading, setConnectEWayBillLoading] = useState(false);
+
+  // Set lastConnectedTime when token is active
+  useEffect(() => {
+    if (sessionToken && !lastConnectedTime) {
+      setLastConnectedTime(new Date());
+    }
+  }, [sessionToken, lastConnectedTime]);
+
+  // Set lastEWayBillConnectedTime when token is active
+  useEffect(() => {
+    if (ewayBillSessionToken && !lastEWayBillConnectedTime) {
+      setLastEWayBillConnectedTime(new Date());
+    }
+  }, [ewayBillSessionToken, lastEWayBillConnectedTime]);
+
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -22,12 +172,90 @@ function Settings() {
     gender: "",
     shopName: "",
     gstNumber: "",
+    estimatedTurnover: "",
+    eInvoiceUsername: "",
+    eInvoicePassword: "",
+    eInvoiceGstin: "",
+    eWayBillUsername: "",
+    eWayBillPassword: "",
   });
 
-  /* LOAD PROFILE */
+  /* LOAD PROFILE & BANK DETAILS */
   useEffect(() => {
     dispatch(fetchProfile());
+    dispatch(fetchBankDetails());
   }, [dispatch]);
+
+  /* MAP BANK DETAILS DATA → FORM */
+  useEffect(() => {
+    if (bankDetails) {
+      setBankForm({
+        bankName: bankDetails.bankName || "",
+        accountHolderName: bankDetails.accountHolderName || "",
+        accountNumber: bankDetails.accountNumber || "",
+        ifscCode: bankDetails.ifscCode || "",
+        upiId: bankDetails.upiId || "",
+      });
+    }
+  }, [bankDetails]);
+
+  const handleBankChange = (key, value) => {
+    const finalVal = key === 'ifscCode' ? value.toUpperCase() : value;
+    setBankForm((prev) => ({ ...prev, [key]: finalVal }));
+    if (bankErrors[key]) {
+      setBankErrors((prev) => ({ ...prev, [key]: "" }));
+    }
+  };
+
+  const validateBankDetails = () => {
+    const errs = {};
+    if (!bankForm.bankName?.trim()) {
+      errs.bankName = "Bank Name is required.";
+    }
+    if (!bankForm.accountHolderName?.trim()) {
+      errs.accountHolderName = "Account Holder Name is required.";
+    }
+    if (!bankForm.accountNumber?.trim()) {
+      errs.accountNumber = "Account Number is required.";
+    } else if (!/^\d+$/.test(bankForm.accountNumber.trim())) {
+      errs.accountNumber = "Account Number must contain numbers only.";
+    }
+    if (!bankForm.ifscCode?.trim()) {
+      errs.ifscCode = "IFSC Code is required.";
+    } else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(bankForm.ifscCode.trim())) {
+      errs.ifscCode = "Enter a valid 11-character IFSC code (e.g. HDFC0002565).";
+    }
+    if (bankForm.upiId?.trim() && !/^[\w.-]+@[\w.-]+$/i.test(bankForm.upiId.trim())) {
+      errs.upiId = "Enter a valid UPI ID format (e.g. user@upi).";
+    }
+
+    setBankErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSaveBankDetails = async (e) => {
+    if (e) e.preventDefault();
+    if (!validateBankDetails()) {
+      toast.error("Please fix the highlighted bank detail errors before saving.");
+      return;
+    }
+
+    const payload = {
+      bankName: bankForm.bankName.trim(),
+      accountNumber: bankForm.accountNumber.trim(),
+      ifscCode: bankForm.ifscCode.trim().toUpperCase(),
+      accountHolderName: bankForm.accountHolderName.trim(),
+      upiId: bankForm.upiId.trim(),
+    };
+
+    try {
+      await dispatch(updateBankDetails(payload)).unwrap();
+      toast.success("FPO Bank Details updated successfully!");
+    } catch (err) {
+      console.error("Failed to update bank details:", err);
+      toast.error(err || "Failed to update FPO Bank Details.");
+    }
+  };
 
   /* MAP API DATA → FORM */
   useEffect(() => {
@@ -43,17 +271,130 @@ function Settings() {
         gender: data.gender || "",
         shopName: data.shopName || "",
         gstNumber: data.gstNumber || "",
+        estimatedTurnover: data.estimatedTurnover || "",
+        eInvoiceUsername: data.eInvoiceUsername || "",
+        eInvoicePassword: data.eInvoicePassword || "",
+        eInvoiceGstin: data.eInvoiceGstin || data.gstin || data.gstNumber || "",
+        eWayBillUsername: data.eWayBillUsername || "",
+        eWayBillPassword: data.eWayBillPassword || "",
       });
     }
   }, [profile, authUser]);
 
+  /* CLEAR E-INVOICE STATUS ON UNMOUNT */
+  useEffect(() => {
+    return () => {
+      dispatch(clearEInvoiceStatus());
+      dispatch(clearEWayBillStatus());
+    };
+  }, [dispatch]);
+
+  /* CONNECT TO PORTAL AND SAVE CREDENTIALS */
+  const handleConnect = async (e) => {
+    if (e) e.preventDefault();
+    if (!validateEInvoice()) {
+      toast.error("Please fix the highlighted E-Invoice credential errors.");
+      return;
+    }
+    const payload = {
+      eInvoiceUsername: form.eInvoiceUsername,
+      eInvoicePassword: form.eInvoicePassword,
+      gstNumber: form.eInvoiceGstin, // Backend stores taxpayer GSTIN in gstNumber
+    };
+    
+    setConnectLoading(true);
+    try {
+      await dispatch(updateProfile(payload)).unwrap();
+      
+      // Call authentication securely without passing credentials in the request body
+      await dispatch(authenticateSession({})).unwrap();
+      
+      setLastConnectedTime(new Date());
+      setIsEditing(false);
+      toast.success("Successfully connected to the Government E-Invoice Portal!");
+    } catch (err) {
+      console.error("Connection failed:", err);
+    } finally {
+      setConnectLoading(false);
+    }
+  };
+
+  /* RECONNECT CURRENT SESSION */
+  const handleReconnect = () => {
+    dispatch(authenticateSession({}))
+      .unwrap()
+      .then(() => {
+        setLastConnectedTime(new Date());
+        toast.success("Session reconnected successfully!");
+      })
+      .catch((err) => {
+        toast.error(err || "Failed to reconnect session.");
+      });
+  };
+
+  /* CONNECT TO E-WAY BILL PORTAL AND SAVE CREDENTIALS */
+  const handleEWayBillConnect = async (e) => {
+    if (e) e.preventDefault();
+    if (!validateEWayBill()) {
+      toast.error("Please fix the highlighted E-Way Bill credential errors.");
+      return;
+    }
+    const payload = {
+      eWayBillUsername: form.eWayBillUsername,
+      eWayBillPassword: form.eWayBillPassword,
+      gstNumber: form.eInvoiceGstin,
+    };
+    
+    setConnectEWayBillLoading(true);
+    try {
+      await dispatch(updateProfile(payload)).unwrap();
+      
+      // Call authentication securely without passing credentials in the request body
+      await dispatch(authenticateEWayBillSession({})).unwrap();
+      
+      setLastEWayBillConnectedTime(new Date());
+      setIsEWayBillEditing(false);
+      toast.success("Successfully connected to the Government E-Way Bill Portal!");
+    } catch (err) {
+      console.error("E-Way Bill Connection failed:", err);
+    } finally {
+      setConnectEWayBillLoading(false);
+    }
+  };
+
+  /* RECONNECT CURRENT E-WAY BILL SESSION */
+  const handleEWayBillReconnect = () => {
+    dispatch(authenticateEWayBillSession({}))
+      .unwrap()
+      .then(() => {
+        setLastEWayBillConnectedTime(new Date());
+        toast.success("E-Way Bill session reconnected successfully!");
+      })
+      .catch((err) => {
+        toast.error(err || "Failed to reconnect E-Way Bill session.");
+      });
+  };
+
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
   /* SAVE PROFILE */
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
+    if (!validateProfile()) {
+      toast.error("Please fix the highlighted errors before saving.");
+      return;
+    }
     const payload = Object.fromEntries(
       Object.entries(form).filter(([, v]) => v !== ""),
     );
-    dispatch(updateProfile(payload));
+    setIsSavingProfile(true);
+    try {
+      await dispatch(updateProfile(payload)).unwrap();
+    } catch (err) {
+      console.error("Failed to update profile:", err);
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   /* CLEAR SUCCESS MESSAGE */
@@ -71,16 +412,19 @@ function Settings() {
     );
   }
 
+  const isConnected = !!sessionToken && isEInvoiceSessionValid();
+  const isEWayBillConnected = !!ewayBillSessionToken && isEWayBillSessionValid();
+
   return (
-    <div className="max-w-4xl mx-auto space-y-2">
+    <div className="max-w-[1700px] w-full mx-auto space-y-6 text-gray-900 font-sans">
       <div>
-        <h1 className="text-xl font-semibold">Settings</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Settings</h1>
+        <p className="text-xs text-gray-500 mt-0.5">
           Manage your account and application preferences
         </p>
       </div>
 
-      <div className="bg-white rounded-xl p-6 shadow-sm">
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-150">
         <div className="flex items-center gap-2 mb-6">
           <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center">
             <span className="text-brand-600">👤</span>
@@ -100,29 +444,42 @@ function Settings() {
         )}
 
         <form onSubmit={handleSave}>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
             {[
-              ["firstName", "First Name"],
+              ["firstName", "First Name", true],
               ["lastName", "Last Name"],
-              ["phone", "Phone Number"],
+              ["phone", "Phone Number", true],
               ["emailId", "Email Address"],
               ["village", "Village"],
               ["district", "District"],
               ["state", "State"],
               ["shopName", "Shop / FPO Name"],
               ["gstNumber", "GST Number"],
-            ].map(([key, label]) => (
-              <div key={key}>
-                <label className="block text-xs text-gray-500 mb-1">
-                  {label}
-                </label>
-                <input
-                  value={form[key]}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                  className="w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
-            ))}
+              ["estimatedTurnover", "Estimated Turnover"],
+            ].map(([key, label, isRequired]) => {
+              const hasErr = !!profileErrors[key];
+              return (
+                <div key={key}>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    {label} {isRequired && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    value={form[key]}
+                    onChange={(e) => handleProfileChange(key, e.target.value)}
+                    className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none transition-colors ${
+                      hasErr
+                        ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                        : "border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white"
+                    }`}
+                  />
+                  {hasErr && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {profileErrors[key]}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">Gender</label>
@@ -147,15 +504,15 @@ function Settings() {
               />
             </div>
 
-            <div className="col-span-2 flex justify-end mt-2">
+            <div className="col-span-1 sm:col-span-2 md:col-span-3 xl:col-span-4 flex justify-end mt-2">
               {!isReadOnly && (
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={isSavingProfile}
                   className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white px-5 py-2 rounded-lg text-sm transition"
                 >
                   <Save className="w-4 h-4" />
-                  {loading ? "Saving..." : "Save Changes"}
+                  {isSavingProfile ? "Saving..." : "Save Changes"}
                 </button>
               )}
               {isReadOnly && (
@@ -166,6 +523,949 @@ function Settings() {
             </div>
           </div>
         </form>
+      </div>
+
+      {/* FPO BANK DETAILS CARD */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-150 mt-6">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-brand-650 shrink-0">
+              <Landmark className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-bold text-base text-gray-900 flex items-center gap-2">
+                FPO Bank Details
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Manage the bank account and payment details used by your FPO.
+              </p>
+            </div>
+          </div>
+          {bankError && (
+            <button
+              type="button"
+              onClick={() => dispatch(fetchBankDetails())}
+              className="flex items-center gap-1 text-xs text-brand-600 hover:underline font-medium"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Retry Load
+            </button>
+          )}
+        </div>
+
+        {bankError && (
+          <div className="mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
+            <span>{bankError}</span>
+            <button
+              type="button"
+              onClick={() => dispatch(fetchBankDetails())}
+              className="text-xs text-red-800 underline font-semibold ml-2"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {bankLoading && !bankForm.bankName ? (
+          <div className="flex justify-center items-center py-10">
+            <Loader2 className="w-6 h-6 animate-spin text-brand-600" />
+            <span className="ml-2 text-xs text-gray-500 font-medium">Loading bank details...</span>
+          </div>
+        ) : (
+          <form onSubmit={handleSaveBankDetails}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Bank Name */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Bank Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  disabled={isReadOnly || bankSaving}
+                  value={bankForm.bankName}
+                  onChange={(e) => handleBankChange("bankName", e.target.value)}
+                  placeholder="e.g. HDFC BANK, MARATHALLI, BANGLORE"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none transition-colors ${
+                    bankErrors.bankName
+                      ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 text-red-900"
+                      : "border-gray-200 focus:ring-2 focus:ring-brand-500 bg-white"
+                  }`}
+                />
+                {bankErrors.bankName && (
+                  <p className="text-[11px] text-red-600 mt-1 font-medium">{bankErrors.bankName}</p>
+                )}
+              </div>
+
+              {/* Account Holder Name */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Account Holder Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  disabled={isReadOnly || bankSaving}
+                  value={bankForm.accountHolderName}
+                  onChange={(e) => handleBankChange("accountHolderName", e.target.value)}
+                  placeholder="e.g. Aniket"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none transition-colors ${
+                    bankErrors.accountHolderName
+                      ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 text-red-900"
+                      : "border-gray-200 focus:ring-2 focus:ring-brand-500 bg-white"
+                  }`}
+                />
+                {bankErrors.accountHolderName && (
+                  <p className="text-[11px] text-red-600 mt-1 font-medium">{bankErrors.accountHolderName}</p>
+                )}
+              </div>
+
+              {/* Account Number */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Account Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  disabled={isReadOnly || bankSaving}
+                  value={bankForm.accountNumber}
+                  onChange={(e) => handleBankChange("accountNumber", e.target.value)}
+                  placeholder="e.g. 12345678954"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none font-mono transition-colors ${
+                    bankErrors.accountNumber
+                      ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 text-red-900"
+                      : "border-gray-200 focus:ring-2 focus:ring-brand-500 bg-white"
+                  }`}
+                />
+                {bankErrors.accountNumber && (
+                  <p className="text-[11px] text-red-600 mt-1 font-medium">{bankErrors.accountNumber}</p>
+                )}
+              </div>
+
+              {/* IFSC Code */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  IFSC Code <span className="text-red-500">*</span>
+                </label>
+                <input
+                  disabled={isReadOnly || bankSaving}
+                  value={bankForm.ifscCode}
+                  onChange={(e) => handleBankChange("ifscCode", e.target.value)}
+                  placeholder="e.g. HDFC0002565"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none font-mono uppercase transition-colors ${
+                    bankErrors.ifscCode
+                      ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 text-red-900"
+                      : "border-gray-200 focus:ring-2 focus:ring-brand-500 bg-white"
+                  }`}
+                />
+                {bankErrors.ifscCode && (
+                  <p className="text-[11px] text-red-600 mt-1 font-medium">{bankErrors.ifscCode}</p>
+                )}
+              </div>
+
+              {/* UPI ID */}
+              <div className="col-span-1 md:col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  UPI ID (Optional)
+                </label>
+                <input
+                  disabled={isReadOnly || bankSaving}
+                  value={bankForm.upiId}
+                  onChange={(e) => handleBankChange("upiId", e.target.value)}
+                  placeholder="e.g. aniket@upi"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none transition-colors ${
+                    bankErrors.upiId
+                      ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 text-red-900"
+                      : "border-gray-200 focus:ring-2 focus:ring-brand-500 bg-white"
+                  }`}
+                />
+                {bankErrors.upiId && (
+                  <p className="text-[11px] text-red-600 mt-1 font-medium">{bankErrors.upiId}</p>
+                )}
+              </div>
+
+              <div className="col-span-1 md:col-span-2 flex justify-end mt-2">
+                {!isReadOnly && (
+                  <button
+                    type="submit"
+                    disabled={bankSaving}
+                    className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white px-5 py-2 rounded-lg text-sm transition font-semibold cursor-pointer"
+                  >
+                    {bankSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        <span>Save Bank Details</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                {isReadOnly && (
+                  <p className="text-xs text-gray-400 italic">
+                    SuperAdmin has view-only access
+                  </p>
+                )}
+              </div>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* GOVERNMENT E-INVOICE INTEGRATION CARD */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-150 mt-6 space-y-6">
+        {/* State 1: Setup Form */}
+        {(!isConnected || isEditing) ? (
+          <div className="space-y-6">
+            {/* Header Area */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-brand-650 shrink-0">
+                  <Landmark className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-base text-gray-900 flex items-center gap-2">
+                    🏛 Government E-Invoice
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Connect your business to the Government E-Invoice Portal.
+                  </p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    This is a one-time setup required before you can generate Government GST E-Invoices.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-red-55/60 border border-red-100 rounded-full text-red-700 text-xs font-semibold self-start sm:self-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block animate-pulse"></span>
+                🔴 Not Connected
+              </div>
+            </div>
+
+            {/* Failure alert message */}
+            {sessionError && (() => {
+              const friendlyError = getUserFriendlyEInvoiceError(sessionError);
+              return (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 text-red-850 text-xs animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="text-red-500 font-bold text-sm shrink-0">❌</div>
+                  <div className="flex-1 space-y-2">
+                    <p className="font-bold text-red-900">{friendlyError.title}</p>
+                    <p className="text-red-800 leading-relaxed font-semibold">
+                      {friendlyError.description}
+                    </p>
+                    <p className="text-red-750 leading-relaxed font-medium bg-white/75 p-2.5 rounded-lg border border-red-100">
+                      <strong>Action:</strong> {friendlyError.actionableAdvice}
+                    </p>
+
+                    <details className="text-[10px] text-red-600 font-medium cursor-pointer select-none pt-1 border-t border-red-200/50">
+                      <summary className="hover:text-red-800 transition duration-150">View technical error details</summary>
+                      <p className="text-[10px] text-red-700 font-mono bg-red-100/50 p-2 rounded-lg break-all mt-1 cursor-text select-text">
+                        {sessionError}
+                      </p>
+                    </details>
+
+                    <button
+                      onClick={() => dispatch(clearEInvoiceStatus())}
+                      className="mt-2 px-3 py-1.5 bg-red-600 hover:bg-red-750 text-white rounded-lg text-[10px] font-bold transition inline-block cursor-pointer border-0 shadow-xs"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Input Form */}
+            <form onSubmit={handleConnect} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Business GSTIN <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    disabled={connectLoading || sessionLoading}
+                    maxLength={15}
+                    value={form.eInvoiceGstin}
+                    onChange={(e) => handleEInvoiceChange("eInvoiceGstin", e.target.value.toUpperCase())}
+                    placeholder="29AAACQ3770E000"
+                    className={`w-full border px-3 py-2.5 rounded-xl text-sm focus:outline-none bg-white transition-colors disabled:bg-gray-50 disabled:text-gray-400 ${
+                      eInvoiceErrors.eInvoiceGstin
+                        ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                        : "border-gray-205 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                    }`}
+                  />
+                  {eInvoiceErrors.eInvoiceGstin && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {eInvoiceErrors.eInvoiceGstin}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Government Portal Username <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    disabled={connectLoading || sessionLoading}
+                    value={form.eInvoiceUsername}
+                    onChange={(e) => handleEInvoiceChange("eInvoiceUsername", e.target.value)}
+                    placeholder="Portal Username"
+                    className={`w-full border px-3 py-2.5 rounded-xl text-sm focus:outline-none bg-white transition-colors disabled:bg-gray-50 disabled:text-gray-400 ${
+                      eInvoiceErrors.eInvoiceUsername
+                        ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                        : "border-gray-205 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                    }`}
+                  />
+                  {eInvoiceErrors.eInvoiceUsername && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {eInvoiceErrors.eInvoiceUsername}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Government Portal Password <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      disabled={connectLoading || sessionLoading}
+                      type={showPassword ? "text" : "password"}
+                      value={form.eInvoicePassword}
+                      onChange={(e) => handleEInvoiceChange("eInvoicePassword", e.target.value)}
+                      placeholder="••••••••••••"
+                      className={`w-full border pl-3 pr-10 py-2.5 rounded-xl text-sm focus:outline-none bg-white transition-colors disabled:bg-gray-50 disabled:text-gray-400 ${
+                        eInvoiceErrors.eInvoicePassword
+                          ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                          : "border-gray-205 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-605"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {eInvoiceErrors.eInvoicePassword && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {eInvoiceErrors.eInvoicePassword}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Info alert / Action footer */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+                <div className="flex items-start gap-2 bg-gray-50 px-4 py-3 rounded-xl border border-gray-150 flex-1">
+                  <Lock className="w-4 h-4 text-brand-650 mt-0.5 shrink-0" />
+                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                    🔒 Your login details are securely stored. They are only used to connect to the Government E-Invoice Portal.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 self-end sm:self-center">
+                  {isEditing && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(false)}
+                      className="px-5 py-2.5 border border-gray-200 text-gray-700 hover:bg-gray-55 text-sm font-semibold rounded-xl transition animate-none"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={connectLoading || sessionLoading}
+                    className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition shadow-sm shrink-0 select-none animate-none"
+                  >
+                    {connectLoading || sessionLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Connecting to Government Portal...
+                      </>
+                    ) : (
+                      "Connect"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        ) : (
+          /* State 2: Connected Dashboard (Matches Requested Design) */
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Header Area */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-5">
+              <div className="flex items-start gap-3.5">
+                <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 border border-emerald-100 relative">
+                  <Landmark className="w-5.5 h-5.5" />
+                  <span className="absolute bottom-0 right-0 w-4.5 h-4.5 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center text-[9px] text-white select-none">✓</span>
+                </div>
+                <div>
+                  <h2 className="font-bold text-lg text-gray-950 tracking-tight">
+                    Government E-Invoice
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                    Connect to the Government E-Invoice portal and generate official GST E-Invoices for eligible B2B sales.
+                  </p>
+                </div>
+              </div>
+
+              {/* Connected badge */}
+              <div className="flex items-center gap-3 px-5 py-3 bg-emerald-50/40 border border-emerald-150 rounded-2xl text-emerald-850 shrink-0 select-none">
+                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white shrink-0 font-bold text-xs">
+                  ✓
+                </div>
+                <div className="text-xs">
+                  <p className="font-bold text-emerald-950">Connected</p>
+                  <p className="text-[10px] text-emerald-700 mt-0.5">E-Invoice service is ready to use</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Integration Details Info Row (Four Column Grid) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 border border-gray-150 rounded-2xl p-5 bg-white divide-y sm:divide-y-0 sm:divide-x divide-gray-100 shadow-2xs gap-4 sm:gap-0">
+              {/* Column 1: GSTIN */}
+              <div className="flex items-center gap-3.5 px-0 sm:px-4 py-2 sm:py-0">
+                <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                  <User className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-405 uppercase tracking-wider">Your GSTIN</p>
+                  <p className="text-xs font-bold text-gray-800 font-mono mt-0.5">{form.eInvoiceGstin || "—"}</p>
+                </div>
+              </div>
+
+              {/* Column 2: Connection status */}
+              <div className="flex items-center gap-3.5 px-0 sm:px-6 py-2 sm:py-0">
+                <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                  <Wifi className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-405 uppercase tracking-wider">Connection</p>
+                  <p className="text-xs font-black text-emerald-650 mt-0.5">Active</p>
+                </div>
+              </div>
+
+              {/* Column 3: Last connected timestamp */}
+              <div className="flex items-center gap-3.5 px-0 sm:px-6 py-2 sm:py-0">
+                <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-405 uppercase tracking-wider">Last Connected</p>
+                  <p className="text-xs font-bold text-gray-850 mt-0.5">
+                    {lastConnectedTime ? `Today, ${lastConnectedTime.toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', hour12: true })}` : "—"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Column 4: Portal context */}
+              <div className="flex items-center gap-3.5 px-0 sm:px-6 py-2 sm:py-0">
+                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-405 uppercase tracking-wider">Portal</p>
+                  <p className="text-xs font-bold text-gray-800 mt-0.5">Sandbox (Testing)</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Portal Login Details Sub-container */}
+            <div className="border border-gray-150 rounded-2xl p-5 bg-white space-y-4 shadow-3xs">
+              <div className="flex items-center gap-2 text-emerald-600 border-b border-gray-100 pb-3">
+                <Lock className="w-4 h-4 shrink-0" />
+                <h3 className="font-bold text-xs uppercase tracking-wider text-gray-700">Portal Login Details</h3>
+              </div>
+
+              {/* Details boxes */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Username */}
+                <div className="flex items-center gap-3 border border-gray-150 rounded-xl p-3.5 bg-gray-50/30">
+                  <User className="w-5 h-5 text-gray-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-gray-450 font-bold uppercase tracking-wider">Portal Username</p>
+                    <p className="text-xs font-bold text-gray-855 truncate mt-0.5">{form.eInvoiceUsername || "—"}</p>
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div className="flex items-center gap-3 border border-gray-150 rounded-xl p-3.5 bg-gray-50/30 justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Lock className="w-5 h-5 text-gray-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-gray-450 font-bold uppercase tracking-wider">Portal Password</p>
+                      <p className="text-xs font-bold text-gray-855 mt-0.5">••••••••••••</p>
+                    </div>
+                  </div>
+                  <EyeOff className="w-4 h-4 text-gray-300 cursor-not-allowed shrink-0" />
+                </div>
+
+                {/* Business GSTIN */}
+                <div className="flex items-center gap-3 border border-gray-150 rounded-xl p-3.5 bg-gray-50/30">
+                  <FileSpreadsheet className="w-5 h-5 text-gray-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-gray-450 font-bold uppercase tracking-wider">Business GSTIN</p>
+                    <p className="text-xs font-bold text-gray-855 font-mono truncate mt-0.5">{form.eInvoiceGstin || "—"}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* All set Banner */}
+              <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-4 flex items-center justify-between shadow-2xs gap-4 flex-wrap sm:flex-nowrap">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0 select-none animate-none">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-emerald-950">All set!</h4>
+                    <p className="text-[11px] text-emerald-800 mt-0.5">
+                      You can now generate Government E-Invoices for eligible GST-registered customers.
+                    </p>
+                  </div>
+                </div>
+                {/* Simulated CSS graphic of Document with QR and check shield */}
+                <div className="flex items-center gap-2 border border-emerald-100 bg-white p-2 rounded-lg shrink-0 pr-3 select-none">
+                  <div className="w-6 h-6 bg-emerald-50 rounded flex items-center justify-center text-emerald-600 font-bold text-xs">QR</div>
+                  <div className="text-[9px] text-gray-550 font-bold leading-tight">
+                    <p className="text-emerald-800">E-INVOICE</p>
+                    <p className="text-gray-400">READY</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action buttons footer */}
+            <div className="flex justify-between items-center pt-2 gap-4 flex-wrap">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleReconnect}
+                  disabled={sessionLoading}
+                  className="flex items-center gap-1.5 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl transition disabled:opacity-50 animate-none shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${sessionLoading ? "animate-spin" : ""}`} />
+                  Reconnect
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="flex items-center gap-1.5 px-5 py-2.5 border border-gray-200 text-gray-650 hover:bg-gray-55 text-xs font-bold rounded-xl transition animate-none shrink-0"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Update Login Details
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleReconnect}
+                disabled={sessionLoading}
+                className="flex items-center gap-1.5 px-5 py-2.5 border border-gray-200 text-gray-650 hover:bg-gray-55 text-xs font-bold rounded-xl transition animate-none shrink-0"
+              >
+                <Activity className="w-3.5 h-3.5" />
+                Test Connection
+              </button>
+            </div>
+
+            {/* Security policy card */}
+            <div className="bg-blue-50/40 border border-blue-100 rounded-2xl p-5 flex items-center justify-between text-xs shadow-3xs gap-4 flex-wrap sm:flex-nowrap">
+              <div className="flex items-start gap-3.5">
+                <Shield className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-blue-950 text-xs">Your information is safe</h4>
+                  <p className="text-blue-800 text-[11px] mt-0.5 leading-relaxed">
+                    Your portal login details are securely stored and used only to connect and generate Government E-Invoices.
+                  </p>
+                </div>
+              </div>
+              <a 
+                href="https://einv-apisandbox.nic.in/" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-[11px] font-bold text-blue-700 hover:underline hover:text-blue-800 shrink-0 flex items-center gap-0.5"
+              >
+                Learn more about E-Invoice &gt;
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* GOVERNMENT E-WAY BILL INTEGRATION CARD */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-150 mt-6 space-y-6">
+        {/* State 1: Setup Form */}
+        {(!isEWayBillConnected || isEWayBillEditing) ? (
+          <div className="space-y-6">
+            {/* Header Area */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-brand-650 shrink-0">
+                  <Landmark className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-base text-gray-900 flex items-center gap-2">
+                    🚚 Government E-Way Bill
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Connect your business to the Government E-Way Bill Portal.
+                  </p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    This is a one-time setup required before you can generate Government E-Way Bills.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-red-55/60 border border-red-100 rounded-full text-red-700 text-xs font-semibold self-start sm:self-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block animate-pulse"></span>
+                🔴 Not Connected
+              </div>
+            </div>
+
+            {/* Failure alert message */}
+            {ewayBillSessionError && (() => {
+              const friendlyError = getUserFriendlyEInvoiceError(ewayBillSessionError);
+              return (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 text-red-850 text-xs animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="text-red-500 font-bold text-sm shrink-0">❌</div>
+                  <div className="flex-1 space-y-2">
+                    <p className="font-bold text-red-900">{friendlyError.title}</p>
+                    <p className="text-red-800 leading-relaxed font-semibold">
+                      {friendlyError.description}
+                    </p>
+                    <p className="text-red-750 leading-relaxed font-medium bg-white/75 p-2.5 rounded-lg border border-red-100">
+                      <strong>Action:</strong> {friendlyError.actionableAdvice}
+                    </p>
+
+                    <details className="text-[10px] text-red-600 font-medium cursor-pointer select-none pt-1 border-t border-red-200/50">
+                      <summary className="hover:text-red-800 transition duration-150">View technical error details</summary>
+                      <p className="text-[10px] text-red-700 font-mono bg-red-100/50 p-2 rounded-lg break-all mt-1 cursor-text select-text">
+                        {ewayBillSessionError}
+                      </p>
+                    </details>
+
+                    <button
+                      onClick={() => dispatch(clearEWayBillStatus())}
+                      className="mt-2 px-3 py-1.5 bg-red-600 hover:bg-red-750 text-white rounded-lg text-[10px] font-bold transition inline-block cursor-pointer border-0 shadow-xs"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Input Form */}
+            <form onSubmit={handleEWayBillConnect} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Business GSTIN <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    disabled={connectEWayBillLoading || ewayBillSessionLoading}
+                    maxLength={15}
+                    value={form.eInvoiceGstin}
+                    onChange={(e) => handleEWayBillChange("eInvoiceGstin", e.target.value.toUpperCase())}
+                    placeholder="29AAACQ3770E000"
+                    className={`w-full border px-3 py-2.5 rounded-xl text-sm focus:outline-none bg-white transition-colors disabled:bg-gray-50 disabled:text-gray-400 ${
+                      eWayBillErrors.eInvoiceGstin
+                        ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                        : "border-gray-205 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                    }`}
+                  />
+                  {eWayBillErrors.eInvoiceGstin && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {eWayBillErrors.eInvoiceGstin}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    E-Way Bill Portal Username <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    disabled={connectEWayBillLoading || ewayBillSessionLoading}
+                    value={form.eWayBillUsername}
+                    onChange={(e) => handleEWayBillChange("eWayBillUsername", e.target.value)}
+                    placeholder="Portal Username"
+                    className={`w-full border px-3 py-2.5 rounded-xl text-sm focus:outline-none bg-white transition-colors disabled:bg-gray-50 disabled:text-gray-400 ${
+                      eWayBillErrors.eWayBillUsername
+                        ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                        : "border-gray-205 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                    }`}
+                  />
+                  {eWayBillErrors.eWayBillUsername && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {eWayBillErrors.eWayBillUsername}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    E-Way Bill Portal Password <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      disabled={connectEWayBillLoading || ewayBillSessionLoading}
+                      type={showEWayBillPassword ? "text" : "password"}
+                      value={form.eWayBillPassword}
+                      onChange={(e) => handleEWayBillChange("eWayBillPassword", e.target.value)}
+                      placeholder="••••••••••••"
+                      className={`w-full border pl-3 pr-10 py-2.5 rounded-xl text-sm focus:outline-none bg-white transition-colors disabled:bg-gray-50 disabled:text-gray-400 ${
+                        eWayBillErrors.eWayBillPassword
+                          ? "border-red-500 bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-red-900"
+                          : "border-gray-205 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowEWayBillPassword(!showEWayBillPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-605"
+                    >
+                      {showEWayBillPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {eWayBillErrors.eWayBillPassword && (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium animate-in fade-in duration-150">
+                      {eWayBillErrors.eWayBillPassword}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Info alert / Action footer */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+                <div className="flex items-start gap-2 bg-gray-50 px-4 py-3 rounded-xl border border-gray-150 flex-1">
+                  <Lock className="w-4 h-4 text-brand-650 mt-0.5 shrink-0" />
+                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                    🔒 Your login details are securely stored. They are only used to connect to the Government E-Way Bill Portal.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 self-end sm:self-center">
+                  {isEWayBillEditing && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEWayBillEditing(false)}
+                      className="px-5 py-2.5 border border-gray-200 text-gray-700 hover:bg-gray-55 text-sm font-semibold rounded-xl transition animate-none"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={connectEWayBillLoading || ewayBillSessionLoading}
+                    className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition shadow-sm shrink-0 select-none animate-none"
+                  >
+                    {connectEWayBillLoading || ewayBillSessionLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Connecting to Portal...
+                      </>
+                    ) : (
+                      "Connect"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        ) : (
+          /* State 2: Connected Dashboard */
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Header Area */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-5">
+              <div className="flex items-start gap-3.5">
+                <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 border border-emerald-100 relative">
+                  <Landmark className="w-5.5 h-5.5" />
+                  <span className="absolute bottom-0 right-0 w-4.5 h-4.5 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center text-[9px] text-white select-none">✓</span>
+                </div>
+                <div>
+                  <h2 className="font-bold text-lg text-gray-950 tracking-tight">
+                    Government E-Way Bill
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                    Connect to the Government E-Way Bill portal and generate official GST E-Way Bills for eligible sales.
+                  </p>
+                </div>
+              </div>
+
+              {/* Connected badge */}
+              <div className="flex items-center gap-3 px-5 py-3 bg-emerald-50/40 border border-emerald-150 rounded-2xl text-emerald-850 shrink-0 select-none">
+                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white shrink-0 font-bold text-xs">
+                  ✓
+                </div>
+                <div className="text-xs">
+                  <p className="font-bold text-emerald-950">Connected</p>
+                  <p className="text-[10px] text-emerald-700 mt-0.5">E-Way Bill service is ready to use</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Integration Details Info Row (Four Column Grid) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 border border-gray-150 rounded-2xl p-5 bg-white divide-y sm:divide-y-0 sm:divide-x divide-gray-100 shadow-2xs gap-4 sm:gap-0">
+              {/* Column 1: GSTIN */}
+              <div className="flex items-center gap-3.5 px-0 sm:px-4 py-2 sm:py-0">
+                <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                  <User className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-405 uppercase tracking-wider">Your GSTIN</p>
+                  <p className="text-xs font-bold text-gray-800 font-mono mt-0.5">{form.eInvoiceGstin || "—"}</p>
+                </div>
+              </div>
+
+              {/* Column 2: Connection status */}
+              <div className="flex items-center gap-3.5 px-0 sm:px-6 py-2 sm:py-0">
+                <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                  <Wifi className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-405 uppercase tracking-wider">Connection</p>
+                  <p className="text-xs font-black text-emerald-650 mt-0.5">Active</p>
+                </div>
+              </div>
+
+              {/* Column 3: Last connected timestamp */}
+              <div className="flex items-center gap-3.5 px-0 sm:px-6 py-2 sm:py-0">
+                <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-405 uppercase tracking-wider">Last Connected</p>
+                  <p className="text-xs font-bold text-gray-855 mt-0.5">
+                    {lastEWayBillConnectedTime ? `Today, ${lastEWayBillConnectedTime.toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', hour12: true })}` : "—"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Column 4: Portal context */}
+              <div className="flex items-center gap-3.5 px-0 sm:px-6 py-2 sm:py-0">
+                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-405 uppercase tracking-wider">Portal</p>
+                  <p className="text-xs font-bold text-gray-800 mt-0.5">Sandbox (Testing)</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Portal Login Details Sub-container */}
+            <div className="border border-gray-150 rounded-2xl p-5 bg-white space-y-4 shadow-3xs">
+              <div className="flex items-center gap-2 text-emerald-605 border-b border-gray-100 pb-3">
+                <Lock className="w-4 h-4 shrink-0" />
+                <h3 className="font-bold text-xs uppercase tracking-wider text-gray-700">Portal Login Details</h3>
+              </div>
+
+              {/* Details boxes */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Username */}
+                <div className="flex items-center gap-3 border border-gray-150 rounded-xl p-3.5 bg-gray-50/30">
+                  <User className="w-5 h-5 text-gray-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-gray-455 font-bold uppercase tracking-wider">Portal Username</p>
+                    <p className="text-xs font-bold text-gray-855 truncate mt-0.5">{form.eWayBillUsername || "—"}</p>
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div className="flex items-center gap-3 border border-gray-150 rounded-xl p-3.5 bg-gray-50/30 justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Lock className="w-5 h-5 text-gray-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-gray-455 font-bold uppercase tracking-wider">Portal Password</p>
+                      <p className="text-xs font-bold text-gray-855 mt-0.5">••••••••••••</p>
+                    </div>
+                  </div>
+                  <EyeOff className="w-4 h-4 text-gray-300 cursor-not-allowed shrink-0" />
+                </div>
+
+                {/* Business GSTIN */}
+                <div className="flex items-center gap-3 border border-gray-150 rounded-xl p-3.5 bg-gray-50/30">
+                  <FileSpreadsheet className="w-5 h-5 text-gray-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-gray-455 font-bold uppercase tracking-wider">Business GSTIN</p>
+                    <p className="text-xs font-bold text-gray-855 font-mono truncate mt-0.5">{form.eInvoiceGstin || "—"}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* All set Banner */}
+              <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-4 flex items-center justify-between shadow-2xs gap-4 flex-wrap sm:flex-nowrap">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0 select-none animate-none">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-emerald-950">All set!</h4>
+                    <p className="text-[11px] text-emerald-800 mt-0.5">
+                      You can now generate Government E-Way Bills for eligible sales.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 border border-emerald-100 bg-white p-2 rounded-lg shrink-0 pr-3 select-none">
+                  <div className="w-6 h-6 bg-emerald-50 rounded flex items-center justify-center text-emerald-600 font-bold text-xs">EWB</div>
+                  <div className="text-[9px] text-gray-550 font-bold leading-tight">
+                    <p className="text-emerald-800">E-WAY BILL</p>
+                    <p className="text-gray-400">READY</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action buttons footer */}
+            <div className="flex justify-between items-center pt-2 gap-4 flex-wrap">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleEWayBillReconnect}
+                  disabled={ewayBillSessionLoading}
+                  className="flex items-center gap-1.5 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl transition disabled:opacity-50 animate-none shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${ewayBillSessionLoading ? "animate-spin" : ""}`} />
+                  Reconnect
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEWayBillEditing(true)}
+                  className="flex items-center gap-1.5 px-5 py-2.5 border border-gray-200 text-gray-655 hover:bg-gray-55 text-xs font-bold rounded-xl transition animate-none shrink-0"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Update Login Details
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleEWayBillReconnect}
+                disabled={ewayBillSessionLoading}
+                className="flex items-center gap-1.5 px-5 py-2.5 border border-gray-200 text-gray-655 hover:bg-gray-55 text-xs font-bold rounded-xl transition animate-none shrink-0"
+              >
+                <Activity className="w-3.5 h-3.5" />
+                Test Connection
+              </button>
+            </div>
+
+            {/* Security policy card */}
+            <div className="bg-blue-50/40 border border-blue-100 rounded-2xl p-5 flex items-center justify-between text-xs shadow-3xs gap-4 flex-wrap sm:flex-nowrap">
+              <div className="flex items-start gap-3.5">
+                <Shield className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-blue-950 text-xs">Your information is safe</h4>
+                  <p className="text-blue-800 text-[11px] mt-0.5 leading-relaxed">
+                    Your portal login details are securely stored and used only to connect and generate Government E-Way Bills.
+                  </p>
+                </div>
+              </div>
+              <a 
+                href="https://einv-apisandbox.nic.in/" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-[11px] font-bold text-blue-700 hover:underline hover:text-blue-800 shrink-0 flex items-center gap-0.5"
+              >
+                Learn more about E-Way Bill &gt;
+              </a>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

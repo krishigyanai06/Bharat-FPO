@@ -35,13 +35,15 @@ export const ROUTE_ROLES = {
   '/ledger': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN],
   '/advertisement': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN],
   '/reports': [ROLES.FPO, ROLES.ADMIN, ROLES.VIEWER],
+  '/gst-reports': [ROLES.FPO, ROLES.ADMIN, ROLES.VIEWER],
   '/settings': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN],
   '/party': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN, ROLES.VIEWER],
+  '/customers': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN, ROLES.VIEWER],
   '/sell': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN, ROLES.VIEWER],
   '/purchase': [ROLES.FPO, ROLES.ADMIN, ROLES.SUPERADMIN, ROLES.VIEWER],
   '/create-tenant': [ROLES.SUPERADMIN],
   '/tier-features': [ROLES.SUPERADMIN],
-
+  '/superadmin/whatsapp-campaign': [ROLES.SUPERADMIN],
 };
 
 // Helper to check if role has permission

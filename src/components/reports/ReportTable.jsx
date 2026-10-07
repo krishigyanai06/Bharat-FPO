@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpDown, ChevronLeft, ChevronRight, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUpDown, ArrowLeft, ArrowRight, ArrowUp, ArrowDown } from 'lucide-react';
 import LoadingSkeleton from './LoadingSkeleton';
 import EmptyState from './EmptyState';
 
@@ -99,70 +99,40 @@ const ReportTable = ({
 
       {/* Pagination component */}
       {pagination && pagination.totalPages > 1 && (
-        <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-4 bg-gray-50/20">
-          <div className="text-xs font-medium text-gray-400">
-            Showing Page <span className="text-gray-700 font-bold">{pagination.page}</span> of{' '}
-            <span className="text-gray-700 font-bold">{pagination.totalPages}</span>
-            {pagination.totalRecords !== undefined && (
-              <>
-                {' '}
-                (<span className="text-gray-700 font-bold">{pagination.totalRecords}</span> items total)
-              </>
-            )}
+        <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-4 bg-white select-none">
+          {/* Left: Item Range */}
+          <div className="text-xs font-semibold text-gray-500">
+            Showing{' '}
+            <span className="text-[#15803D] font-bold">
+              {pagination.totalRecords === 0 ? 0 : (pagination.page - 1) * (pagination.limit || 10) + 1}–
+              {Math.min(pagination.page * (pagination.limit || 10), pagination.totalRecords)}
+            </span>{' '}
+            of <span className="text-[#15803D] font-bold">{Number(pagination.totalRecords).toLocaleString('en-IN')}</span> items
           </div>
           
-          <div className="flex items-center gap-1.5">
+          {/* Center: Current Page Status */}
+          <div className="text-xs font-semibold text-gray-500">
+            Page <span className="text-[#15803D] font-bold">{pagination.page}</span> of {pagination.totalPages}
+          </div>
+
+          {/* Right: Previous / Next Buttons */}
+          <div className="flex items-center gap-3">
             <button
               onClick={() => onPageChange(pagination.page - 1)}
               disabled={pagination.page <= 1}
-              className="p-1.5 bg-white border border-gray-200 rounded-lg text-gray-500 hover:text-gray-800 disabled:opacity-50 disabled:pointer-events-none hover:bg-gray-50 active:scale-95 transition-all cursor-pointer"
+              className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2 font-bold text-xs text-gray-700 shadow-sm transition-all hover:bg-gray-50 active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ArrowLeft className="w-4 h-4 text-[#15803D]" />
+              <span>Previous</span>
             </button>
-            
-            {Array.from({ length: pagination.totalPages }).map((_, i) => {
-              const pageNum = i + 1;
-              const isCurrent = pageNum === pagination.page;
-              
-              // Only display pagination buttons for current page, surrounding pages, and edges
-              if (
-                pageNum === 1 ||
-                pageNum === pagination.totalPages ||
-                Math.abs(pageNum - pagination.page) <= 1
-              ) {
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => onPageChange(pageNum)}
-                    className={`w-7.5 h-7.5 text-xs font-bold rounded-lg transition-all active:scale-95 cursor-pointer ${
-                      isCurrent
-                        ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
-                        : 'bg-white text-gray-500 hover:text-gray-800 border border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              }
-              
-              // Draw ellipses for skipped ranges
-              if (pageNum === 2 || pageNum === pagination.totalPages - 1) {
-                return (
-                  <span key={pageNum} className="text-gray-400 text-xs px-1 select-none">
-                    ...
-                  </span>
-                );
-              }
-              
-              return null;
-            })}
-            
+
             <button
               onClick={() => onPageChange(pagination.page + 1)}
               disabled={pagination.page >= pagination.totalPages}
-              className="p-1.5 bg-white border border-gray-200 rounded-lg text-gray-500 hover:text-gray-800 disabled:opacity-50 disabled:pointer-events-none hover:bg-gray-50 active:scale-95 transition-all cursor-pointer"
+              className="flex items-center gap-2 bg-[#15803D] hover:bg-green-700 text-white rounded-xl px-4 py-2 font-bold text-xs shadow-sm shadow-green-600/10 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
             >
-              <ChevronRight className="w-4 h-4" />
+              <span>Next</span>
+              <ArrowRight className="w-4 h-4 text-white" />
             </button>
           </div>
         </div>

@@ -2,15 +2,19 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchSales } from '../../store/thunks/sellThunk';
 import { fetchParties } from '../../store/thunks/partyThunk';
+import { fetchProducts } from '../../store/thunks/inventoryThunk';
 import { downloadSalesReport } from '../../store/thunks/reportsThunk';
 import { generateClientSalesReportPDF, generateIndividualSalePDF } from '../../utils/clientPdfGenerator';
+import { fetchProcurementSales } from '../../redux/procurementSaleThunk';
 import api from '../../lib/api';
+import ErrorState from '../../components/ErrorState';
+import toast from 'react-hot-toast';
 
 import { 
   RotateCw, 
   Search, 
-  ChevronLeft, 
-  ChevronRight, 
+  ArrowLeft, 
+  ArrowRight, 
   Loader2,
   Wallet,
   AlertCircle,
@@ -36,10 +40,15 @@ const SalesReport = () => {
   const dispatch = useDispatch();
   const exportDropdownRef = useRef(null);
   const rowMenuRef = useRef(null);
+  const startDateInputRef = useRef(null);
+  const endDateInputRef = useRef(null);
 
   // Redux Selectors
-  const { sales, loading: salesLoading } = useSelector((state) => state.sell);
+  const { sales: inventorySales, loading: inventoryLoading } = useSelector((state) => state.sell);
+  const { sales: procurementSales, loading: procurementLoading } = useSelector((state) => state.procurementSales || { sales: [] });
+  const salesLoading = inventoryLoading || procurementLoading;
   const { parties } = useSelector((state) => state.party);
+  const { products = [] } = useSelector((state) => state.inventory || {});
   const { salesDownloadLoading, error } = useSelector((state) => state.reports);
 
   // Filters State
@@ -48,7 +57,17 @@ const SalesReport = () => {
   const [saleType, setSaleType] = useState('');
   const [billingType, setBillingType] = useState('');
   const [partyId, setPartyId] = useState('');
+  const [itemId, setItemId] = useState('');
   const [search, setSearch] = useState('');
+  const [dateError, setDateError] = useState(null);
+
+  const combinedSales = useMemo(() => {
+    const inv = (saleType === 'PROCUREMENT') ? [] : (inventorySales || []).map(s => ({ ...s, sourceType: 'Inventory', saleType: s.saleType || 'SALE' }));
+    const proc = (saleType === 'INVENTORY') ? [] : (procurementSales || []).map(s => ({ ...s, sourceType: 'Procurement', saleType: 'PROCUREMENT' }));
+    return [...inv, ...proc];
+  }, [inventorySales, procurementSales, saleType]);
+
+  const sales = combinedSales;
 
   // UI Dropdowns State
   const [exportOpen, setExportOpen] = useState(false);
@@ -82,18 +101,21 @@ const SalesReport = () => {
   // Initial Fetch
   useEffect(() => {
     dispatch(fetchParties());
+    dispatch(fetchProducts());
   }, [dispatch]);
 
   // Reactive Fetch when filters change
   useEffect(() => {
-    const currentFilters = { startDate, endDate, saleType, billingType, party: partyId };
+    const currentFilters = { startDate, endDate, saleType, billingType, party: partyId, search, item: itemId };
 
     const filtersChanged = !lastFetchedFilters.current ||
       currentFilters.startDate !== lastFetchedFilters.current.startDate ||
       currentFilters.endDate !== lastFetchedFilters.current.endDate ||
       currentFilters.saleType !== lastFetchedFilters.current.saleType ||
       currentFilters.billingType !== lastFetchedFilters.current.billingType ||
-      currentFilters.party !== lastFetchedFilters.current.party;
+      currentFilters.party !== lastFetchedFilters.current.party ||
+      currentFilters.search !== lastFetchedFilters.current.search ||
+      currentFilters.item !== lastFetchedFilters.current.item;
 
     if (!filtersChanged) return;
 
@@ -116,16 +138,45 @@ const SalesReport = () => {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [startDate, endDate, saleType, billingType, partyId]);
+  }, [startDate, endDate, saleType, billingType, partyId, search, itemId]);
+
+  const getTodayString = () => new Date().toISOString().split('T')[0];
+
+  const validateDateRange = (sDate, eDate) => {
+    const today = getTodayString();
+    if (sDate && sDate > today) {
+      return "Future dates are not allowed.\nPlease select today's date or an earlier date.";
+    }
+    if (eDate && eDate > today) {
+      return "Future dates are not allowed.\nPlease select today's date or an earlier date.";
+    }
+    if (sDate && eDate && sDate > eDate) {
+      return "From Date cannot be later than To Date.\nPlease select a valid date range.";
+    }
+    return null;
+  };
 
   const handleFetchData = (targetFilters = null) => {
-    const rawFilters = targetFilters || { startDate, endDate, saleType, billingType, party: partyId };
+    const rawFilters = targetFilters || { startDate, endDate, saleType, billingType, party: partyId, search, item: itemId };
+    
+    // Date Range Validation
+    const dateErr = validateDateRange(rawFilters.startDate, rawFilters.endDate);
+    if (dateErr) {
+      setDateError(dateErr);
+      toast.error(dateErr);
+      return;
+    }
+
+    setDateError(null);
+
     const filters = {};
     if (rawFilters.startDate) filters.startDate = rawFilters.startDate;
     if (rawFilters.endDate) filters.endDate = rawFilters.endDate;
     if (rawFilters.saleType) filters.saleType = rawFilters.saleType;
     if (rawFilters.billingType) filters.billingType = rawFilters.billingType;
     if (rawFilters.party) filters.party = rawFilters.party;
+    if (rawFilters.search) filters.search = rawFilters.search;
+    if (rawFilters.item) filters.item = rawFilters.item;
 
     if (activeRequestRef.current) {
       activeRequestRef.current.abort();
@@ -133,8 +184,20 @@ const SalesReport = () => {
 
     lastFetchedFilters.current = rawFilters;
 
-    const promise = dispatch(fetchSales(filters));
-    activeRequestRef.current = promise;
+    const selectedType = rawFilters.saleType; // "INVENTORY", "PROCUREMENT", or ""
+
+    // Don't pass UI category 'INVENTORY' or 'PROCUREMENT' as query param to sell list APIs
+    const apiFilters = { ...filters };
+    if (selectedType === 'INVENTORY' || selectedType === 'PROCUREMENT') {
+      delete apiFilters.saleType;
+    }
+
+    if (selectedType === 'INVENTORY' || !selectedType) {
+      dispatch(fetchSales(apiFilters));
+    }
+    if (selectedType === 'PROCUREMENT' || !selectedType) {
+      dispatch(fetchProcurementSales(apiFilters));
+    }
 
     setCurrentPage(1);
     setOpenRowActionId(null);
@@ -146,9 +209,11 @@ const SalesReport = () => {
     setSaleType('');
     setBillingType('');
     setPartyId('');
+    setItemId('');
     setSearch('');
+    setDateError(null);
 
-    const cleanFilters = { startDate: '', endDate: '', saleType: '', billingType: '', party: '' };
+    const cleanFilters = { startDate: '', endDate: '', saleType: '', billingType: '', party: '', search: '', item: '' };
 
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
@@ -157,13 +222,26 @@ const SalesReport = () => {
     handleFetchData(cleanFilters);
   };
 
-  const handleDownloadPDF = async () => {
+  const getReportApiQueryFilters = () => {
     const filters = {};
-    if (startDate) filters.startDate = startDate;
-    if (endDate) filters.endDate = endDate;
     if (saleType) filters.saleType = saleType;
     if (billingType) filters.billingType = billingType;
-    if (partyId) filters.party = partyId;
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+    if (search) filters.search = search;
+    if (itemId) filters.item = itemId;
+    return filters;
+  };
+
+  const handleDownloadPDF = async () => {
+    const dateErr = validateDateRange(startDate, endDate);
+    if (dateErr) {
+      setDateError(dateErr);
+      toast.error(dateErr);
+      return;
+    }
+
+    const filters = getReportApiQueryFilters();
 
     const res = await dispatch(downloadSalesReport(filters));
     
@@ -176,7 +254,15 @@ const SalesReport = () => {
   const handleDownloadIndividual = async (item) => {
     try {
       const invoiceNo = item.invoiceNo || item.invoiceNumber || item.refNo || item._id;
-      const res = await api.get(`/sell/receipt/${item._id}`, { responseType: 'blob' });
+      const supplyTypeParam = item.supplyType ? `?supplyType=${encodeURIComponent(item.supplyType)}` : "";
+      
+      let res;
+      if (item.sourceType === 'Procurement') {
+        res = await api.get(`/procurement-sale/receipt/${item._id}`, { responseType: 'blob' });
+      } else {
+        res = await api.get(`/sell/receipt/${item._id}${supplyTypeParam}`, { responseType: 'blob' });
+      }
+
       const blob = new Blob([res.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -320,6 +406,32 @@ const SalesReport = () => {
       );
     }
 
+    // Client-side item filter
+    if (itemId) {
+      result = result.filter((sale) => {
+        const matchesItems = (sale.items || []).some((i) => {
+          if (!i) return false;
+          const itemRef = i.item;
+          const refId = typeof itemRef === 'string' ? itemRef : (itemRef?._id || itemRef?.id || '');
+          const prodVal = i.product || i.productId;
+          const prodId = typeof prodVal === 'string' ? prodVal : (prodVal?._id || prodVal?.id || '');
+          const selfId = i._id || i.id || '';
+          const sourceRef = itemRef?.sourceRef || '';
+          return refId === itemId || prodId === itemId || selfId === itemId || sourceRef === itemId;
+        });
+
+        const matchesCrops = (sale.crops || []).some((c) => {
+          if (!c) return false;
+          const cropVal = c.crop || c.cropId;
+          const cropId = typeof cropVal === 'string' ? cropVal : (cropVal?._id || cropVal?.id || '');
+          const selfId = c._id || c.id || '';
+          return cropId === itemId || selfId === itemId;
+        });
+
+        return matchesItems || matchesCrops;
+      });
+    }
+
     // Client-side sort
     if (sortConfig.key) {
       result.sort((a, b) => {
@@ -356,7 +468,7 @@ const SalesReport = () => {
     }
 
     return result;
-  }, [sales, search, sortConfig]);
+  }, [sales, search, itemId, sortConfig]);
 
   // Paginated Rows
   const paginatedData = useMemo(() => {
@@ -521,9 +633,12 @@ const SalesReport = () => {
 
       {/* Error alert */}
       {error && (
-        <div className="bg-red-50 border border-red-100 text-red-700 text-[11px] px-3.5 py-2.5 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span className="font-semibold">{error}</span>
+        <div className="mb-4">
+          <ErrorState
+            error={error}
+            variant="inline"
+            onRetry={() => handleFetchData()}
+          />
         </div>
       )}
 
@@ -533,22 +648,46 @@ const SalesReport = () => {
           {/* Date Range Picker */}
           <div className="flex flex-col">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Date Range</span>
-            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-3 py-1.5 h-[38px] shadow-sm hover:border-gray-300 transition-colors focus-within:border-[#15803D] focus-within:ring-1 focus-within:ring-[#15803D]">
-              <Calendar className="w-3.5 h-3.5 text-gray-450" />
+            <div className={`flex items-center gap-1.5 bg-white border ${dateError ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'} rounded-lg px-3 py-1.5 h-[38px] shadow-sm hover:border-gray-300 transition-colors focus-within:border-[#15803D] focus-within:ring-1 focus-within:ring-[#15803D] cursor-pointer`}>
+              <Calendar
+                className="w-3.5 h-3.5 text-gray-450 hover:text-[#15803D] transition-colors shrink-0 cursor-pointer"
+                onClick={() => startDateInputRef.current?.showPicker?.()}
+              />
               <input
+                ref={startDateInputRef}
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-transparent border-none text-xs font-semibold text-gray-700 focus:outline-none w-[115px] p-0"
+                max={getTodayString()}
+                onClick={(e) => e.target.showPicker?.()}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setStartDate(val);
+                  const err = validateDateRange(val, endDate);
+                  setDateError(err);
+                }}
+                className="bg-transparent border-none text-xs font-semibold text-gray-700 focus:outline-none w-[115px] p-0 cursor-pointer"
               />
               <span className="text-gray-400 text-xs font-semibold px-0.5">–</span>
               <input
+                ref={endDateInputRef}
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="bg-transparent border-none text-xs font-semibold text-gray-700 focus:outline-none w-[115px] p-0"
+                max={getTodayString()}
+                onClick={(e) => e.target.showPicker?.()}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setEndDate(val);
+                  const err = validateDateRange(startDate, val);
+                  setDateError(err);
+                }}
+                className="bg-transparent border-none text-xs font-semibold text-gray-700 focus:outline-none w-[115px] p-0 cursor-pointer"
               />
             </div>
+            {dateError && (
+              <span className="text-[11px] font-semibold text-red-600 mt-1 animate-fade-in whitespace-pre-line">
+                {dateError}
+              </span>
+            )}
           </div>
 
           {/* Customer filter */}
@@ -568,6 +707,23 @@ const SalesReport = () => {
             </select>
           </div>
 
+          {/* Item filter */}
+          <div className="w-[160px] flex flex-col">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Item</span>
+            <select
+              value={itemId}
+              onChange={(e) => setItemId(e.target.value)}
+              className="w-full bg-white border border-gray-200 px-3 py-1.5 h-[38px] rounded-lg text-xs font-bold focus:outline-none focus:border-[#15803D] focus:ring-1 focus:ring-[#15803D] text-gray-750 shadow-sm cursor-pointer"
+            >
+              <option value="">All Items</option>
+              {products?.map((p) => (
+                <option key={p._id} value={p._id}>
+                  {p.productName}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Sale Type filter */}
           <div className="w-[120px] flex flex-col">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Sale Type</span>
@@ -576,9 +732,9 @@ const SalesReport = () => {
               onChange={(e) => setSaleType(e.target.value)}
               className="w-full bg-white border border-gray-200 px-3 py-1.5 h-[38px] rounded-lg text-xs font-bold focus:outline-none focus:border-[#15803D] focus:ring-1 focus:ring-[#15803D] text-gray-750 shadow-sm cursor-pointer"
             >
-              <option value="">All Types</option>
-              <option value="SALE">SALE</option>
-              <option value="ESTIMATE">ESTIMATE</option>
+              <option value="">Both</option>
+              <option value="INVENTORY">Inventory</option>
+              <option value="PROCUREMENT">Procurement</option>
             </select>
           </div>
 
@@ -615,10 +771,26 @@ const SalesReport = () => {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => handleFetchData()}
-              className="flex items-center justify-center px-4 h-[38px] bg-[#15803D] hover:bg-[#126630] text-white rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95 cursor-pointer"
+              disabled={salesLoading || salesDownloadLoading}
+              onClick={() => {
+                if (startDate && endDate && startDate > endDate) {
+                  const msg = "From Date cannot be later than To Date.\nPlease select a valid date range.";
+                  setDateError(msg);
+                  toast.error("From Date cannot be later than To Date.\nPlease select a valid date range.");
+                  return;
+                }
+                handleFetchData();
+              }}
+              className="flex items-center justify-center px-4 h-[38px] bg-[#15803D] hover:bg-[#126630] disabled:bg-gray-400 text-white rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
             >
-              Generate Report
+              {(salesLoading || salesDownloadLoading) ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <span>Generate Report</span>
+              )}
             </button>
 
             <button
@@ -816,14 +988,16 @@ const SalesReport = () => {
           </div>
         ) : processedData.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-            <span className="text-5xl mb-4 select-none">📊</span>
-            <h3 className="text-base font-bold text-gray-800">No Sales Records Found</h3>
-            <p className="text-xs text-gray-400 mt-1 max-w-sm select-none">
-              Try changing the filters or selecting another date range.
+            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+              <FileText className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900">No Transactions Found</h3>
+            <p className="text-xs text-gray-500 mt-1 max-w-sm font-medium leading-relaxed">
+              No transactions are available for the selected date range. Try selecting a different date range or adjusting your filters.
             </p>
             <button
               onClick={handleResetFilters}
-              className="mt-4 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-xs font-bold rounded-lg shadow-sm transition-all"
+              className="mt-4 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-xs font-bold text-gray-700 rounded-lg shadow-sm transition-all cursor-pointer"
             >
               Reset Filters
             </button>
@@ -1079,47 +1253,44 @@ const SalesReport = () => {
             </div>
 
             {/* Pagination footer */}
-            <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between bg-[#F8FAFC] flex-wrap gap-4 select-none">
-              <span className="text-sm text-gray-500 font-medium">
-                Showing {startIndex}–{endIndex} of {processedData.length} invoices
-              </span>
+            {Math.ceil(processedData.length / itemsPerPage) > 1 && (
+              <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between bg-white flex-wrap gap-4 select-none">
+                {/* Left: Item Range */}
+                <div className="text-xs font-semibold text-gray-500">
+                  Showing{' '}
+                  <span className="text-[#15803D] font-bold">
+                    {processedData.length === 0 ? 0 : startIndex}–{endIndex}
+                  </span>{' '}
+                  of <span className="text-[#15803D] font-bold">{Number(processedData.length).toLocaleString('en-IN')}</span> items
+                </div>
+                
+                {/* Center: Current Page Status */}
+                <div className="text-xs font-semibold text-gray-500">
+                  Page <span className="text-[#15803D] font-bold">{currentPage}</span> of {Math.ceil(processedData.length / itemsPerPage)}
+                </div>
 
-              <div className="inline-flex gap-1 items-center">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                  disabled={currentPage <= 1}
-                  className="p-1.5 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-500 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
+                {/* Right: Previous / Next Buttons */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                    disabled={currentPage <= 1}
+                    className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2 font-bold text-xs text-gray-700 shadow-sm transition-all hover:bg-gray-50 active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                  >
+                    <ArrowLeft className="w-4 h-4 text-[#15803D]" />
+                    <span>Previous</span>
+                  </button>
 
-                {Array.from({ length: Math.ceil(processedData.length / itemsPerPage) || 1 }).map((_, idx) => {
-                  const pg = idx + 1;
-                  const isCurrent = pg === currentPage;
-                  return (
-                    <button
-                      key={pg}
-                      onClick={() => setCurrentPage(pg)}
-                      className={`w-8 h-8 text-xs font-bold rounded-lg transition-all ${
-                        isCurrent 
-                          ? 'bg-slate-900 text-white shadow-sm' 
-                          : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
-                      } cursor-pointer`}
-                    >
-                      {pg}
-                    </button>
-                  );
-                })}
-
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(p + 1, Math.ceil(processedData.length / itemsPerPage)))}
-                  disabled={currentPage >= Math.ceil(processedData.length / itemsPerPage)}
-                  className="p-1.5 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-500 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(p + 1, Math.ceil(processedData.length / itemsPerPage)))}
+                    disabled={currentPage >= Math.ceil(processedData.length / itemsPerPage)}
+                    className="flex items-center gap-2 bg-[#15803D] hover:bg-green-700 text-white rounded-xl px-4 py-2 font-bold text-xs shadow-sm shadow-green-600/10 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                  >
+                    <span>Next</span>
+                    <ArrowRight className="w-4 h-4 text-white" />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>

@@ -4,9 +4,9 @@ import api from '../../lib/api';
 // 1. Fetch All Parties
 export const fetchParties = createAsyncThunk(
     'party/fetchParties',
-    async (_, { rejectWithValue }) => {
+    async (params = {}, { rejectWithValue }) => {
         try {
-            const res = await api.get('/party/getAllParties');
+            const res = await api.get('/party/getAllParties', { params });
             // Adjust standard return based on backend format
             return res.data?.data || res.data?.parties || res.data || [];
         } catch (err) {
@@ -41,7 +41,7 @@ export const updateParty = createAsyncThunk(
     'party/updateParty',
     async ({ id, data }, { rejectWithValue }) => {
         try {
-            const res = await api.put(`/party/updateParty/${id}`, data);
+            const res = await api.patch(`/party/updateParty/${id}`, data);
             return res.data?.data || res.data?.party || res.data;
         } catch (err) {
             return rejectWithValue(

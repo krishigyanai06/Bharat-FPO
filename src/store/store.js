@@ -19,6 +19,12 @@ import orderReducer from './slices/orderSlice';
 import featuresReducer from './slices/featuresSlice';
 import partyReducer from './slices/partySlice';
 import sellReducer from './slices/sellSlice';
+import eInvoiceReducer from './slices/eInvoiceSlice';
+import eWayBillReducer from './slices/eWayBillSlice';
+import procurementSalesReducer from '../redux/procurementSaleSlice';
+import bankDetailsReducer from './slices/bankDetailsSlice';
+import superadminReducer from './slices/superadminSlice';
+
 
 export const store = configureStore({
   reducer: {
@@ -42,5 +48,11 @@ export const store = configureStore({
     features: featuresReducer,
     party: partyReducer,
     sell: sellReducer,
+    eInvoice: eInvoiceReducer,
+    eWayBill: eWayBillReducer,
+    procurementSales: procurementSalesReducer,
+    bankDetails: bankDetailsReducer,
+    superadmin: superadminReducer,
   },
 });
+

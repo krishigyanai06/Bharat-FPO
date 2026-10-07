@@ -504,7 +504,7 @@ Base URL: `http://localhost:5000/api`
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `POST` | `/procurement/addPurchase` | 🔒👔 | Record crop procurement |
-| `PUT` | `/procurement/updatePurchase/:id` | 🔒👔 | Update procurement |
+| `PATCH` | `/procurement/updatePurchase/:id` | 🔒👔 | Update procurement |
 | `DELETE` | `/procurement/deletePurchase/:id` | 🔒👔 | Delete procurement |
 | `GET` | `/procurement/getPurchases` | 🔒👔 | Get all procurements |
 | `GET` | `/procurement/getPurchaseById/:id` | 🔒👔 | Get procurement by ID |
