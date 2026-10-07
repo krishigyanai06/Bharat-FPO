@@ -42,7 +42,7 @@ export default function QuickAddProductModal({ onClose, onSuccess, defaultName =
     setLoading(true);
     const payload = {
       productName: form.productName.trim(),
-      brand: form.brand.trim() || undefined,
+      brand: form.brand.trim() || "General",
       productCategory: form.productCategory,
       unit: form.unit,
       parameter: form.parameter.trim(),

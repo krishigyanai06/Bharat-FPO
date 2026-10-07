@@ -2605,7 +2605,7 @@ function QuickAddProductModal({ onClose, onSuccess }) {
     setLoading(true);
     const payload = {
       productName: form.productName.trim(),
-      brand: form.brand.trim() || undefined,
+      brand: form.brand.trim() || "General",
       productCategory: form.productCategory,
       unit: form.unit,
       parameter: form.parameter.trim(),
@@ -2662,6 +2662,7 @@ function QuickAddProductModal({ onClose, onSuccess }) {
         </div>
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Product Name */}
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-slate-700 mb-1">Product Name *</label>
               <input
@@ -2669,11 +2670,25 @@ function QuickAddProductModal({ onClose, onSuccess }) {
                 value={form.productName}
                 onChange={(e) => setForm({ ...form, productName: e.target.value })}
                 className="w-full px-3 py-2 text-xs border border-[#DCE5EA] rounded-lg font-medium text-[#172033] focus:ring-2 focus:ring-[#16A36A]/20 focus:border-[#16A36A]"
-                placeholder="e.g. NPK 19-19-19"
+                placeholder="e.g. Urea Coarse"
                 autoFocus
               />
               {errors.productName && <p className="text-red-500 text-[11px] font-semibold mt-1">{errors.productName}</p>}
             </div>
+
+            {/* Brand */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Brand</label>
+              <input
+                type="text"
+                value={form.brand}
+                onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                className="w-full px-3 py-2 text-xs border border-[#DCE5EA] rounded-lg font-medium text-[#172033] focus:ring-2 focus:ring-[#16A36A]/20 focus:border-[#16A36A]"
+                placeholder="e.g. IFFCO"
+              />
+            </div>
+
+            {/* Category */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Category</label>
               <select
@@ -2684,10 +2699,73 @@ function QuickAddProductModal({ onClose, onSuccess }) {
                 <option value="Fertilizers">Fertilizers</option>
                 <option value="Insecticides">Insecticides</option>
                 <option value="Fungicides">Fungicides</option>
+                <option value="Herbicides">Herbicides</option>
                 <option value="Seeds">Seeds</option>
+                <option value="Organic">Organic</option>
+                <option value="Pgr">Pgr</option>
+                <option value="Tools">Tools</option>
                 <option value="Other">Other</option>
               </select>
             </div>
+
+            {/* Size / Parameter */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Size / Parameter *</label>
+              <input
+                type="text"
+                value={form.parameter}
+                onChange={(e) => setForm({ ...form, parameter: e.target.value })}
+                className="w-full px-3 py-2 text-xs border border-[#DCE5EA] rounded-lg font-medium text-[#172033] focus:ring-2 focus:ring-[#16A36A]/20 focus:border-[#16A36A]"
+                placeholder="e.g. 50"
+              />
+              {errors.parameter && <p className="text-red-500 text-[11px] font-semibold mt-1">{errors.parameter}</p>}
+            </div>
+
+            {/* Unit */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Unit</label>
+              <select
+                value={form.unit}
+                onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                className="w-full px-3 py-2 text-xs border border-[#DCE5EA] rounded-lg font-medium text-[#172033] focus:ring-2 focus:ring-[#16A36A]/20 focus:border-[#16A36A]"
+              >
+                <option value="Kg">Kg</option>
+                <option value="L">L</option>
+                <option value="ml">ml</option>
+                <option value="gm">gm</option>
+                <option value="pcs">pcs</option>
+                <option value="bag">bag</option>
+                <option value="box">box</option>
+              </select>
+            </div>
+
+            {/* MRP */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">MRP (₹)</label>
+              <input
+                type="number"
+                step="any"
+                value={form.mrp}
+                onChange={(e) => setForm({ ...form, mrp: e.target.value })}
+                className="w-full px-3 py-2 text-xs border border-[#DCE5EA] rounded-lg font-medium text-[#172033] focus:ring-2 focus:ring-[#16A36A]/20 focus:border-[#16A36A]"
+                placeholder="0.00"
+              />
+            </div>
+
+            {/* Purchase Price */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Purchase Price (₹)</label>
+              <input
+                type="number"
+                step="any"
+                value={form.purchasePrice}
+                onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })}
+                className="w-full px-3 py-2 text-xs border border-[#DCE5EA] rounded-lg font-medium text-[#172033] focus:ring-2 focus:ring-[#16A36A]/20 focus:border-[#16A36A]"
+                placeholder="0.00"
+              />
+            </div>
+
+            {/* Sale Price */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Sale Price (₹) *</label>
               <input
@@ -2699,6 +2777,18 @@ function QuickAddProductModal({ onClose, onSuccess }) {
                 placeholder="0.00"
               />
               {errors.salePrice && <p className="text-red-500 text-[11px] font-semibold mt-1">{errors.salePrice}</p>}
+            </div>
+
+            {/* Opening Quantity */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Opening Quantity</label>
+              <input
+                type="number"
+                value={form.quantity}
+                onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                className="w-full px-3 py-2 text-xs border border-[#DCE5EA] rounded-lg font-medium text-[#172033] focus:ring-2 focus:ring-[#16A36A]/20 focus:border-[#16A36A]"
+                placeholder="0"
+              />
             </div>
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
