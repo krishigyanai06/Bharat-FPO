@@ -1,5 +1,6 @@
 import { createSlice } from '@reduxjs/toolkit';
 import {
+  fetchSalesTotal,
   fetchSales,
   createSaleOrEstimate,
   updateSaleOrEstimate,
@@ -18,6 +19,9 @@ import {
 const initialState = {
   sales: [],
   salesTotal: 0,
+  salesSummary: null,
+  salesSummaryLoading: false,
+  salesSummaryError: null,
   payments: [],
   paymentsTotal: 0,
   returns: [],
@@ -33,6 +37,7 @@ const sellSlice = createSlice({
   reducers: {
     clearSellStatus: (state) => {
       state.error = null;
+      state.salesSummaryError = null;
       state.success = false;
     },
     updateSaleEInvoice: (state, action) => {
@@ -64,6 +69,22 @@ const sellSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // Fetch Sales Total (Aggregate Summary)
+      .addCase(fetchSalesTotal.pending, (state) => {
+        state.salesSummaryLoading = true;
+        state.salesSummaryError = null;
+      })
+      .addCase(fetchSalesTotal.fulfilled, (state, action) => {
+        state.salesSummaryLoading = false;
+        state.salesSummary = action.payload;
+        state.salesSummaryError = null;
+      })
+      .addCase(fetchSalesTotal.rejected, (state, action) => {
+        if (action.meta?.aborted) return;
+        state.salesSummaryLoading = false;
+        state.salesSummaryError = action.payload;
+      })
+
       // Fetch Sales
       .addCase(fetchSales.pending, (state) => {
         state.loading = true;

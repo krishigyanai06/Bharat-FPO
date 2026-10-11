@@ -230,6 +230,16 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
+    // 0. Silently ignore cancelled / aborted requests (e.g., AbortController, React StrictMode unmount, search debounce)
+    if (
+      axios.isCancel(error) ||
+      error?.name === "CanceledError" ||
+      error?.name === "AbortError" ||
+      error?.code === "ERR_CANCELED"
+    ) {
+      return Promise.reject(error);
+    }
+
     // Don't logout on 404 errors - they're not authentication failures
     if (error.response?.status === 404) {
       console.warn("404 NOT FOUND:", error.config?.url);
@@ -247,6 +257,14 @@ api.interceptors.response.use(
     };
 
     if (!error.response) {
+      if (
+        axios.isCancel(error) ||
+        error?.name === "CanceledError" ||
+        error?.name === "AbortError" ||
+        error?.code === "ERR_CANCELED"
+      ) {
+        return Promise.reject(error);
+      }
       if (!navigator.onLine) {
         normalizedError = {
           type: "OFFLINE",

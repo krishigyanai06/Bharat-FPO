@@ -1,35 +1,35 @@
 import React from "react";
 import { FileText, Coins, IndianRupee, Wallet, AlertTriangle } from "lucide-react";
 
-export default function PurchaseMetrics({ purchaseMetrics }) {
+export default function PurchaseMetrics({ purchaseMetrics = {} }) {
   const cards = [
     {
       label: "Total Purchase Bills",
-      val: `₹${purchaseMetrics.totalBills.toLocaleString("en-IN")}`,
+      val: `₹${Number(purchaseMetrics?.totalBills || 0).toLocaleString("en-IN")}`,
       icon: FileText,
       bg: "bg-blue-50 text-blue-700 border-blue-100",
     },
     {
       label: "Total Purchase Orders",
-      val: `₹${purchaseMetrics.totalOrders.toLocaleString("en-IN")}`,
+      val: `₹${Number(purchaseMetrics?.totalOrders || 0).toLocaleString("en-IN")}`,
       icon: Coins,
       bg: "bg-purple-50 text-purple-700 border-purple-100",
     },
     {
       label: "Total Payments Out",
-      val: `₹${purchaseMetrics.totalPayments.toLocaleString("en-IN")}`,
+      val: `₹${Number(purchaseMetrics?.totalPayments || 0).toLocaleString("en-IN")}`,
       icon: IndianRupee,
       bg: "bg-emerald-50 text-emerald-700 border-emerald-100",
     },
     {
       label: "Total Expenses",
-      val: `₹${purchaseMetrics.totalExpenses.toLocaleString("en-IN")}`,
+      val: `₹${Number(purchaseMetrics?.totalExpenses || 0).toLocaleString("en-IN")}`,
       icon: Wallet,
       bg: "bg-amber-50 text-amber-700 border-amber-100",
     },
     {
       label: "Outstanding Payables",
-      val: `₹${purchaseMetrics.outstandingPayables.toLocaleString("en-IN")}`,
+      val: `₹${Number(purchaseMetrics?.outstandingPayables || 0).toLocaleString("en-IN")}`,
       icon: AlertTriangle,
       bg: "bg-red-50 text-red-700 border-red-100",
     },
@@ -43,7 +43,7 @@ export default function PurchaseMetrics({ purchaseMetrics }) {
             <item.icon className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[11px] text-gray-505 font-semibold uppercase tracking-wider">{item.label}</p>
+            <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">{item.label}</p>
             <h3 className="text-lg font-bold text-gray-900 mt-0.5">{item.val}</h3>
           </div>
         </div>

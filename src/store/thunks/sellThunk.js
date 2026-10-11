@@ -1,5 +1,7 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
+import axios from 'axios';
 import api from '../../lib/api';
+import sellService from '../../services/sellService';
 
 // Helper to extract array from paginated response
 const extractData = (res) => {
@@ -9,6 +11,27 @@ const extractData = (res) => {
   if (Array.isArray(res.data?.results)) return res.data.results;
   return [];
 };
+
+// GET /sell/total — Fetch aggregate metrics across matching transactions
+export const fetchSalesTotal = createAsyncThunk(
+  'sell/fetchSalesTotal',
+  async (params = {}, { rejectWithValue, signal }) => {
+    try {
+      const res = await sellService.getSalesTotal(params, { signal });
+      return res?.data !== undefined ? res.data : res;
+    } catch (err) {
+      if (
+        axios.isCancel(err) ||
+        err.name === 'CanceledError' ||
+        err.name === 'AbortError' ||
+        err.code === 'ERR_CANCELED'
+      ) {
+        throw err;
+      }
+      return rejectWithValue(err.response?.data?.message || 'Failed to fetch sales totals');
+    }
+  }
+);
 
 // GET /sell/ — Fetch all sales & estimates
 export const fetchSales = createAsyncThunk(

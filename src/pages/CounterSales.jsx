@@ -1,8 +1,9 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
+  fetchSalesTotal,
   fetchSales,
   createSaleOrEstimate,
   updateSaleOrEstimate,
@@ -184,6 +185,9 @@ export default function CounterSales() {
   const {
     sales,
     salesTotal,
+    salesSummary,
+    salesSummaryLoading,
+    salesSummaryError,
     payments,
     paymentsTotal,
     returns,
@@ -210,12 +214,127 @@ export default function CounterSales() {
   const [complianceDrawerOpen, setComplianceDrawerOpen] = useState(false);
   const [complianceItem, setComplianceItem] = useState(null);
 
+  // URL query parameters (party, date range, item)
+  const searchParty = searchParams.get("party") || "";
+  const searchStartDate = searchParams.get("startDate") || "";
+  const searchEndDate = searchParams.get("endDate") || "";
+  const searchItem = searchParams.get("item") || "";
+
   // Local list filters
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [saleTypeFilter, setSaleTypeFilter] = useState("all");
   const [billingFilter, setBillingFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 12;
+
+  const activeSummaryRequestRef = useRef(null);
+
+  // Debounce search query changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const trimmed = searchQuery.trim();
+      if (trimmed !== debouncedSearch) {
+        setDebouncedSearch(trimmed);
+        setCurrentPage(1);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery, debouncedSearch]);
+
+  // Reset search when activeTab changes
+  useEffect(() => {
+    setSearchQuery("");
+    setDebouncedSearch("");
+    setCurrentPage(1);
+  }, [activeTab]);
+
+  // Build clean common sales query parameters (reusable for summary & list table)
+  const getCommonSalesFilters = useCallback((searchOverride = debouncedSearch) => {
+    const filters = {};
+    if (saleTypeFilter && saleTypeFilter !== "all") {
+      filters.saleType = saleTypeFilter;
+    }
+    if (billingFilter && billingFilter !== "all") {
+      filters.billingType = billingFilter;
+    }
+    const s = typeof searchOverride === "string" ? searchOverride.trim() : "";
+    if (s) {
+      filters.search = s;
+    }
+    if (searchParty && searchParty.trim()) {
+      filters.party = searchParty.trim();
+    }
+    if (searchStartDate && searchStartDate.trim()) {
+      filters.startDate = searchStartDate.trim();
+    }
+    if (searchEndDate && searchEndDate.trim()) {
+      filters.endDate = searchEndDate.trim();
+    }
+    if (searchItem && searchItem.trim()) {
+      filters.item = searchItem.trim();
+    }
+    return filters;
+  }, [saleTypeFilter, billingFilter, debouncedSearch, searchParty, searchStartDate, searchEndDate, searchItem]);
+
+  // Fetch summary aggregate totals (GET /sell/total) independently from pagination
+  const loadSummaryData = useCallback((searchOverride) => {
+    if (activeSummaryRequestRef.current) {
+      activeSummaryRequestRef.current.abort();
+    }
+    const filters = getCommonSalesFilters(searchOverride);
+    const promise = dispatch(fetchSalesTotal(filters));
+    activeSummaryRequestRef.current = promise;
+    promise.finally(() => {
+      if (activeSummaryRequestRef.current === promise) {
+        activeSummaryRequestRef.current = null;
+      }
+    });
+    return promise;
+  }, [dispatch, getCommonSalesFilters]);
+
+  // Clean up in-flight summary request when unmounting
+  useEffect(() => {
+    return () => {
+      if (activeSummaryRequestRef.current) {
+        activeSummaryRequestRef.current.abort();
+        activeSummaryRequestRef.current = null;
+      }
+    };
+  }, []);
+
+  // Fetch paginated records for the current page
+  const loadListData = useCallback((page = currentPage, searchOverride = debouncedSearch) => {
+    const filters = { page, limit: ITEMS_PER_PAGE };
+    if (activeTab === "sales") {
+      const salesFilters = getCommonSalesFilters(searchOverride);
+      dispatch(fetchSales({ ...salesFilters, page, limit: ITEMS_PER_PAGE }));
+    } else if (activeTab === "payments") {
+      const s = typeof searchOverride === "string" ? searchOverride.trim() : "";
+      if (s) filters.search = s;
+      dispatch(fetchPaymentsIn(filters));
+    } else if (activeTab === "returns") {
+      const s = typeof searchOverride === "string" ? searchOverride.trim() : "";
+      if (s) filters.search = s;
+      dispatch(fetchSalesReturns(filters));
+    }
+  }, [activeTab, currentPage, debouncedSearch, getCommonSalesFilters, dispatch]);
+
+  // Fetch aggregate summary on mount and when summary-relevant filters change (never for page number changes alone)
+  useEffect(() => {
+    loadSummaryData();
+  }, [saleTypeFilter, billingFilter, debouncedSearch, searchParty, searchStartDate, searchEndDate, searchItem]);
+
+  // Fetch paginated table data on mount, tab change, page change, or filter change
+  useEffect(() => {
+    loadListData(currentPage, debouncedSearch);
+  }, [activeTab, currentPage, saleTypeFilter, billingFilter, debouncedSearch, searchParty, searchStartDate, searchEndDate, searchItem]);
+
+  // Synchronize both summary totals and table list after transactions
+  const refreshAllData = useCallback(() => {
+    loadListData(currentPage, debouncedSearch);
+    loadSummaryData(debouncedSearch);
+  }, [loadListData, loadSummaryData, currentPage, debouncedSearch]);
 
   // Viewing detail state
   const [detailItem, setDetailItem] = useState(null);
@@ -237,39 +356,17 @@ export default function CounterSales() {
     dispatch(fetchStockSummary());
   }, [dispatch]);
 
-  // Load correct lists on active tab changes
-  useEffect(() => {
-    setSearchQuery("");
-    setCurrentPage(1);
-    loadListData();
-  }, [activeTab]);
-
-  const loadListData = () => {
-    const filters = { page: currentPage, limit: ITEMS_PER_PAGE };
-    if (activeTab === "sales") {
-      if (saleTypeFilter !== "all") filters.saleType = saleTypeFilter;
-      if (billingFilter !== "all") filters.billingType = billingFilter;
-      if (searchQuery) filters.search = searchQuery;
-      dispatch(fetchSales(filters));
-    } else if (activeTab === "payments") {
-      if (searchQuery) filters.search = searchQuery;
-      dispatch(fetchPaymentsIn(filters));
-    } else if (activeTab === "returns") {
-      if (searchQuery) filters.search = searchQuery;
-      dispatch(fetchSalesReturns(filters));
-    }
-  };
-
-  // Re-run filter fetch
-  useEffect(() => {
-    loadListData();
-  }, [currentPage, saleTypeFilter, billingFilter]);
-
-  // Trigger search on submit
+  // Trigger search immediately on form submit
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    setCurrentPage(1);
-    loadListData();
+    const trimmed = searchQuery.trim();
+    if (trimmed !== debouncedSearch) {
+      setDebouncedSearch(trimmed);
+      setCurrentPage(1);
+    } else {
+      loadListData(1, trimmed);
+      loadSummaryData(trimmed);
+    }
   };
 
   // Helper: Format Date
@@ -364,7 +461,7 @@ export default function CounterSales() {
     try {
       await dispatch(convertToSale(id)).unwrap();
       toast.success("Estimate converted to Sale successfully!", { id: loadingToast });
-      loadListData();
+      refreshAllData();
     } catch (err) {
       toast.error(err || "Failed to convert estimate", { id: loadingToast });
     }
@@ -376,7 +473,7 @@ export default function CounterSales() {
       try {
         await dispatch(deleteSale(id)).unwrap();
         toast.success("Sales Bill deleted successfully");
-        loadListData();
+        refreshAllData();
       } catch (err) {
         toast.error(err || "Failed to delete sales bill");
       }
@@ -388,7 +485,7 @@ export default function CounterSales() {
       try {
         await dispatch(deletePaymentIn(id)).unwrap();
         toast.success("Payment receipt deleted successfully");
-        loadListData();
+        refreshAllData();
       } catch (err) {
         toast.error(err || "Failed to delete payment receipt");
       }
@@ -400,7 +497,7 @@ export default function CounterSales() {
       try {
         await dispatch(deleteSalesReturn(id)).unwrap();
         toast.success("Sales return deleted successfully");
-        loadListData();
+        refreshAllData();
       } catch (err) {
         toast.error(err || "Failed to delete sales return");
       }
@@ -451,12 +548,24 @@ export default function CounterSales() {
     });
   }, [returns]);
 
-  // Summary Metrics calculations (from loaded lists)
+  // Summary Metrics calculations (aggregate summary from GET /sell/total + auxiliary sources)
   const salesMetrics = {
-    totalSales: sales.filter((s) => s.saleType === "SALE").reduce((acc, s) => acc + (s.totalAmount || 0), 0),
+    totalSales: salesSummary
+      ? Number(salesSummary.totalSalesAmount ?? salesSummary.totalAmount ?? 0)
+      : 0,
+    totalSalesCount: salesSummary
+      ? Number(salesSummary.totalCount ?? 0)
+      : (salesTotal || 0),
     totalEstimates: sales.filter((s) => s.saleType === "ESTIMATE").reduce((acc, s) => acc + (s.totalAmount || 0), 0),
-    creditOutstanding: sales.filter((s) => s.billingType === "Credit").reduce((acc, s) => acc + (s.totalAmount || 0), 0),
+    estimatesCount: sales.filter((s) => s.saleType === "ESTIMATE").length,
+    creditOutstanding: salesSummary
+      ? Number(salesSummary.totalUnpaidAmount ?? 0)
+      : 0,
+    creditBillsCount: salesSummary
+      ? Number(salesSummary.creditCount ?? 0)
+      : 0,
     paymentsReceived: payments.reduce((acc, p) => acc + (p.receivedAmount || 0), 0),
+    paymentsCount: paymentsTotal || payments.length,
   };
 
   const totalPages = Math.ceil(
@@ -528,7 +637,7 @@ export default function CounterSales() {
               ₹{salesMetrics.totalSales.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </h3>
             <p className="text-[10px] text-emerald-700 font-medium mt-0.5">
-              {sales.filter((s) => s.saleType === "SALE").length} Bills Logged
+              {salesMetrics.totalSalesCount} Bills Logged
             </p>
           </div>
           <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0">
@@ -544,7 +653,7 @@ export default function CounterSales() {
               ₹{salesMetrics.totalEstimates.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </h3>
             <p className="text-[10px] text-blue-700 font-medium mt-0.5">
-              {sales.filter((s) => s.saleType === "ESTIMATE").length} Estimates Drafted
+              {salesMetrics.estimatesCount} Estimates Drafted
             </p>
           </div>
           <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100/80 text-blue-600 flex items-center justify-center shrink-0">
@@ -560,7 +669,7 @@ export default function CounterSales() {
               ₹{salesMetrics.creditOutstanding.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </h3>
             <p className="text-[10px] text-amber-600 font-medium mt-0.5">
-              {sales.filter((s) => s.billingType === "Credit" && s.unpaidAmount > 0).length} Credit Bills
+              {salesMetrics.creditBillsCount} Credit Bills
             </p>
           </div>
           <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-100/80 text-amber-600 flex items-center justify-center shrink-0">
@@ -576,7 +685,7 @@ export default function CounterSales() {
               ₹{salesMetrics.paymentsReceived.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </h3>
             <p className="text-[10px] text-purple-700 font-medium mt-0.5">
-              {payments.length} Payment Receipts
+              {salesMetrics.paymentsCount} Payment Receipts
             </p>
           </div>
           <div className="w-9 h-9 rounded-lg bg-purple-50 border border-purple-100/80 text-purple-600 flex items-center justify-center shrink-0">
@@ -630,7 +739,10 @@ export default function CounterSales() {
               <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Type:</span>
               <select
                 value={saleTypeFilter}
-                onChange={(e) => setSaleTypeFilter(e.target.value)}
+                onChange={(e) => {
+                  setSaleTypeFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
               >
                 <option value="all">All Types</option>
@@ -643,7 +755,10 @@ export default function CounterSales() {
               <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Billing:</span>
               <select
                 value={billingFilter}
-                onChange={(e) => setBillingFilter(e.target.value)}
+                onChange={(e) => {
+                  setBillingFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
               >
                 <option value="all">All Billing</option>
@@ -1172,7 +1287,7 @@ export default function CounterSales() {
             setPaymentModalOpen(false);
             setEditPaymentRecord(null);
             setLinkedSellForPayment(null);
-            loadListData();
+            refreshAllData();
           }}
         />
       )}
@@ -1191,7 +1306,7 @@ export default function CounterSales() {
           onSuccess={() => {
             setReturnModalOpen(false);
             setEditReturnRecord(null);
-            loadListData();
+            refreshAllData();
           }}
         />
       )}

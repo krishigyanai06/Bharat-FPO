@@ -1,5 +1,6 @@
 import { createSlice } from '@reduxjs/toolkit';
 import {
+  fetchPurchaseTotal,
   fetchPurchases,
   createPurchase,
   updatePurchase,
@@ -20,6 +21,9 @@ import {
 const initialState = {
   purchases: [],
   purchasesTotal: 0,
+  purchaseSummary: null,
+  purchaseSummaryLoading: false,
+  purchaseSummaryError: null,
   payments: [],
   paymentsTotal: 0,
   returns: [],
@@ -45,6 +49,7 @@ const purchaseSlice = createSlice({
   reducers: {
     clearPurchaseStatus: (state) => {
       state.error = null;
+      state.purchaseSummaryError = null;
       state.success = false;
     },
     setPagination: (state, action) => {
@@ -56,6 +61,24 @@ const purchaseSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // ==========================================
+      // AGGREGATE SUMMARY (GET /purchase/total)
+      // ==========================================
+      .addCase(fetchPurchaseTotal.pending, (state) => {
+        state.purchaseSummaryLoading = true;
+        state.purchaseSummaryError = null;
+      })
+      .addCase(fetchPurchaseTotal.fulfilled, (state, action) => {
+        state.purchaseSummaryLoading = false;
+        state.purchaseSummary = action.payload;
+        state.purchaseSummaryError = null;
+      })
+      .addCase(fetchPurchaseTotal.rejected, (state, action) => {
+        if (action.meta?.aborted) return;
+        state.purchaseSummaryLoading = false;
+        state.purchaseSummaryError = action.payload;
+      })
+
       // ==========================================
       // 1. BILLS & ORDERS
       // ==========================================

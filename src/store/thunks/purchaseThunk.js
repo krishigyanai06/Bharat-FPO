@@ -1,9 +1,32 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
+import axios from 'axios';
 import api from '../../lib/api';
+import purchaseService from '../../services/purchaseService';
 
 // ==========================================
 // 1. BILLS & ORDERS
 // ==========================================
+
+// GET /purchase/total — Fetch aggregate metrics across matching transactions
+export const fetchPurchaseTotal = createAsyncThunk(
+  'purchase/fetchPurchaseTotal',
+  async (params = {}, { rejectWithValue, signal }) => {
+    try {
+      const res = await purchaseService.getPurchaseTotal(params, { signal });
+      return res?.data !== undefined ? res.data : res;
+    } catch (err) {
+      if (
+        axios.isCancel(err) ||
+        err.name === 'CanceledError' ||
+        err.name === 'AbortError' ||
+        err.code === 'ERR_CANCELED'
+      ) {
+        throw err;
+      }
+      return rejectWithValue(err.response?.data?.message || 'Failed to fetch purchase totals');
+    }
+  }
+);
 
 export const fetchPurchases = createAsyncThunk(
   'purchase/fetchPurchases',

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import Swal from "sweetalert2";
 import { Trash2 } from "lucide-react";
@@ -9,6 +9,7 @@ import ErrorState from "../components/ErrorState";
 import api from "../lib/api";
 
 import {
+  fetchPurchaseTotal,
   fetchPurchases,
   fetchPaymentsOut,
   fetchPurchaseReturns,
@@ -57,6 +58,9 @@ export default function Purchases() {
   const {
     purchases,
     purchasesTotal,
+    purchaseSummary,
+    purchaseSummaryLoading,
+    purchaseSummaryError,
     payments,
     paymentsTotal,
     returns,
@@ -69,6 +73,8 @@ export default function Purchases() {
 
   const { parties } = useSelector((state) => state.party);
   const { products, stockSummary } = useSelector((state) => state.inventory);
+
+  const [searchParams] = useSearchParams();
 
   // Modals Local States
   const [billModalOpen, setBillModalOpen] = useState(false);
@@ -134,12 +140,18 @@ export default function Purchases() {
     return "";
   });
 
+  const activeSummaryRequestRef = useRef(null);
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery.trim());
+      const trimmed = searchQuery.trim();
+      if (trimmed !== debouncedSearchQuery) {
+        setDebouncedSearchQuery(trimmed);
+        setCurrentPage(1);
+      }
     }, 400);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, debouncedSearchQuery]);
 
   useEffect(() => {
     if (pathname.includes("/purchase/orders")) {
@@ -169,34 +181,118 @@ export default function Purchases() {
     dispatch(fetchStockSummary());
   }, [dispatch]);
 
-  useEffect(() => {
-    loadListData();
-  }, [activeTab, currentPage, partyFilter, startDate, endDate, purchaseTypeFilter, billingTypeFilter, debouncedSearchQuery]);
+  // Build clean common purchase query parameters (for both summary and table)
+  const getCommonPurchaseFilters = useCallback((searchOverride = debouncedSearchQuery) => {
+    const filters = {};
+    if (purchaseTypeFilter && purchaseTypeFilter.trim()) {
+      filters.purchaseType = purchaseTypeFilter.trim();
+    }
+    if (billingTypeFilter && billingTypeFilter.trim()) {
+      filters.billingType = billingTypeFilter.trim();
+    }
+    const s = typeof searchOverride === "string" ? searchOverride.trim() : "";
+    if (s) {
+      filters.search = s;
+    }
+    if (partyFilter && partyFilter.trim()) {
+      filters.party = partyFilter.trim();
+    }
+    if (startDate && startDate.trim()) {
+      filters.startDate = startDate.trim();
+    }
+    if (endDate && endDate.trim()) {
+      filters.endDate = endDate.trim();
+    }
+    const itemParam = searchParams.get("item");
+    if (itemParam && itemParam.trim()) {
+      filters.item = itemParam.trim();
+    }
+    return filters;
+  }, [purchaseTypeFilter, billingTypeFilter, debouncedSearchQuery, partyFilter, startDate, endDate, searchParams]);
 
-  const loadListData = () => {
-    const filters = { page: currentPage, limit: ITEMS_PER_PAGE };
-    if (debouncedSearchQuery) filters.search = debouncedSearchQuery;
-    if (partyFilter) filters.party = partyFilter;
-    if (startDate) filters.startDate = startDate;
-    if (endDate) filters.endDate = endDate;
+  // Fetch aggregate summary metrics (GET /purchase/total) independently from pagination
+  const loadSummaryData = useCallback((searchOverride) => {
+    if (activeSummaryRequestRef.current) {
+      activeSummaryRequestRef.current.abort();
+    }
+    const filters = getCommonPurchaseFilters(searchOverride);
+    const promise = dispatch(fetchPurchaseTotal(filters));
+    activeSummaryRequestRef.current = promise;
+    promise.finally(() => {
+      if (activeSummaryRequestRef.current === promise) {
+        activeSummaryRequestRef.current = null;
+      }
+    });
+    return promise;
+  }, [dispatch, getCommonPurchaseFilters]);
+
+  // Clean up in-flight summary request when unmounting
+  useEffect(() => {
+    return () => {
+      if (activeSummaryRequestRef.current) {
+        activeSummaryRequestRef.current.abort();
+        activeSummaryRequestRef.current = null;
+      }
+    };
+  }, []);
+
+  // Fetch paginated table records
+  const loadListData = useCallback((page = currentPage, searchOverride = debouncedSearchQuery) => {
+    const filters = { page, limit: ITEMS_PER_PAGE };
+    const commonFilters = getCommonPurchaseFilters(searchOverride);
 
     if (activeTab === "purchases") {
-      if (purchaseTypeFilter) filters.purchaseType = purchaseTypeFilter;
-      if (billingTypeFilter) filters.billingType = billingTypeFilter;
-      dispatch(fetchPurchases(filters));
+      dispatch(fetchPurchases({ ...commonFilters, page, limit: ITEMS_PER_PAGE }));
     } else if (activeTab === "payments") {
-      dispatch(fetchPaymentsOut(filters));
+      const paymentFilters = { page, limit: ITEMS_PER_PAGE };
+      if (commonFilters.search) paymentFilters.search = commonFilters.search;
+      if (commonFilters.party) paymentFilters.party = commonFilters.party;
+      if (commonFilters.startDate) paymentFilters.startDate = commonFilters.startDate;
+      if (commonFilters.endDate) paymentFilters.endDate = commonFilters.endDate;
+      dispatch(fetchPaymentsOut(paymentFilters));
     } else if (activeTab === "returns") {
-      dispatch(fetchPurchaseReturns(filters));
+      const returnFilters = { page, limit: ITEMS_PER_PAGE };
+      if (commonFilters.search) returnFilters.search = commonFilters.search;
+      if (commonFilters.party) returnFilters.party = commonFilters.party;
+      if (commonFilters.startDate) returnFilters.startDate = commonFilters.startDate;
+      if (commonFilters.endDate) returnFilters.endDate = commonFilters.endDate;
+      dispatch(fetchPurchaseReturns(returnFilters));
     } else if (activeTab === "expenses") {
-      dispatch(fetchExpenses(filters));
+      const expFilters = { page, limit: ITEMS_PER_PAGE };
+      if (commonFilters.search) expFilters.search = commonFilters.search;
+      if (commonFilters.party) expFilters.party = commonFilters.party;
+      if (commonFilters.startDate) expFilters.startDate = commonFilters.startDate;
+      if (commonFilters.endDate) expFilters.endDate = commonFilters.endDate;
+      dispatch(fetchExpenses(expFilters));
     }
-  };
+  }, [activeTab, currentPage, debouncedSearchQuery, getCommonPurchaseFilters, dispatch]);
+
+  // Fetch aggregate summary on mount and when summary-relevant filters change (never for page changes alone)
+  useEffect(() => {
+    loadSummaryData();
+  }, [purchaseTypeFilter, billingTypeFilter, partyFilter, startDate, endDate, debouncedSearchQuery, searchParams]);
+
+  // Fetch paginated table data on mount, tab change, page change, or filter change
+  useEffect(() => {
+    loadListData(currentPage, debouncedSearchQuery);
+  }, [activeTab, currentPage, purchaseTypeFilter, billingTypeFilter, partyFilter, startDate, endDate, debouncedSearchQuery, searchParams]);
+
+  // Synchronize both summary totals and table list after transactions
+  const refreshAllData = useCallback(() => {
+    loadListData(currentPage, debouncedSearchQuery);
+    loadSummaryData(debouncedSearchQuery);
+  }, [loadListData, loadSummaryData, currentPage, debouncedSearchQuery]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    setDebouncedSearchQuery(searchQuery.trim());
-    setCurrentPage(1);
+    const trimmed = searchQuery.trim();
+    if (trimmed !== debouncedSearchQuery) {
+      setDebouncedSearchQuery(trimmed);
+      setCurrentPage(1);
+    } else {
+      loadListData(1, trimmed);
+      loadSummaryData(trimmed);
+    }
   };
 
   const getPartyName = (item) => {
@@ -298,18 +394,32 @@ export default function Purchases() {
   };
 
   const purchaseMetrics = useMemo(() => {
-    const totalBills = purchases.filter((p) => p.purchaseType === "BILL").reduce((sum, p) => sum + (p.totalAmount || 0), 0);
+    const totalBills = purchaseSummary
+      ? Number(purchaseSummary.totalPurchaseAmount ?? purchaseSummary.totalAmount ?? 0)
+      : purchases.filter((p) => p.purchaseType === "BILL").reduce((sum, p) => sum + (p.totalAmount || 0), 0);
     const totalOrders = purchases.filter((p) => p.purchaseType === "ORDER").reduce((sum, p) => sum + (p.totalAmount || 0), 0);
     const totalPayments = payments.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
     const totalExp = expenses.reduce((sum, e) => sum + (e.totalAmount || 0), 0);
+    const outstandingPayables = purchaseSummary
+      ? Number(purchaseSummary.totalUnpaidAmount ?? 0)
+      : Math.max(0, totalBills - totalPayments);
+
     return {
       totalBills,
       totalOrders,
       totalPayments,
       totalExpenses: totalExp,
-      outstandingPayables: Math.max(0, totalBills - totalPayments),
+      outstandingPayables,
+      // Aggregate metrics from GET /purchase/total
+      totalCount: purchaseSummary ? Number(purchaseSummary.totalCount ?? 0) : purchasesTotal,
+      totalPaidAmount: purchaseSummary ? Number(purchaseSummary.totalPaidAmount ?? 0) : totalPayments,
+      totalSubTotal: purchaseSummary ? Number(purchaseSummary.totalSubTotal ?? 0) : 0,
+      totalCashAmount: purchaseSummary ? Number(purchaseSummary.totalCashAmount ?? 0) : 0,
+      totalCreditAmount: purchaseSummary ? Number(purchaseSummary.totalCreditAmount ?? 0) : 0,
+      cashCount: purchaseSummary ? Number(purchaseSummary.cashCount ?? 0) : 0,
+      creditCount: purchaseSummary ? Number(purchaseSummary.creditCount ?? 0) : 0,
     };
-  }, [purchases, payments, expenses]);
+  }, [purchaseSummary, purchases, payments, expenses, purchasesTotal]);
 
   const totalPages = Math.ceil(
     (activeTab === "purchases"
@@ -338,21 +448,21 @@ export default function Purchases() {
       if (type === "bill") {
         await dispatch(deletePurchase(id)).unwrap();
         toast.success("Purchase record deleted successfully", { id: loadingToast });
-        dispatch(fetchPurchases({ page: currentPage, limit: ITEMS_PER_PAGE }));
+        refreshAllData();
         dispatch(fetchPaymentsOut({ page: 1, limit: ITEMS_PER_PAGE }));
       } else if (type === "payment") {
         await dispatch(deletePaymentOut(id)).unwrap();
         toast.success("Payment out receipt deleted", { id: loadingToast });
-        dispatch(fetchPaymentsOut({ page: currentPage, limit: ITEMS_PER_PAGE }));
+        refreshAllData();
         dispatch(fetchPurchases({ page: 1, limit: ITEMS_PER_PAGE }));
       } else if (type === "return") {
         await dispatch(deletePurchaseReturn(id)).unwrap();
         toast.success("Debit note deleted successfully", { id: loadingToast });
-        dispatch(fetchPurchaseReturns({ page: currentPage, limit: ITEMS_PER_PAGE }));
+        refreshAllData();
       } else if (type === "expense") {
         await dispatch(deleteExpense(id)).unwrap();
         toast.success("Expense deleted successfully", { id: loadingToast });
-        dispatch(fetchExpenses({ page: currentPage, limit: ITEMS_PER_PAGE }));
+        refreshAllData();
       }
     } catch (err) {
       toast.error(typeof err === "string" ? err : err?.message || "Failed to delete record", { id: loadingToast });
@@ -486,7 +596,7 @@ export default function Purchases() {
         try {
           await dispatch(convertToPurchaseBill(id)).unwrap();
           toast.success("Converted to Purchase Bill successfully!", { id: loadingToast });
-          loadListData();
+          refreshAllData();
           dispatch(fetchPaymentsOut({ page: 1, limit: ITEMS_PER_PAGE }));
         } catch (err) {
           toast.error(typeof err === "string" ? err : err?.message || "Failed to convert to Purchase Bill", { id: loadingToast });
@@ -509,7 +619,7 @@ export default function Purchases() {
         onSuccess={(savedRecord) => {
           setBillModalOpen(false);
           setEditBillRecord(null);
-          loadListData();
+          refreshAllData();
           dispatch(fetchPaymentsOut({ page: 1, limit: ITEMS_PER_PAGE }));
           if (savedRecord) {
             handleOpenDetailModal(savedRecord, "bill");
@@ -675,7 +785,7 @@ export default function Purchases() {
           onSuccess={() => {
             setPaymentModalOpen(false);
             setEditPaymentRecord(null);
-            loadListData();
+            refreshAllData();
             dispatch(fetchPurchases({ page: 1, limit: ITEMS_PER_PAGE }));
           }}
         />
@@ -687,7 +797,7 @@ export default function Purchases() {
           onClose={() => setReturnModalOpen(false)}
           onSuccess={() => {
             setReturnModalOpen(false);
-            loadListData();
+            refreshAllData();
           }}
         />
       )}
@@ -699,7 +809,7 @@ export default function Purchases() {
           onClose={() => setExpenseModalOpen(false)}
           onSuccess={() => {
             setExpenseModalOpen(false);
-            loadListData();
+            refreshAllData();
           }}
         />
       )}
